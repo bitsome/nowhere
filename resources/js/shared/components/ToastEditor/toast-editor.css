@@ -1,0 +1,388 @@
+.toast-editor-module,
+.toast-viewer-module {
+    width: 100%;
+}
+
+.toast-editor-module .toastui-editor-defaultUI,
+.toast-viewer-module .toastui-editor-contents {
+    font-family: inherit;
+}
+
+.toast-editor-module .toastui-editor-defaultUI {
+    border: 1px solid #dddddd;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.toast-editor-module .toastui-editor-toolbar,
+.toast-editor-module .toastui-editor-mode-switch,
+.toast-viewer-module {
+    background-color: #f7f7f7;
+}
+
+.toast-editor-module .toastui-editor-toolbar {
+    border-bottom: 1px solid #dddddd;
+}
+
+.toast-editor-module .toastui-editor-mode-switch {
+    border-top: 1px solid #dddddd;
+}
+
+.toast-editor-module .toastui-editor-toolbar-icons {
+    opacity: 0.78;
+}
+
+.toast-editor-module .toastui-editor-toolbar button {
+    border-radius: 8px;
+}
+
+.toast-editor-module .nowhere-editor-toolbar-item-wrapper {
+    width: 32px;
+    height: 32px;
+    line-height: 32px;
+    margin: 7px 5px;
+}
+
+.toast-editor-module .nowhere-editor-toolbar-image {
+    margin: 0;
+}
+
+.toast-editor-module .toastui-editor-md-container,
+.toast-editor-module .toastui-editor-ww-container,
+.toast-editor-module .toastui-editor-md-preview {
+    background-color: #f7f7f7;
+}
+
+.toast-editor-module .toastui-editor-contents,
+.toast-editor-module .ProseMirror,
+.toast-viewer-module .toastui-editor-contents {
+    color: #1f1f1f;
+    font-size: 14px;
+    line-height: 1.75;
+}
+
+.toast-editor-module .toastui-editor-md-tab-container {
+    background-color: #efefef;
+}
+
+.toast-editor-module .toastui-editor-md-tab-container .tab-item {
+    color: #6a6a6a;
+}
+
+.toast-editor-module .toastui-editor-md-tab-container .active {
+    color: #1f1f1f;
+}
+
+.toast-editor-module .toastui-editor-popup,
+.toast-editor-module .toastui-editor-context-menu {
+    border-color: #dddddd;
+    border-radius: 10px;
+    box-shadow: none;
+}
+
+.toast-viewer-module {
+    min-height: 320px;
+    border: 1px solid #dddddd;
+    border-radius: 10px;
+    padding: 16px;
+}
+
+.toast-viewer-module .toastui-editor-contents > :first-child {
+    margin-top: 0;
+}
+
+.dark .toast-editor-module .toastui-editor-defaultUI,
+.dark .toast-viewer-module {
+    border-color: #2a2a2a;
+}
+
+.dark .toast-editor-module .toastui-editor-toolbar,
+.dark .toast-editor-module .toastui-editor-mode-switch,
+.dark .toast-editor-module .toastui-editor-md-container,
+.dark .toast-editor-module .toastui-editor-ww-container,
+.dark .toast-editor-module .toastui-editor-md-preview,
+.dark .toast-viewer-module {
+    background-color: #1a1a1a;
+}
+
+.dark .toast-editor-module .toastui-editor-toolbar {
+    border-bottom-color: #2a2a2a;
+}
+
+.dark .toast-editor-module .toastui-editor-mode-switch {
+    border-top-color: #2a2a2a;
+}
+
+.dark .toast-editor-module .toastui-editor-md-tab-container {
+    background-color: #202020;
+}
+
+.dark .toast-editor-module .toastui-editor-md-tab-container .tab-item,
+.dark .toast-editor-module .toastui-editor-toolbar-icons,
+.dark .toast-editor-module .toastui-editor-toolbar button {
+    color: #b9bbc0;
+}
+
+.dark .toast-editor-module .toastui-editor-md-tab-container .active {
+    color: #f3f3f3;
+}
+
+.dark .toast-editor-module .toastui-editor-contents,
+.dark .toast-editor-module .ProseMirror,
+.dark .toast-viewer-module .toastui-editor-contents,
+.dark .toast-editor-module .toastui-editor-md-preview .toastui-editor-contents {
+    color: #d6d6dd;
+}
+
+.dark .toast-editor-module .toastui-editor-md-list-item-style::before,
+.dark .toast-editor-module .toastui-editor-md-preview-highlight {
+    color: #9ea1a8;
+}
+
+.dark .toast-editor-module .toastui-editor-popup,
+.dark .toast-editor-module .toastui-editor-context-menu {
+    border-color: #343434;
+    box-shadow: none;
+}
+
+.nowhere-file-manager-modal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    z-index: 999;
+}
+
+.nowhere-file-manager-modal__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 15, 15, 0.68);
+}
+
+.nowhere-file-manager-modal__panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: min(1280px, 100%);
+    max-height: calc(100vh - 2rem);
+    padding: 1.25rem;
+    border: 1px solid #dddddd;
+    border-radius: 12px;
+    background: #f7f7f7;
+    overflow: hidden;
+}
+
+.nowhere-file-manager-modal__header,
+.nowhere-file-manager-modal__toolbar,
+.nowhere-file-manager-modal__footer,
+.nowhere-file-manager-modal__file-body,
+.nowhere-file-manager-modal__file-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.nowhere-file-manager-modal__header,
+.nowhere-file-manager-modal__footer {
+    flex-wrap: wrap;
+}
+
+.nowhere-file-manager-modal__eyebrow {
+    margin: 0;
+    color: #6a6a6a;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.nowhere-file-manager-modal__title {
+    margin: 0.35rem 0 0;
+    color: #1f1f1f;
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.nowhere-file-manager-modal__description,
+.nowhere-file-manager-modal__footer-text,
+.nowhere-file-manager-modal__dropzone-description,
+.nowhere-file-manager-modal__file-meta {
+    margin: 0.5rem 0 0;
+    color: #6a6a6a;
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.nowhere-file-manager-modal__search {
+    display: grid;
+    gap: 0.5rem;
+    min-width: min(100%, 320px);
+}
+
+.nowhere-file-manager-modal__label,
+.nowhere-file-manager-modal__dropzone-title,
+.nowhere-file-manager-modal__file-name {
+    color: #1f1f1f;
+    font-size: 0.92rem;
+    font-weight: 600;
+}
+
+.nowhere-file-manager-modal__toolbar {
+    flex-wrap: wrap;
+}
+
+.nowhere-file-manager-modal__toolbar-actions,
+.nowhere-file-manager-modal__footer-actions,
+.nowhere-file-manager-modal__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.nowhere-file-manager-modal__icon-button {
+    min-width: 44px;
+    width: 44px;
+    padding: 0;
+}
+
+.nowhere-file-manager-modal__icon-button--sm {
+    min-width: 36px;
+    width: 36px;
+}
+
+.nowhere-file-manager-modal__dropzone {
+    display: grid;
+    gap: 0.35rem;
+    padding: 1rem;
+    border: 1px dashed #cfcfcf;
+    border-radius: 10px;
+    background: #efefef;
+}
+
+.nowhere-file-manager-modal__dropzone.is-disabled {
+    opacity: 0.6;
+}
+
+.nowhere-file-manager-modal__content {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+}
+
+.nowhere-file-manager-modal__empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 240px;
+    border: 1px solid #dddddd;
+    border-radius: 10px;
+    background: #f1f1f1;
+    color: #6a6a6a;
+    font-size: 0.95rem;
+}
+
+.nowhere-file-manager-modal__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.75rem;
+}
+
+.nowhere-file-manager-modal__file-card {
+    overflow: hidden;
+}
+
+.nowhere-file-manager-modal__file-select {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.nowhere-file-manager-modal__image {
+    display: block;
+    width: 100%;
+    height: 160px;
+    object-fit: cover;
+    background: #ededed;
+}
+
+.nowhere-file-manager-modal__file-body {
+    align-items: flex-start;
+    padding: 0.85rem;
+}
+
+.nowhere-file-manager-modal__file-text {
+    min-width: 0;
+}
+
+.nowhere-file-manager-modal__file-name {
+    margin: 0;
+    word-break: break-word;
+}
+
+.nowhere-file-manager-modal__file-meta {
+    margin-top: 0.35rem;
+}
+
+.nowhere-file-manager-modal__file-actions {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+@media (max-width: 767px) {
+    .nowhere-file-manager-modal__panel {
+        width: calc(100vw - 1rem);
+        max-height: calc(100vh - 1rem);
+        margin: 0.5rem auto;
+        padding: 1rem;
+    }
+
+    .nowhere-file-manager-modal__file-body {
+        flex-direction: column;
+    }
+
+    .nowhere-file-manager-modal__file-actions {
+        width: 100%;
+        flex-direction: row;
+    }
+}
+
+.dark .nowhere-file-manager-modal__panel {
+    border-color: #2a2a2a;
+    background: #1a1a1a;
+}
+
+.dark .nowhere-file-manager-modal__eyebrow,
+.dark .nowhere-file-manager-modal__description,
+.dark .nowhere-file-manager-modal__footer-text,
+.dark .nowhere-file-manager-modal__dropzone-description,
+.dark .nowhere-file-manager-modal__file-meta,
+.dark .nowhere-file-manager-modal__empty {
+    color: #9ea1a8;
+}
+
+.dark .nowhere-file-manager-modal__title,
+.dark .nowhere-file-manager-modal__label,
+.dark .nowhere-file-manager-modal__dropzone-title,
+.dark .nowhere-file-manager-modal__file-name {
+    color: #f3f3f3;
+}
+
+.dark .nowhere-file-manager-modal__dropzone {
+    border-color: #343434;
+    background: #202020;
+}
+
+.dark .nowhere-file-manager-modal__empty {
+    border-color: #2a2a2a;
+    background: #181818;
+}
+
+.dark .nowhere-file-manager-modal__image {
+    background: #202020;
+}

@@ -1,0 +1,119 @@
+.toast-stack {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    width: min(360px, calc(100vw - 2rem));
+    pointer-events: none;
+}
+
+.toast-card {
+    pointer-events: auto;
+    display: grid;
+    gap: 0.75rem;
+    padding: 0.9rem 1rem;
+    border: 1px solid #dddddd;
+    border-radius: 10px;
+    background: #f7f7f7;
+}
+
+.toast-card__row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+}
+
+.toast-card__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    flex-shrink: 0;
+    border: 1px solid #d6d6d6;
+    border-radius: 999px;
+    background: #efefef;
+    color: #4f4f4f;
+}
+
+.toast-card__body {
+    min-width: 0;
+    flex: 1;
+}
+
+.toast-card__title {
+    margin: 0;
+    color: #1f1f1f;
+    font-size: 0.92rem;
+    font-weight: 600;
+    line-height: 1.5;
+}
+
+.toast-card__message {
+    margin: 0.2rem 0 0;
+    color: #6a6a6a;
+    font-size: 0.88rem;
+    line-height: 1.6;
+    word-break: break-word;
+}
+
+.toast-card__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    flex-shrink: 0;
+    border: 1px solid #d6d6d6;
+    border-radius: 8px;
+    background: #f1f1f1;
+    color: #6a6a6a;
+    transition: background-color 0.16s ease, color 0.16s ease, border-color 0.16s ease;
+}
+
+.toast-card__close:hover {
+    background: #ededed;
+    color: #1f1f1f;
+}
+
+.toast-card.is-success .toast-card__icon,
+.toast-card.is-info .toast-card__icon,
+.toast-card.is-error .toast-card__icon {
+    border-color: #d6d6d6;
+}
+
+html.dark .toast-card {
+    border-color: #2a2a2a;
+    background: #1a1a1a;
+}
+
+html.dark .toast-card__icon,
+html.dark .toast-card__close {
+    border-color: #343434;
+    background: #202020;
+    color: #b9bbc0;
+}
+
+html.dark .toast-card__title {
+    color: #d6d6dd;
+}
+
+html.dark .toast-card__message {
+    color: #9ea1a8;
+}
+
+html.dark .toast-card__close:hover {
+    background: #222222;
+    color: #f3f3f3;
+}
+
+@media (max-width: 767px) {
+    .toast-stack {
+        top: auto;
+        bottom: 1rem;
+        right: 1rem;
+    }
+}

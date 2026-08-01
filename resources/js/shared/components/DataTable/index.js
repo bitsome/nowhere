@@ -1,0 +1,13 @@
+export { default as DataTable } from './DataTable.vue';
+export { default as DataTablePlayground } from './DataTablePlayground.vue';
+export { default as TableBody } from './TableBody.vue';
+export { default as TableCell } from './TableCell.vue';
+export { default as TableColumn } from './TableColumn.vue';
+export { default as TableEmpty } from './TableEmpty.vue';
+export { default as TableFilter } from './TableFilter.vue';
+export { default as TableHeader } from './TableHeader.vue';
+export { default as TableLoading } from './TableLoading.vue';
+export { default as TablePagination } from './TablePagination.vue';
+export { default as TableRow } from './TableRow.vue';
+export { default as TableSearch } from './TableSearch.vue';
+export { default as TableToolbar } from './TableToolbar.vue';
