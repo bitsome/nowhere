@@ -5,7 +5,7 @@ import { useMessage } from 'naive-ui';
 import { useAuthStore } from '../stores/auth';
 import { apiUpdateProfile } from '../api/auth';
 import { apiCommunityUser } from '../api/community';
-import { getApiErrorMessage } from '../api/client';
+import { apiClient, getApiErrorMessage } from '../api/client';
 import LevelBadge from '../components/LevelBadge.vue';
 
 const auth = useAuthStore();
@@ -13,6 +13,7 @@ const router = useRouter();
 const message = useMessage();
 
 const saving = ref(false);
+const requesting = ref('');
 const error = ref('');
 const success = ref('');
 const myStats = ref(null);
@@ -38,6 +39,20 @@ const initials = computed(() => auth.user?.name?.charAt(0) ?? 'N');
 const level = computed(() => auth.user?.level ?? null);
 
 const formatWon = (value) => (value ?? 0).toLocaleString();
+
+// 차량·면허 인증 신청 — 관리자에게 알림이 전달된다
+const requestVerification = async (type) => {
+    requesting.value = type;
+
+    try {
+        await apiClient.post('/verification/request', { [type]: true });
+        message.success('인증 신청이 관리자에게 전달되었습니다.');
+    } catch (e) {
+        message.error(getApiErrorMessage(e));
+    } finally {
+        requesting.value = '';
+    }
+};
 
 onMounted(() => {
     form.name = auth.user?.name ?? '';
@@ -132,6 +147,52 @@ const logout = async () => {
                 </strong>
             </div>
         </div>
+
+        <!-- 차량·면허 인증 -->
+        <n-card :bordered="true" class="profile-block">
+            <div class="verify-head">
+                <strong>인증</strong>
+                <span class="verify-hint">관리자 승인 후 마켓에서 인증 배지가 표시됩니다</span>
+            </div>
+
+            <div class="verify-row">
+                <span class="verify-row__label">
+                    차량 인증
+                    <span v-if="auth.user?.is_vehicle_verified" class="verify-row__done">완료</span>
+                    <span v-else class="verify-row__pending">미인증</span>
+                </span>
+                <n-button
+                    v-if="!auth.user?.is_vehicle_verified"
+                    size="small"
+                    type="primary"
+                    ghost
+                    :loading="requesting === 'vehicle'"
+                    @click="requestVerification('vehicle')"
+                >
+                    신청
+                </n-button>
+                <span v-else class="verify-row__badge">✓</span>
+            </div>
+
+            <div class="verify-row">
+                <span class="verify-row__label">
+                    면허 인증
+                    <span v-if="auth.user?.is_license_verified" class="verify-row__done">완료</span>
+                    <span v-else class="verify-row__pending">미인증</span>
+                </span>
+                <n-button
+                    v-if="!auth.user?.is_license_verified"
+                    size="small"
+                    type="primary"
+                    ghost
+                    :loading="requesting === 'license'"
+                    @click="requestVerification('license')"
+                >
+                    신청
+                </n-button>
+                <span v-else class="verify-row__badge">✓</span>
+            </div>
+        </n-card>
 
         <!-- 레벨 시스템 -->
         <n-card v-if="level" :bordered="true" class="profile-block">
@@ -242,6 +303,64 @@ const logout = async () => {
 .profile-block {
     margin-bottom: 16px;
     border-radius: 16px;
+}
+
+/* 인증 카드 */
+.verify-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.verify-hint {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.verify-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.verify-row:last-child {
+    border-bottom: none;
+}
+
+.verify-row__label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.verify-row__done {
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: rgba(46, 160, 67, 0.12);
+    color: #2ea043;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.verify-row__pending {
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: rgba(128, 128, 128, 0.14);
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.verify-row__badge {
+    color: #2ea043;
+    font-weight: 800;
 }
 
 /* 내 실적 카드 */

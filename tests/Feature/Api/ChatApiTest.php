@@ -4,6 +4,8 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 
 uses(RefreshDatabase::class);
@@ -51,6 +53,30 @@ test('api chats sends a message', function () {
 
     expect($conversation->fresh()?->last_message_at)->not->toBeNull();
     expect(Message::query()->where('user_id', $this->driver->id)->count())->toBe(1);
+});
+
+test('api chat send accepts an image attachment', function () {
+    Storage::fake('public');
+
+    $conversation = Conversation::create();
+    $conversation->users()->attach([$this->driver->id, $this->partner->id]);
+
+    $response = $this->post("/api/chats/{$conversation->id}/messages", [
+        'body' => '사진입니다',
+        'image' => UploadedFile::fake()->image('photo.jpg', 10, 10),
+    ])->assertCreated();
+
+    expect($response->json('data.image_url'))->not->toBeNull();
+
+    Storage::disk('public')->assertExists(Message::latest('id')->first()->image_path);
+});
+
+test('api chat send requires body or image', function () {
+    $conversation = Conversation::create();
+    $conversation->users()->attach([$this->driver->id, $this->partner->id]);
+
+    $this->postJson("/api/chats/{$conversation->id}/messages", ['body' => ''])
+        ->assertStatus(422);
 });
 
 test('api chats forbids access to conversations I am not in', function () {

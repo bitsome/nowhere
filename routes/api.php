@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\StatsController;
 use App\Http\Controllers\Api\StreamController;
+use App\Http\Controllers\Api\VerificationController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -33,6 +34,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/options/orders', [OrderController::class, 'options']);
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::post('/notifications/read', [NotificationController::class, 'markRead']);
+    Route::post('/verification/request', [VerificationController::class, 'request']);
+    Route::patch('/admin/users/{user}/verification', [VerificationController::class, 'update']);
     Route::get('/chats', [ChatController::class, 'index']);
     Route::post('/chats', [ChatController::class, 'store']);
     Route::get('/chats/{conversation}', [ChatController::class, 'show']);
@@ -60,5 +63,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/community/posts/{post}', [CommunityController::class, 'destroy']);
 });
 
-// 커뮤니티 이미지 — <img> 태그는 Authorization 헤더를 못 보내므로 인증 밖(공개)에서 서빙
+// 커뮤니티·채팅 이미지 — <img> 태그는 Authorization 헤더를 못 보내므로 인증 밖(공개)에서 서빙
 Route::get('/community/images/{filename}', [CommunityController::class, 'image']);
+Route::get('/chat/images/{filename}', [ChatController::class, 'image']);

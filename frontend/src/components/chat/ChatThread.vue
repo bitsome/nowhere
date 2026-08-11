@@ -12,6 +12,18 @@ const router = useRouter();
 const draft = ref('');
 const threadEl = ref(null);
 const sending = ref(false);
+const pendingImage = ref(null);
+const imageInput = ref(null);
+
+const pickImage = (event) => {
+    const file = event.target.files?.[0];
+
+    if (file) {
+        pendingImage.value = file;
+    }
+
+    event.target.value = '';
+};
 
 const activeConversation = computed(() => store.activeConversation);
 
@@ -50,11 +62,13 @@ const jumpToBottom = async () => {
 
 const send = async () => {
     const body = draft.value.trim();
-    if (!body || sending.value) return;
+    if ((!body && !pendingImage.value) || sending.value) return;
     sending.value = true;
+    const image = pendingImage.value;
+    pendingImage.value = null;
     draft.value = '';
     try {
-        await store.send(body);
+        await store.send(body, image);
         isNearBottom.value = true;
         newMessages.value = 0;
     } finally {
@@ -146,8 +160,26 @@ onMounted(() => {
         </button>
 
         <form class="chat-thread__input" @submit.prevent="send">
-            <input v-model="draft" type="text" placeholder="메시지를 입력하세요..." :disabled="sending" />
-            <n-button type="primary" attr-type="submit" :loading="sending" :disabled="!draft.trim()">보내기</n-button>
+            <!-- 이미지 첨부 -->
+            <input ref="imageInput" type="file" accept="image/*" hidden @change="pickImage" />
+            <button
+                type="button"
+                class="chat-thread__attach"
+                :class="{ 'chat-thread__attach--active': pendingImage }"
+                :disabled="sending"
+                title="이미지 첨부"
+                @click="imageInput?.click()"
+            >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="m21 15-5-5L5 21" /></svg>
+            </button>
+
+            <input
+                v-model="draft"
+                type="text"
+                :placeholder="pendingImage ? '사진과 함께 보낼 메시지 (선택)' : '메시지를 입력하세요...'"
+                :disabled="sending"
+            />
+            <n-button type="primary" attr-type="submit" :loading="sending" :disabled="!draft.trim() && !pendingImage">보내기</n-button>
         </form>
     </div>
 </template>
@@ -169,6 +201,10 @@ onMounted(() => {
 
 /* 입력창 — flex 하단에 자연 배치 (fixed 불필요) */
 .chat-thread__input{display:flex;gap:8px;padding:10px 14px calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--border);background:var(--surface)}
+.chat-thread__attach{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border:1px solid var(--border);border-radius:50%;background:var(--bg);color:var(--text-muted);cursor:pointer;flex-shrink:0;transition:color .15s ease,border-color .15s ease}
+.chat-thread__attach svg{width:18px;height:18px}
+.chat-thread__attach--active{color:#36adff;border-color:#36adff}
+.chat-thread__attach:disabled{opacity:.5;cursor:not-allowed}
 .chat-thread__input input{flex:1;border:1px solid var(--border);border-radius:20px;padding:10px 16px;font-size:14px;background:var(--bg);color:var(--text);outline:none}
 .chat-thread__input input:focus{border-color:#36adff}
 

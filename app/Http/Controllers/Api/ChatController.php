@@ -9,7 +9,12 @@ use App\Models\Order;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ChatController extends Controller
 {
@@ -56,6 +61,9 @@ class ChatController extends Controller
                     ] : null,
                     'last_message' => $lastMessage ? [
                         'body' => $lastMessage->body,
+                        'image_url' => $lastMessage->image_path
+                            ? url('/api/chat/images/'.basename($lastMessage->image_path))
+                            : null,
                         'user_id' => $lastMessage->user_id,
                         'created_at' => $lastMessage->created_at?->diffForHumans(),
                     ] : null,
@@ -111,14 +119,7 @@ class ChatController extends Controller
         $messages = $conversation->messages()
             ->with('user:id,name')
             ->get()
-            ->map(fn (Message $message) => [
-                'id' => $message->id,
-                'user_id' => $message->user_id,
-                'user_name' => $message->user?->name,
-                'body' => $message->body,
-                'created_at' => $message->created_at?->diffForHumans(),
-                'read' => $message->read_at !== null,
-            ]);
+            ->map(fn (Message $message) => $this->serializeMessage($message));
 
         // 대화를 열면 상대 메시지를 읽음 처리한다
         $conversation->messages()
@@ -140,26 +141,68 @@ class ChatController extends Controller
 
         abort_unless($conversation->users()->where('users.id', $user->id)->exists(), 403);
 
-        $body = $request->validate([
-            'body' => ['required', 'string', 'max:2000'],
-        ])['body'];
+        $data = $request->validate([
+            'body' => ['nullable', 'string', 'max:2000'],
+            'image' => ['nullable', 'image', 'max:5120'],
+        ]);
+
+        $image = $data['image'] ?? null;
+
+        $imagePath = $image instanceof UploadedFile
+            ? $image->store('chat', 'public')
+            : null;
+
+        if (trim((string) ($data['body'] ?? '')) === '' && $imagePath === null) {
+            throw ValidationException::withMessages([
+                'body' => ['메시지 또는 이미지를 입력해주세요.'],
+            ]);
+        }
 
         $message = $conversation->messages()->create([
             'user_id' => $user->id,
-            'body' => $body,
+            'body' => $data['body'] ?? '',
+            'image_path' => $imagePath,
         ]);
 
         $conversation->forceFill(['last_message_at' => now()])->save();
 
         return response()->json([
-            'data' => [
-                'id' => $message->id,
-                'user_id' => $message->user_id,
-                'body' => $message->body,
-                'created_at' => $message->created_at?->diffForHumans(),
-                'read' => false,
-            ],
+            'data' => $this->serializeMessage($message),
         ], 201);
+    }
+
+    /**
+     * 채팅 이미지를 공개 서빙한다 (<img> 태그는 Authorization 헤더를 못 보내므로 인증 밖).
+     */
+    public function image(string $filename): BinaryFileResponse|StreamedResponse
+    {
+        $path = 'chat/'.$filename;
+
+        abort_unless(Storage::disk('public')->exists($path), 404);
+
+        return Storage::disk('public')
+            ->response($path, null, [
+                'Cache-Control' => 'public, max-age=86400, immutable',
+                'Content-Type' => Storage::disk('public')->mimeType($path) ?? 'application/octet-stream',
+            ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function serializeMessage(Message $message): array
+    {
+        return [
+            'id' => $message->id,
+            'user_id' => $message->user_id,
+            'user_name' => $message->user?->name,
+            'body' => $message->body,
+            'image_url' => $message->image_path
+                ? url('/api/chat/images/'.basename($message->image_path))
+                : null,
+            'created_at' => $message->created_at?->diffForHumans(),
+            'read' => $message->read_at !== null,
+        ];
     }
 
     /**

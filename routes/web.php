@@ -10,6 +10,7 @@ use App\Http\Controllers\FileManagementController;
 use App\Http\Controllers\OrderManagementController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UserManagementController;
+use Illuminate\Support\Facades\File;
 use App\Models\Order;
 use Illuminate\Support\Facades\Route;
 
@@ -26,9 +27,12 @@ Route::get('/', function () {
     ]);
 })->name('home');
 
+// ── 레거시 Blade (테스트·관리용) — SPA와 경로 완전 분리 ──
+// SPA(Vue Router)는 /login·/profile·/dashboard 경로를 사용하므로,
+// Blade 버전은 /legacy/* 하위로 격리한다 (라우트명은 유지 → 기존 참조 안전).
 Route::middleware('guest')->group(function () {
-    Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
-    Route::post('/login', [AuthenticatedSessionController::class, 'store'])->name('login.store');
+    Route::get('/legacy/login', [AuthenticatedSessionController::class, 'create'])->name('login');
+    Route::post('/legacy/login', [AuthenticatedSessionController::class, 'store'])->name('login.store');
 
     Route::get('/register', [RegisteredUserController::class, 'create'])->name('register');
     Route::post('/register', [RegisteredUserController::class, 'store'])->name('register.store');
@@ -39,9 +43,9 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::middleware('auth')->group(function () {
-    Route::get('/dashboard', [DashboardWorkspaceController::class, 'index'])->name('dashboard');
-    Route::get('/market', [DashboardWorkspaceController::class, 'market'])->name('market');
-    Route::get('/my-orders', [DashboardWorkspaceController::class, 'myOrders'])->name('my-orders');
+    Route::get('/legacy/dashboard', [DashboardWorkspaceController::class, 'index'])->name('dashboard');
+    Route::get('/legacy/market', [DashboardWorkspaceController::class, 'market'])->name('market');
+    Route::get('/legacy/my-orders', [DashboardWorkspaceController::class, 'myOrders'])->name('my-orders');
 
     // 비즈니스 (언제든 재개발 대상) — 공통/데모와 분리
     Route::prefix('/dashboard/business')->name('dashboard.business.')->group(function () {
@@ -94,11 +98,13 @@ Route::middleware('auth')->group(function () {
         Route::get('/loading', [DashboardWorkspaceController::class, 'loading'])->name('loading');
         Route::get('/alert', [DashboardWorkspaceController::class, 'alert'])->name('alert');
     });
-    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
+    Route::get('/legacy/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/legacy/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::post('/legacy/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
 });
 
-// Route::fallback(function () {
-//     return response('Laravel 404', 404);
-// });
+// SPA 폴백 — 프론트엔드(Vue Router)가 처리하는 라우트를 index.html로 안내.
+// Blade(관리자 대시보드)와 /api 라우트는 위에서 우선 매칭되므로 충돌하지 않는다.
+Route::fallback(function () {
+    return File::get(public_path('index.html'));
+});

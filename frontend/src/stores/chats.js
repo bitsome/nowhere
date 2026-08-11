@@ -45,12 +45,12 @@ export const useChatsStore = defineStore('chats', {
                 this.messages = [...this.messages, ...fresh];
             }
         },
-        async send(body) {
+        async send(body, image = null) {
             if (!this.activeId) {
                 return;
             }
 
-            await apiSendChatMessage(this.activeId, body);
+            await apiSendChatMessage(this.activeId, body, image);
             await this.reloadMessages();
             await this.loadConversations();
         },
