@@ -9,3 +9,4 @@ export * from './DataTable/index.js';
 export * from './ToastEditor/index.js';
 export * from './Form/index.js';
 export * from './Toast/index.js';
+export * from './Modal/index.js';

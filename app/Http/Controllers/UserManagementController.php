@@ -10,15 +10,6 @@ use Illuminate\View\View;
 
 class UserManagementController extends Controller
 {
-    private function assertCanManageUser(User $actor, User $targetUser): void
-    {
-        if (! $actor->canManageUser($targetUser)) {
-            throw ValidationException::withMessages([
-                'user' => '자신의 권한보다 동등하거나 상위 권한 사용자에게는 변경 작업을 수행할 수 없습니다.',
-            ]);
-        }
-    }
-
     public function index(Request $request): View
     {
         $search = trim((string) $request->string('search'));
@@ -28,10 +19,8 @@ class UserManagementController extends Controller
         $users = User::query()
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($userQuery) use ($search) {
-                    $userQuery
-                        ->where('name', 'like', "%{$search}%")
-                        ->orWhere('email', 'like', "%{$search}%")
-                        ->orWhere('phone', 'like', "%{$search}%");
+                    $userQuery->where('name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%");
                 });
             })
             ->when($role !== '', fn ($query) => $query->where('role', $role))
@@ -39,12 +28,30 @@ class UserManagementController extends Controller
             ->latest()
             ->get();
 
-        return view('dashboard.modules.users.index', [
-            'module' => DashboardWorkspaceController::findWorkspaceModule('users'),
-            'modules' => DashboardWorkspaceController::workspaceModules(),
+        $actor = auth()->user() instanceof User ? auth()->user() : null;
+
+        return view('dashboard.business.users.index', [
+            'module' => DashboardWorkspaceController::findBusinessModule('users'),
+            'modules' => DashboardWorkspaceController::businessModules(),
+            'actor' => $actor,
+            'assignableRoles' => $actor?->assignableRoles() ?? [],
             'roleOptions' => User::roleOptions(),
             'statusOptions' => User::statusOptions(),
             'users' => $users,
+            'userDetailData' => $users->map(fn (User $user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone' => $user->phone,
+                'role' => $user->role,
+                'status' => $user->status,
+                'statusLabel' => User::statusOptions()[$user->status] ?? $user->status,
+                'createdAt' => $user->created_at?->format('Y-m-d H:i'),
+                'lastLoginAt' => $user->last_login_at?->format('Y-m-d H:i') ?? '기록 없음',
+                'loginCount' => number_format($user->login_count).'회',
+                'canManage' => $actor?->canManageUser($user) ?? false,
+                'permissionsUrl' => route('dashboard.business.users.permissions', $user),
+            ])->values(),
             'filters' => [
                 'role' => $role,
                 'search' => $search,
@@ -57,13 +64,13 @@ class UserManagementController extends Controller
     {
         $actor = $this->resolveActor($user);
 
-        return view('dashboard.modules.users.show', [
+        return view('dashboard.business.users.show', [
             'actor' => $actor,
             'assignablePermissions' => $actor->assignablePermissions(),
             'assignableRoles' => $actor->assignableRoles(),
             'canManageUser' => $actor->canManageUser($user),
-            'module' => DashboardWorkspaceController::findWorkspaceModule('users'),
-            'modules' => DashboardWorkspaceController::workspaceModules(),
+            'module' => DashboardWorkspaceController::findBusinessModule('users'),
+            'modules' => DashboardWorkspaceController::businessModules(),
             'permissionOptions' => User::permissionOptions(),
             'roleOptions' => User::roleOptions(),
             'statusOptions' => User::statusOptions(),
@@ -75,12 +82,12 @@ class UserManagementController extends Controller
     {
         $actor = $this->resolveActor($user);
 
-        return view('dashboard.modules.users.permissions', [
+        return view('dashboard.business.users.permissions', [
             'actor' => $actor,
             'assignablePermissions' => $actor->assignablePermissions(),
             'canManageUser' => $actor->canManageUser($user),
-            'module' => DashboardWorkspaceController::findWorkspaceModule('users'),
-            'modules' => DashboardWorkspaceController::workspaceModules(),
+            'module' => DashboardWorkspaceController::findBusinessModule('users'),
+            'modules' => DashboardWorkspaceController::businessModules(),
             'permissionOptions' => User::permissionOptions(),
             'user' => $user,
         ]);
@@ -89,7 +96,6 @@ class UserManagementController extends Controller
     public function updateRole(Request $request, User $user): RedirectResponse
     {
         $actor = $this->resolveActor($user);
-        $this->assertCanManageUser($actor, $user);
 
         $validated = $request->validate([
             'role' => ['required', 'string', 'in:'.implode(',', User::roleOptions())],
@@ -111,7 +117,6 @@ class UserManagementController extends Controller
     public function updateStatus(Request $request, User $user): RedirectResponse
     {
         $actor = $this->resolveActor($user);
-        $this->assertCanManageUser($actor, $user);
 
         $validated = $request->validate([
             'status' => ['required', 'string', 'in:'.implode(',', array_keys(User::statusOptions()))],
@@ -127,7 +132,6 @@ class UserManagementController extends Controller
     public function updatePermissions(Request $request, User $user): RedirectResponse
     {
         $actor = $this->resolveActor($user);
-        $this->assertCanManageUser($actor, $user);
         $assignablePermissions = $actor->assignablePermissions();
 
         $validated = $request->validate([
@@ -153,7 +157,7 @@ class UserManagementController extends Controller
         ])->save();
 
         return redirect()
-            ->route('dashboard.modules.users.permissions', $user)
+            ->route('dashboard.business.users.permissions', $user)
             ->with('status', '회원 Permission이 저장되었습니다.');
     }
 

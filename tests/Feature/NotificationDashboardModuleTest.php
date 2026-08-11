@@ -13,7 +13,7 @@ test('dashboard hub shows notification module link', function () {
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertSuccessful()
-        ->assertSee('Notification 테스트')
+        ->assertSee('알림')
         ->assertSee(route('dashboard.modules.notification'), false);
 });
 

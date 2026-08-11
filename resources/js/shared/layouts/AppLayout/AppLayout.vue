@@ -97,7 +97,7 @@ const resolvedSidebarItems = computed(() => props.sidebarItems.length ? props.si
 </script>
 
 <template>
-    <div class="min-h-screen bg-[#f3f3f3] text-[#1f1f1f] dark:bg-[#141414] dark:text-[#d6d6dd]">
+    <div class="min-h-screen bg-[#f3f3f3] text-[#1f1f1f] dark:bg-[#171717] dark:text-[#d6d6dd]">
         <div class="mx-auto flex min-h-screen max-w-7xl flex-col px-4 py-4 lg:px-8 lg:py-6">
             <AppHeader
                 :alarms="alarms"
@@ -128,7 +128,7 @@ const resolvedSidebarItems = computed(() => props.sidebarItems.length ? props.si
                 <button
                     v-if="isSidebarOpen"
                     type="button"
-                    class="fixed inset-0 z-20 bg-[#141414]/40 lg:hidden"
+                    class="fixed inset-0 z-20 bg-[#171717]/40 lg:hidden"
                     aria-label="사이드바 닫기"
                     @click="$emit('sidebar-toggle')"
                 />

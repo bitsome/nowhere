@@ -21,7 +21,7 @@ const props = defineProps({
         :class="[
             inline
                 ? 'inline-flex items-center gap-3'
-                : 'fixed inset-0 z-50 flex items-center justify-center bg-[#f3f3f3]/70 px-4 backdrop-blur-[1px] dark:bg-[#141414]/70',
+                : 'fixed inset-0 z-50 flex items-center justify-center bg-[#f3f3f3]/70 px-4 backdrop-blur-[1px] dark:bg-[#171717]/70',
         ]"
     >
         <div

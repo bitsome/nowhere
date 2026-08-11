@@ -1,0 +1,634 @@
+/* ===== Order UI (SET / Single 카드 + 타임라인) ===== */
+.order-section {
+    display: grid;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
+.order-set {
+    overflow: hidden;
+    border: 1px solid #d8d8d8;
+    border-radius: 10px;
+    background: #f6f6f6;
+}
+
+html.dark .order-set {
+    border-color: #2a2a2a;
+    background: #1a1a1a;
+}
+
+.order-set__header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+}
+
+.order-set__toggle {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid #d8d8d8;
+    border-radius: 0.5rem;
+    background: #f3f3f3;
+    color: #4f4f4f;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.order-set__toggle:hover {
+    background: #ededed;
+    color: #1f1f1f;
+}
+
+html.dark .order-set__toggle {
+    border-color: #2a2a2a;
+    background: #1a1a1a;
+    color: #b9bbc0;
+}
+
+html.dark .order-set__toggle:hover {
+    background: #222222;
+    color: #d6d6dd;
+}
+
+.order-set__toggle svg {
+    transition: transform 0.2s ease;
+}
+
+.order-set.is-collapsed .order-set__toggle svg {
+    transform: rotate(-90deg);
+}
+
+.order-set__range {
+    flex-shrink: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1f1f1f;
+}
+
+html.dark .order-set__range {
+    color: #d6d6dd;
+}
+
+.order-set__company,
+.order-set__driver {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 0.8125rem;
+    color: #6a6a6a;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+html.dark .order-set__company,
+html.dark .order-set__driver {
+    color: #9ea1a8;
+}
+
+.order-set__count {
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.order-set__body {
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.5rem 1rem 0.75rem;
+    border-top: 1px solid #e5e5e5;
+}
+
+html.dark .order-set__body {
+    border-color: #262626;
+}
+
+.order-set.is-collapsed .order-set__body {
+    display: none;
+}
+
+.order-set__item-row {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.order-set__item {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 0.25rem;
+    border-radius: 0.5rem;
+    color: #4f4f4f;
+    font-size: 0.875rem;
+    text-decoration: none;
+    transition: background 0.15s;
+}
+
+.order-set__item:hover {
+    background: #ededed;
+}
+
+html.dark .order-set__item {
+    color: #b9bbc0;
+}
+
+html.dark .order-set__item:hover {
+    background: #222222;
+}
+
+.order-set__icon {
+    flex-shrink: 0;
+}
+
+.order-set__label {
+    min-width: 5.5rem;
+    flex-shrink: 0;
+    font-weight: 600;
+    color: #1f1f1f;
+}
+
+html.dark .order-set__label {
+    color: #d6d6dd;
+}
+
+.order-set__date {
+    flex-shrink: 0;
+}
+
+.order-set__time {
+    min-width: 3.5rem;
+    flex-shrink: 0;
+}
+
+.order-set__amount {
+    flex-shrink: 0;
+    font-weight: 600;
+    color: #1f1f1f;
+}
+
+html.dark .order-set__amount {
+    color: #d6d6dd;
+}
+
+.order-set__route {
+    min-width: 0;
+    overflow: hidden;
+    color: #6a6a6a;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+html.dark .order-set__route {
+    color: #9ea1a8;
+}
+
+/* Single 카드 */
+.order-card {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding-right: 0.5rem;
+    border: 1px solid #d8d8d8;
+    border-radius: 10px;
+    background: #f6f6f6;
+    transition: border-color 0.15s, background 0.15s;
+}
+
+html.dark .order-card {
+    border-color: #2a2a2a;
+    background: #1a1a1a;
+}
+
+.order-card:hover {
+    border-color: #c7c7c7;
+    background: #f1f1f1;
+}
+
+html.dark .order-card:hover {
+    border-color: #343434;
+    background: #222222;
+}
+
+.order-card__link {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 0.5rem 0.75rem 1rem;
+    text-decoration: none;
+}
+
+.order-card__main {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    min-width: 0;
+    font-size: 0.875rem;
+}
+
+.order-card__service {
+    flex-shrink: 0;
+    font-weight: 600;
+    color: #1f1f1f;
+}
+
+html.dark .order-card__service {
+    color: #d6d6dd;
+}
+
+.order-card__date,
+.order-card__time {
+    flex-shrink: 0;
+    color: #6a6a6a;
+}
+
+html.dark .order-card__date,
+html.dark .order-card__time {
+    color: #9ea1a8;
+}
+
+.order-card__amount {
+    flex-shrink: 0;
+    font-weight: 600;
+    color: #1f1f1f;
+}
+
+html.dark .order-card__amount {
+    color: #d6d6dd;
+}
+
+.order-card__icon {
+    flex-shrink: 0;
+}
+
+.order-card__route {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1f1f1f;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+html.dark .order-card__route {
+    color: #d6d6dd;
+}
+
+@media (max-width: 768px) {
+    .order-card__link {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+}
+
+/* 액션 아이콘 드롭다운 */
+.order-card__actions,
+.order-set__actions {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.order-card__actions-toggle,
+.order-set__actions-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: #6a6a6a;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.order-card__actions-toggle:hover,
+.order-set__actions-toggle:hover,
+.order-card__actions.is-open .order-card__actions-toggle,
+.order-set__actions.is-open .order-set__actions-toggle {
+    background: #ededed;
+    color: #1f1f1f;
+}
+
+html.dark .order-card__actions-toggle,
+html.dark .order-set__actions-toggle {
+    color: #9ea1a8;
+}
+
+html.dark .order-card__actions-toggle:hover,
+html.dark .order-set__actions-toggle:hover,
+html.dark .order-card__actions.is-open .order-card__actions-toggle,
+html.dark .order-set__actions.is-open .order-set__actions-toggle {
+    background: #222222;
+    color: #d6d6dd;
+}
+
+.order-card__actions-menu,
+.order-set__actions-menu {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    right: 0;
+    z-index: 20;
+    min-width: 8rem;
+    padding: 0.25rem;
+    border: 1px solid #d8d8d8;
+    border-radius: 0.5rem;
+    background: #ffffff;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+html.dark .order-card__actions-menu,
+html.dark .order-set__actions-menu {
+    border-color: #2a2a2a;
+    background: #1f1f1f;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.order-card__actions-menu a,
+.order-set__actions-menu a {
+    display: block;
+    padding: 0.4rem 0.75rem;
+    border-radius: 0.375rem;
+    font-size: 0.8125rem;
+    color: #4f4f4f;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.order-card__actions-menu a:hover,
+.order-set__actions-menu a:hover {
+    background: #f0f0f0;
+    color: #1f1f1f;
+}
+
+html.dark .order-card__actions-menu a,
+html.dark .order-set__actions-menu a {
+    color: #b9bbc0;
+}
+
+html.dark .order-card__actions-menu a:hover,
+html.dark .order-set__actions-menu a:hover {
+    background: #262626;
+    color: #d6d6dd;
+}
+
+/* ===== 오더 목록 테이블 (SET / Single 행 구분) ===== */
+
+/* 행 배경은 tr이 아니라 td 기준으로만 표시되도록 고정 */
+.order-group-row,
+.order-member-row,
+.order-single-row {
+    background: transparent;
+}
+
+/* 공용 .datatable-row:hover(밝은 회색)가 행 전체를 덮지 않도록 tr은 투명 유지 */
+tr.order-member-row:hover,
+tr.order-single-row:hover {
+    background: transparent;
+}
+
+/* SET 그룹 헤더 행 */
+.order-group-row {
+    cursor: pointer;
+}
+
+.order-group-row td {
+    padding: 0.625rem 1rem;
+    background: #e2e2e2;
+}
+
+html.dark .order-group-row td {
+    background: #202020;
+}
+
+.order-group-row.is-expanded td {
+    background: #d9d9d9;
+}
+
+html.dark .order-group-row.is-expanded td {
+    background: #262626;
+}
+
+.order-group-row:hover td {
+    background: #c9c9c9;
+}
+
+html.dark .order-group-row:hover td {
+    background: #2e2e2e;
+}
+
+.order-group-row td:first-child {
+    border-left: 3px solid #9a9a9a;
+}
+
+html.dark .order-group-row td:first-child {
+    border-left-color: #6a6a6a;
+}
+
+.order-group-row__title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.order-group-row__caret {
+    flex-shrink: 0;
+    color: #6a6a6a;
+    transition: transform 0.2s ease;
+    pointer-events: none;
+}
+
+html.dark .order-group-row__caret {
+    color: #9ea1a8;
+}
+
+.order-group-row.is-expanded .order-group-row__caret {
+    transform: rotate(180deg);
+}
+
+.order-group-row__name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1f1f1f;
+}
+
+html.dark .order-group-row__name {
+    color: #f3f3f3;
+}
+
+.order-group-row__routes {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.order-group-row__route {
+    display: flex;
+    align-items: baseline;
+    gap: 0.375rem;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    color: #4f4f4f;
+}
+
+html.dark .order-group-row__route {
+    color: #c9ccd2;
+}
+
+.order-group-row__route-index {
+    flex-shrink: 0;
+    color: #6a6a6a;
+}
+
+html.dark .order-group-row__route-index {
+    color: #9ea1a8;
+}
+
+.order-group-row__route-path {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.order-group-row__more {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    align-self: center;
+    gap: 0.25rem;
+    margin-left: 0.5rem;
+    padding: 0.0625rem 0.375rem;
+    border: 1px solid #cfcfcf;
+    border-radius: 999px;
+    background: #f7f7f7;
+    cursor: pointer;
+    font-size: 0.75rem;
+    color: #4f4f4f;
+}
+
+.order-group-row__more:hover {
+    border-color: #b9b9b9;
+    background: transparent;
+    color: #1f1f1f;
+}
+
+html.dark .order-group-row__more {
+    border-color: #343434;
+    background: #1a1a1a;
+    color: #9ea1a8;
+}
+
+html.dark .order-group-row__more:hover {
+    background: transparent;
+    color: #d6d6dd;
+}
+
+.order-group-row__time {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: #4f4f4f;
+    white-space: nowrap;
+}
+
+html.dark .order-group-row__time {
+    color: #c9ccd2;
+}
+
+.order-group-row__amount {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1f1f1f;
+}
+
+html.dark .order-group-row__amount {
+    color: #f3f3f3;
+}
+
+/* SET 멤버 오더 행: 들여쓰기 + 레일로 그룹 소속 표현 */
+.order-member-row {
+    cursor: pointer;
+}
+
+.order-member-row td {
+    background: #f0f0f0;
+}
+
+html.dark .order-member-row td {
+    background: #181818;
+}
+
+.order-member-row:hover td {
+    background: #dcdcdc;
+}
+
+html.dark .order-member-row:hover td {
+    background: #262626;
+}
+
+.order-member-row td:first-child {
+    padding-left: 2.75rem;
+    border-left: 3px solid #cfcfcf;
+}
+
+html.dark .order-member-row td:first-child {
+    border-left-color: #4a4a4a;
+}
+
+/* 싱글 오더 행: 호버 시 전체 행 강조 */
+.order-single-row:hover td {
+    background: #e2e2e2;
+}
+
+html.dark .order-single-row:hover td {
+    background: #242424;
+}
+
+@media (max-width: 768px) {
+    .order-member-row td:first-child {
+        padding-left: 2.25rem;
+    }
+}
+
+/* ===== 오더 행 액션 아이콘 드롭다운 ===== */
+.order-table-actions {
+    position: relative;
+    display: inline-flex;
+}
+
+.order-table-actions__toggle {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-color: transparent;
+    background: transparent;
+}
+
+.order-table-actions__toggle:hover,
+.order-table-actions__toggle.is-open {
+    background: #ececec;
+    color: #1f1f1f;
+}
+
+html.dark .order-table-actions__toggle:hover,
+html.dark .order-table-actions__toggle.is-open {
+    background: #2a2a2a;
+    color: #f3f3f3;
+}
+
+.order-table-actions__menu {
+    position: absolute;
+    top: calc(100% + 0.25rem);
+    right: 0;
+    z-index: 30;
+    min-width: 9rem;
+}
+
+

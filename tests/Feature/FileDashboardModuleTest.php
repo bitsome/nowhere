@@ -16,7 +16,7 @@ test('dashboard hub shows file management module link', function () {
         ->get(route('dashboard'))
         ->assertSuccessful()
         ->assertSee('파일관리')
-        ->assertSee(route('dashboard.modules.files'), false);
+        ->assertSee(route('dashboard.business.files'), false);
 });
 
 test('authenticated users can access file management dashboard module page', function () {
@@ -25,7 +25,7 @@ test('authenticated users can access file management dashboard module page', fun
     ]);
 
     $this->actingAs($user)
-        ->get(route('dashboard.modules.files'))
+        ->get(route('dashboard.business.files'))
         ->assertSuccessful()
         ->assertSee('파일 선택, 업로드, 이미지 미리보기')
         ->assertSee('업로드된 파일 관리');
@@ -40,7 +40,7 @@ test('file management page uses shared flash toast marker for uploaded status', 
         ->withSession([
             'status' => '파일이 업로드되었습니다.',
         ])
-        ->get(route('dashboard.modules.files'))
+        ->get(route('dashboard.business.files'))
         ->assertSuccessful()
         ->assertSee('data-toast-flash', false)
         ->assertSee('업로드 완료')
@@ -56,7 +56,7 @@ test('authenticated users can upload files in chunks in file manager module', fu
     ]);
 
     $this->actingAs($user)
-        ->post(route('dashboard.modules.files.store'), [
+        ->post(route('dashboard.business.files.store'), [
             'file' => UploadedFile::fake()->createWithContent('sample-image.part1', 'hello '),
             'upload_id' => 'upload-test-1',
             'chunk_index' => 0,
@@ -71,7 +71,7 @@ test('authenticated users can upload files in chunks in file manager module', fu
         ->assertJsonPath('completed', false);
 
     $this->actingAs($user)
-        ->post(route('dashboard.modules.files.store'), [
+        ->post(route('dashboard.business.files.store'), [
             'file' => UploadedFile::fake()->createWithContent('sample-image.part2', 'world'),
             'upload_id' => 'upload-test-1',
             'chunk_index' => 1,
@@ -96,7 +96,7 @@ test('authenticated users can upload editor images through file manager api and 
     ]);
 
     $response = $this->actingAs($user)
-        ->post(route('dashboard.modules.files.store'), [
+        ->post(route('dashboard.business.files.store'), [
             'files' => [
                 UploadedFile::fake()->image('editor-image.jpg'),
             ],
@@ -140,7 +140,7 @@ test('authenticated users can fetch image library json for editor modal', functi
         ->toMediaCollection('file-manager', 'public');
 
     $response = $this->actingAs($user)
-        ->get(route('dashboard.modules.files.library', ['search' => 'library']), [
+        ->get(route('dashboard.business.files.library', ['search' => 'library']), [
             'Accept' => 'application/json',
             'X-Requested-With' => 'XMLHttpRequest',
         ]);
@@ -149,7 +149,7 @@ test('authenticated users can fetch image library json for editor modal', functi
         ->assertSuccessful()
         ->assertJsonCount(1, 'files')
         ->assertJsonPath('files.0.id', $imageMedia->id)
-        ->assertJsonPath('files.0.delete_url', route('dashboard.modules.files.destroy', $imageMedia));
+        ->assertJsonPath('files.0.delete_url', route('dashboard.business.files.destroy', $imageMedia));
 });
 
 test('authenticated users can download uploaded files in file manager module', function () {
@@ -164,7 +164,7 @@ test('authenticated users can download uploaded files in file manager module', f
         ->toMediaCollection('file-manager', 'public');
 
     $this->actingAs($user)
-        ->get(route('dashboard.modules.files.download', $media))
+        ->get(route('dashboard.business.files.download', $media))
         ->assertSuccessful()
         ->assertHeader('content-disposition');
 });
@@ -181,8 +181,8 @@ test('authenticated users can delete uploaded files in file manager module', fun
         ->toMediaCollection('file-manager', 'public');
 
     $this->actingAs($user)
-        ->delete(route('dashboard.modules.files.destroy', $media))
-        ->assertRedirect(route('dashboard.modules.files'))
+        ->delete(route('dashboard.business.files.destroy', $media))
+        ->assertRedirect(route('dashboard.business.files'))
         ->assertSessionHas('status');
 
     expect($user->fresh()->getMedia('file-manager'))->toHaveCount(0);
@@ -200,7 +200,7 @@ test('authenticated users can delete uploaded files with json response for edito
         ->toMediaCollection('file-manager', 'public');
 
     $this->actingAs($user)
-        ->delete(route('dashboard.modules.files.destroy', $media), [], [
+        ->delete(route('dashboard.business.files.destroy', $media), [], [
             'Accept' => 'application/json',
             'X-Requested-With' => 'XMLHttpRequest',
         ])

@@ -1,9 +1,124 @@
 # 시스템 아키텍처
 
+## 현재 구조 (AI 참조용)
+
+현재 구현된 실제 구조를 기준으로 한 빠른 파악용 정리다. 아래 트리와 라우트 맵을 먼저 읽으면 코드 탐색이 쉬워진다.
+
+### 계층 원칙
+
+| 계층 | 위치 | 특징 |
+|---|---|---|
+| 공통(Shared) | `app/Shared`, `resources/js/shared`, `resources/views/components` | 안정 기준, 언제든 재사용 |
+| 비즈니스 | `app/Http/Controllers/*Management*`, `app/Services`, `resources/views/dashboard/business`, `resources/js/business` | 언제든 재개발 대상, 공통과 분리 |
+| 데모(Modules) | `resources/views/dashboard/modules`, `resources/js/modules` | 컴포넌트/피드백 유형 데모 페이지 |
+
+### 디렉토리 구조
+
+```
+nowhere/
+├── app/
+│   ├── Http/
+│   │   ├── Controllers/
+│   │   │   ├── Auth/                      # 로그인/회원가입/비밀번호
+│   │   │   ├── DashboardWorkspaceController.php   # 데모 페이지(모듈) + 허브
+│   │   │   ├── OrderManagementController.php      # 비즈니스: 오더 CRUD + AI 구조화
+│   │   │   ├── BoardManagementController.php      # 비즈니스: 게시판
+│   │   │   ├── FileManagementController.php       # 비즈니스: 파일
+│   │   │   ├── UserManagementController.php       # 비즈니스: 회원/권한
+│   │   │   └── ProfileController.php
+│   │   └── Requests/                      # 폼 검증 (Order/Profile/Auth)
+│   ├── Models/                            # User, Order, OrderGroup, OrderLineItem, Board
+│   ├── Services/                          # FileService, OrderGroupService, OrderSummaryAiStructurer
+│   ├── Support/Orders/                    # OrderListRowBuilder, OrderWorkspaceListBuilder
+│   └── Notifications/
+├── routes/web.php                         # 라우트 전체 (아래 맵 참고)
+├── resources/
+│   ├── views/
+│   │   ├── components/                    # 공용 Blade: layouts/app, alert, dialog, modal
+│   │   ├── dashboard/
+│   │   │   ├── business/                  # 비즈니스 화면 (order/orders/boards/users/files/nowhere)
+│   │   │   ├── modules/                   # 컴포넌트 데모 (06-x) + notification
+│   │   │   └── partials/sidebar-nav.blade.php
+│   │   ├── dashboard.blade.php            # 허브 (비즈니스 모듈 + 컴포넌트 데모)
+│   │   ├── welcome.blade.php / market.blade.php / my-orders.blade.php
+│   │   └── auth/ · errors/
+│   └── js/
+│       ├── app.js                         # 진입점 (데모/공용 마운트, 비즈니스는 import)
+│       ├── business/                      # 비즈니스 JS/Vue (언제든 재개발)
+│       │   ├── order/                     # ai-structuring, line-items, workspace
+│       │   ├── orders/                    # OrderDataTable/OrderCardList/OrderTableCells.vue
+│       │   ├── users/                     # UserDataTable.vue + user-table/user-actions
+│       │   ├── row-actions.js             # 테이블 행 액션 (삭제 확인)
+│       │   └── gallery.js                 # 파일 업로드 갤러리
+│       ├── shared/                        # 공통 (안정)
+│       │   ├── api/                       # axios/request/response/interceptor/error (STEP 2-5)
+│       │   ├── components/                # Base*/DataTable/Dropdown/Form/Modal/Dialog/Toast/ToastEditor/Icon
+│       │   ├── layouts/                   # AppLayout/AuthLayout/BlankLayout
+│       │   ├── notifications/             # notificationStore
+│       │   └── utils/toast-bridge.js      # createToastBridge
+│       └── modules/dialog/                # 데모 전용 (DialogPlayground)
+├── public/build/                          # Vite 빌드 산출물
+├── tests/Feature/                         # 기능 테스트 (도메인별 파일)
+└── docs/                                  # 설계/규약 문서 (아래 인덱스)
+```
+
+### 라우트 맵 (routes/web.php)
+
+| 네임스페이스 | 경로 | 담당 | 비고 |
+|---|---|---|---|
+| (루트) | `/`, `/login`, `/register`, `/forgot-password` | Auth | guest 미들웨어 |
+| `dashboard` | `/dashboard` | 허브 | auth |
+| `dashboard.market` | `/market` | 마켓 화면 | auth |
+| `dashboard.my-orders` | `/my-orders` | 내 오더 | auth |
+| `dashboard.business.*` | `/dashboard/business/{files,boards,users,nowhere,order...}` | 비즈니스 CRUD | auth, 재개발 대상 |
+| `dashboard.modules.*` | `/dashboard/modules/{notification,dropdown,datatable,editor,dialog,components,buttons,modal,cards,lists,forms,toast,loading,alert}` | 컴포넌트 데모 | auth, 안정 |
+| `profile.*` / `logout` | `/profile`, `/logout` | 프로필/로그아웃 | auth |
+
+### 비즈니스 모듈 라우트
+
+```
+dashboard.business.files.*           # 파일 목록/업로드/다운로드/삭제
+dashboard.business.boards.*          # 게시판 목록/등록/상세/수정/삭제
+dashboard.business.users.*           # 회원 목록/상세/권한/역할/상태
+dashboard.business.nowhere           # NoWhere 비즈니스 허브
+dashboard.business.order             # 오더 워크스페이스
+dashboard.business.order.create      # 예약 등록 (AI 구조화 포함)
+dashboard.business.order.store / update / show / edit
+dashboard.business.order.structure   # AI 구조화 (POST)
+dashboard.business.order.storeStructured
+dashboard.business.order.status.transition
+```
+
+### 의존 흐름
+
+```
+웹 요청 → 라우트 → 컨트롤러
+  ├─ 데모: DashboardWorkspaceController → view('dashboard.modules.*')
+  └─ 비즈니스: *ManagementController → Services/Models → view('dashboard.business.*')
+Vue 마운트 → resources/js/app.js → business/* (비즈니스) / shared/* (공통)
+서버 통신 → shared/api 헬퍼 (postData/getData + getApiErrorMessage)
+```
+
+### 문서 인덱스
+
+| 문서 | 내용 |
+|---|---|
+| `docs/ROADMAP.md` | 단계별 로드맵 (STEP 2 Shared 완료, 다음은 Order Module) |
+| `docs/TASKS.md` | 현재 작업 기준 (Current = Order Module) |
+| `docs/FOUNDATION.md` | 공통 컴포넌트 규약 명세 |
+| `docs/API.md` | shared/api 통신 규약 |
+| `docs/ARCHITECTURE.md` | 아키텍처/권한/인증 설계 (본 문서) |
+| `docs/DATABASE.md` | 데이터베이스 설계 |
+| `docs/UI.md` | UI/디자인 기준 |
+| `docs/RULES.md` | 작업 규칙 (수정 금지 규칙 등) |
+
+---
+
 ## 전체 구조
 - 애플리케이션은 Laravel 13 기반의 모놀리식 웹 구조를 사용한다.
 - 서버 렌더링 중심의 Blade UI와 Laravel 라우팅, 컨트롤러, 세션 인증으로 구성한다.
 - 현재는 인증과 기본 대시보드를 시작점으로 두고, 이후 도메인 기능을 모듈 단위로 확장하는 구조를 목표로 한다.
+- 상위 구조 기준은 `Application > Core / Shared / Modules`다.
 
 ## Backend
 - 프레임워크: Laravel 13
@@ -15,16 +130,26 @@
   - `app/Models/`: Eloquent 모델
   - `database/`: 마이그레이션, 팩토리, 시더
 - 현재 백엔드는 세션 인증, 뷰 반환, 폼 검증 중심으로 구성되어 있다.
+- 공통으로 재사용되는 화면 데이터 조립 규칙, 포맷 규칙, row builder 규칙은 컨트롤러나 Blade에 장기 보관하지 않고 분리 가능한 PHP class 계층으로 이동하는 것을 우선한다.
 
 ## Frontend
 - 렌더링 방식: Blade 기반 서버 렌더링
 - 스타일링: 프로젝트 내부 plain CSS
 - 번들러: Vite
+- 프런트 구조 원칙: `Application > Core / Shared / Modules` 기준 해석
 - 주요 화면
   - 랜딩 페이지
   - 로그인 페이지
   - 인증 후 대시보드
 - 공용 레이아웃과 재사용 스타일 클래스를 통해 UI 일관성을 유지한다.
+- 현재 공통 UI는 `resources/js/shared/` 기준으로 유지한다.
+- 현재 `Core`, `Shared`, `Modules`는 상위 설계 기준으로 사용한다.
+- 실제 업무 기능은 장기적으로 `Modules/{Domain}` 구조로 확장한다.
+- 각 업무 모듈은 내부에서 `Models`와 `UI` 계층을 분리한다.
+- 비즈니스 모델과 비즈니스 UI는 같은 폴더에 섞지 않는다.
+- NoWhere 비즈니스 UI는 공통 Foundation 위에서 동작하지만, `shared`와 구분되는 독립적인 디자인과 스타일 레이어를 가진다.
+- 프론트엔드 화면은 렌더링과 사용자 상호작용에 집중하고, 반복되는 데이터 조립 규칙이나 재사용 가능한 뷰 모델 생성 규칙은 공통 계층으로 분리한다.
+- Blade와 Vue는 최종 출력 계층이며, 공통 기능 규칙을 직접 소유하지 않는 방향을 기본으로 한다.
 
 ## Redis
 - 현재 프로젝트에는 Redis가 활성 사용되고 있지 않다.
@@ -101,6 +226,11 @@
 
 ### Permission 네이밍 규칙
 - 모든 Permission은 `모듈.기능` 형식으로 정의한다.
+- **실제 사용 중인 Permission은 `App\Models\User::permissionOptions()`가 단일 기준이다.**
+  - `board.view`, `board.create`, `board.update`, `board.delete`, `board.comment`
+  - `order.create`, `order.status.update`
+  - `dispatch.assign`
+- 권한 검증은 `App\Policies`(BoardPolicy/OrderPolicy/UserPolicy)를 통해 라우트 `can:` 미들웨어와 컨트롤러에서 공용으로 사용한다.
 - 예시
   - `dashboard.view`
   - `user.view`
@@ -120,6 +250,7 @@
   - `order.create`
   - `order.update`
   - `order.delete`
+  - `order.status.update`
   - `dispatch.view`
   - `dispatch.assign`
   - `dispatch.cancel`
@@ -152,15 +283,16 @@
   - 회원 권한 변경: `user.permission`
 
 ### 전환 전략
-- 1단계: `spatie/laravel-permission` 설치
-- 2단계: Permission Seeder 작성
-- 3단계: Role Seeder 작성
-- 4단계: User ↔ Role 연결
-- 5단계: Role 관리 페이지
-- 6단계: Permission 관리 페이지
-- 7단계: User 권한 변경
-- 8단계: Vue `can()` 적용
-- 전환 완료 전까지는 현재 임시 컬럼 구조를 유지하고, 완료 후 점진적으로 교체한다.
+- 완료: 권한 검증 일원화 — `App\Policies`(Board/Order/User) + 라우트 `can:` 미들웨어 적용 (임시 컬럼 기반 `hasPermission` 사용).
+- 잔여(다음 페이즈): `spatie/laravel-permission` 전환
+  - 1단계: `composer require spatie/laravel-permission`
+  - 2단계: config/migration publish + migrate
+  - 3단계: Permission/Role Seeder 작성
+  - 4단계: `User`에 `HasRoles` 적용, `hasPermission` → `hasPermissionTo`/`can()` 교체
+  - 5단계: UserFactory·컨트롤러·뷰(권한/역할 관리) 교체
+  - 6단계: 테스트를 Spatie 기반으로 갱신
+  - 7단계: `menu.*` 메뉴 권한 + Vue `can()` 적용
+- 전환 완료 전까지는 현재 임시 컬럼 구조를 유지한다.
 
 ## 이벤트 구조
 - 현재 커스텀 이벤트/리스너는 아직 도입되지 않았다.
@@ -186,108 +318,28 @@
   - 알림 모듈
   - 운영/관리 모듈
 
-## 공통 DataTable 구조
-- 목록 화면은 단순한 테이블이 아니라 공통 `List Framework` 성격의 `DataTable`을 기준으로 설계한다.
-- 공통 경로는 `resources/js/shared/components/DataTable/`를 기준으로 유지한다.
-- 각 모듈은 `columns`, `rows`, 검색어, 필터 값, 페이지 정보만 제공하고, 목록 출력 UI는 공통 `DataTable`이 담당한다.
-- `UserList`, `BoardList`, `OrderList`, `DriverList`, `DispatchList`, `SettlementList`는 공통 `DataTable`을 재사용하는 구조를 기본 원칙으로 한다.
-- 도메인 전용 `UserTable`, `BoardTable`, `OrderTable` 같은 개별 출력 컴포넌트는 특별한 사유가 없으면 만들지 않는다.
-- 1차 범위는 아래 기능만 포함한다.
-  - 컬럼 출력
-  - 데이터 출력
-  - 빈 데이터 표시
-  - 로딩
-  - 페이지네이션
-  - 검색
-  - Toolbar
-  - Slot 지원
-- 2차 이후 후보 기능은 정렬, 체크박스, 전체선택, 다중선택, 컬럼 숨김, 컬럼 순서 변경이다.
-- 3차 이후 후보 기능은 Drag Sort, Excel Export/Import, Row Expand, Tree Table이다.
+## Application 구조
+- `Core`
+  - 프로젝트 실행에 필요한 핵심 기능
+  - 예: `Auth`, `User`, `Role`, `Permission`, 접근 제어, 앱 부트스트랩
+- `Shared`
+  - 프로젝트 전체에서 재사용되는 Foundation UI와 공통 기능
+  - 예: `DataTable`, `Form`, `Modal`, `Dialog`, `Toast`, `Loading`, `File Manager`, `Markdown Editor`
+- `Modules`
+  - 실제 업무 기능
+  - 예: `Board`, `Customer`, `Company`, `Vehicle`, `Driver`, `Order`, `Dispatch`, `Settlement`
 
-## 공통 Toast UI Editor / Viewer 구조
-- 문서형 본문 입력과 조회는 공통 `Toast UI Editor / Viewer` 구조를 기준으로 설계한다.
-- 공통 경로는 `resources/js/shared/components/ToastEditor/`를 기준으로 유지한다.
-- 입력 컴포넌트는 `ToastEditor.vue`, 조회 컴포넌트는 `ToastViewer.vue`를 사용한다.
-- 저장 기준 값은 HTML이 아니라 Markdown 문자열을 우선 사용한다.
-- `Board`, `Notice`, `FAQ`, `QnA`, `Operation Manual` 같은 문서형 모듈은 공통 Editor / Viewer를 재사용하는 구조를 기본 원칙으로 한다.
-- 도메인 전용 `BoardEditor`, `NoticeEditor`, `FaqEditor` 같은 개별 에디터 컴포넌트는 특별한 사유가 없으면 만들지 않는다.
-- Editor 이미지 업로드는 도메인 모듈 내부에서 별도 저장 로직을 만들지 않고 공통 `File Module`과 `spatie/laravel-medialibrary` 훅을 연결한다.
-- 1차 범위는 아래 기능만 포함한다.
-  - Markdown / WYSIWYG 전환
-  - 공통 Viewer 렌더링
-  - Markdown 문자열 동기화
-  - Blade 대시보드 테스트 페이지 연결
-
-## 파일 모듈 구조
-- 업로드/저장은 `spatie/laravel-medialibrary`가 담당하고, NoWhere 전용 파일 관리 UI와 업무 규칙은 공통 `File Module`이 담당한다.
-- 백엔드에서는 `app/Services/FileService.php`를 공통 진입점으로 두고 Media Library 호출을 캡슐화한다.
-- 파일 기능은 공통 `File Module`로 분리하고, 다른 모듈은 이를 가져다 사용하는 구조를 기본으로 한다.
-- 1차 범위 후보
-  - 파일 업로드
-  - 파일 삭제
-  - 파일 다운로드
-  - 이미지 미리보기
-  - 파일 목록
-- 역할 분리 원칙
-  - `Upload`: 게시판, 오더, 프로필, 기사 등 일반 화면에서 첨부/업로드 용도로 사용
-  - `Manager`: 업로드된 파일 조회, 삭제, 관리가 필요한 관리자 화면에서 사용
-- 적용 대상 예시
-  - `Board` -> 공통 파일 업로드/목록
-  - `Profile` -> 공통 이미지 업로드
-  - `Order` -> 공통 파일 업로드/미리보기
-  - `Driver` -> 공통 프로필 이미지 업로드
-- 파일 기능이 필요한 새 모듈이 생기면 각 모듈 내부에서 별도 업로드 로직을 만들지 않고 공통 파일 모듈을 우선 재사용한다.
-
-## 게시판 구조
-- 게시판은 하나의 공통 `Board` 모듈로 운영하고 `type` 값으로 `notice`, `free`, `qna`를 구분한다.
-- 1차 범위는 `목록`, `상세`, `등록`, `수정`, `삭제`, `검색`만 포함한다.
-- 첨부파일은 게시판 내부에 별도 저장 구조를 만들지 않고 공통 `File Module`과 `spatie/laravel-medialibrary`를 재사용한다.
-- 게시글 등록/수정은 공통 Upload 성격의 파일 업로드를 사용하고, 상세 화면에서는 첨부 목록과 다운로드를 제공한다.
-- 현재 제외 항목은 `댓글`, `좋아요`, `신고`, `북마크`, `FAQ`, `상단 고정`, `실시간 알림`이다.
-- UI는 현재 프로젝트 기준에 맞춰 Blade 기반 모듈 페이지로 구현한다.
-- 경로는 `/dashboard/modules/boards`를 기준으로 사용한다.
-
-### boards 테이블
-- `id`
-- `type`
-- `title`
-- `content`
-- `user_id`
-- `status`
-- `is_notice`
-- `is_private`
-- `view_count`
-- `created_at`
-- `updated_at`
-
-### Board 권한
-- `board.view`
-- `board.create`
-- `board.update`
-- `board.delete`
-- `board.comment`은 댓글 단계에서 사용할 예약 권한으로 유지한다.
-
-## 요청 흐름
-1. 사용자가 브라우저에서 웹 페이지 요청
-2. Laravel Router가 URL을 매칭
-3. 필요한 미들웨어(`web`, `auth`, `guest`) 실행
-4. Controller 또는 Closure가 요청 처리
-5. FormRequest로 입력값 검증
-6. 인증 또는 비즈니스 로직 수행
-7. Blade View 또는 Redirect Response 반환
-8. 브라우저가 결과 화면 렌더링
-
-## 배포 구조
-- 현재는 전형적인 Laravel 웹 배포 구조를 가정한다.
-- 기본 구성 요소
-  - 웹 서버(Nginx/Apache)
-  - PHP 런타임
-  - 애플리케이션 코드
-  - SQLite 또는 향후 RDBMS
-  - 필요 시 Queue Worker / Redis / Scheduler
-- 확장 시 고려 사항
-  - 환경 변수 분리
-  - 자산 빌드 자동화
-  - 마이그레이션 배포 절차
-  - 백그라운드 워커 운영
-  - 로그 및 장애 모니터링
+## Modules 내부 구조
+- 각 업무 모듈은 `Modules/{Domain}` 구조를 기준으로 확장한다.
+- `Modules/{Domain}/Models`
+  - 도메인 데이터 처리 계층
+  - 예: API 호출, 상수, 서비스, 헬퍼, 매퍼, 옵션 로딩, row builder, formatter, list builder
+- `Modules/{Domain}/UI`
+  - 실제 도메인 화면 UI 계층
+  - 예: 페이지 컴포넌트, 도메인 폼 조합, 상세 패널, 도메인 전용 카드
+- 핵심 원칙
+  - 공통 UI는 `Shared`에 둔다.
+  - 모듈의 `Models`에 UI를 넣지 않는다.
+  - 모듈의 `UI`는 `Shared` 공통 컴포넌트를 조합해서 만든다.
+  - 모듈의 `UI`는 독립적인 레이아웃, 패널 구조, 상태 표현, 화면 밀도, 모듈 전용 스타일을 가질 수 있다.
+  - 두 개 이상의 화면에서 반복되는 규칙이나 프론트 재사용이 필요한 기능은 `UI` 내부에 중복 보관하지 않고 공통 분리 구조로 옮긴다.

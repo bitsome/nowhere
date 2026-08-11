@@ -3,12 +3,16 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Support\Leveling\LevelTable;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 use Spatie\Image\Enums\Fit;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
@@ -25,18 +29,30 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
     'status',
     'last_login_at',
     'login_count',
+    'is_vehicle_verified',
+    'is_license_verified',
+    'is_vip',
+    'vehicle_info',
+    'xp',
+    'channels',
 ])]
 #[Hidden(['password', 'remember_token'])]
-class User extends Authenticatable
-    implements HasMedia
+class User extends Authenticatable implements HasMedia
 {
+    use HasApiTokens;
+
     public const ROLE_SUPER_ADMIN = 'Super Admin';
+
     public const ROLE_ADMIN = 'Admin';
+
     public const ROLE_OPERATOR = 'Operator';
+
     public const ROLE_DRIVER = 'Driver';
 
     public const STATUS_ACTIVE = 'active';
+
     public const STATUS_INACTIVE = 'inactive';
+
     public const STATUS_SUSPENDED = 'suspended';
 
     /**
@@ -54,6 +70,52 @@ class User extends Authenticatable
 
     /** @use HasFactory<UserFactory> */
     use HasFactory, InteractsWithMedia, Notifiable;
+
+    /**
+     * @return BelongsToMany<Conversation, $this>
+     */
+    public function conversations(): BelongsToMany
+    {
+        return $this->belongsToMany(Conversation::class);
+    }
+
+    public function communityPosts(): HasMany
+    {
+        return $this->hasMany(CommunityPost::class);
+    }
+
+    public function levelEvents(): HasMany
+    {
+        return $this->hasMany(UserLevelEvent::class);
+    }
+
+    /**
+     * XP를 부여하고 이벤트 로그를 남긴다.
+     */
+    public function addXp(int $xp, string $type, string $label): void
+    {
+        if ($xp <= 0) {
+            return;
+        }
+
+        $this->increment('xp', $xp);
+
+        $this->levelEvents()->create([
+            'type' => $type,
+            'label' => $label,
+            'xp' => $xp,
+        ]);
+    }
+
+    /**
+     * 현재 레벨 정보 (XP → 레벨/타이틀/진행률).
+     *
+     * @return array{level: int, title: string, min_xp: int, next_xp: int|null, progress: float}
+     */
+    public function levelInfo(): array
+    {
+        return LevelTable::resolve((int) $this->xp);
+    }
 
     /**
      * @return array<int, string>
@@ -80,6 +142,7 @@ class User extends Authenticatable
             'board.delete',
             'board.comment',
             'order.create',
+            'order.status.update',
             'dispatch.assign',
         ];
     }
@@ -110,12 +173,14 @@ class User extends Authenticatable
                 'board.delete',
                 'board.comment',
                 'order.create',
+                'order.status.update',
                 'dispatch.assign',
             ],
             self::ROLE_OPERATOR => [
                 'board.view',
                 'board.comment',
                 'order.create',
+                'order.status.update',
                 'dispatch.assign',
             ],
             self::ROLE_DRIVER => [

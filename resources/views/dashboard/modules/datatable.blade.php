@@ -6,18 +6,32 @@
     $sampleCellClass = 'px-4 py-3 text-sm text-[#4f4f4f] dark:text-[#b9bbc0]';
     $sampleActionButtonClass = 'inline-flex h-9 items-center justify-center rounded-lg border border-[#d8d8d8] bg-[#f5f5f5] px-3 text-sm text-[#4f4f4f] dark:border-[#2a2a2a] dark:bg-[#1a1a1a] dark:text-[#b9bbc0]';
     $sampleToolbarClass = 'mt-4 flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-[#d8d8d8] bg-[#efefef] px-4 py-3 dark:border-[#343434] dark:bg-[#202020]';
-    $sampleInputClass = 'h-9 rounded-lg border border-[#d6d6d6] bg-[#f5f5f5] px-3 text-sm text-[#1f1f1f] dark:border-[#2a2a2a] dark:bg-[#141414] dark:text-[#d6d6dd]';
-    $sampleMenuClass = 'menu-panel';
-    $sampleMenuItemClass = 'menu-item';
+    $sampleInputClass = 'h-9 rounded-lg border border-[#d6d6d6] bg-[#f5f5f5] px-3 text-sm text-[#1f1f1f] dark:border-[#2a2a2a] dark:bg-[#171717] dark:text-[#d6d6dd]';
     $sampleBadgeStrongClass = 'inline-flex rounded-full border border-[#d0d0d0] bg-[#ececec] px-2.5 py-1 text-xs font-medium text-[#1f1f1f] dark:border-[#343434] dark:bg-[#252526] dark:text-[#d6d6dd]';
     $sampleBadgeMutedClass = 'inline-flex rounded-full border border-[#d8d8d8] bg-[#f1f1f1] px-2.5 py-1 text-xs font-medium text-[#555555] dark:border-[#343434] dark:bg-[#202020] dark:text-[#b9bbc0]';
     $multiSelectActions = ['상태 변경', '권한 변경', '삭제'];
-    $rowActionButtons = ['상세', '권한'];
     $hoverMenuPrimaryItems = ['이름 변경', '공유 링크', '삭제'];
     $hoverMenuSecondaryItems = ['다운로드', '복제', '삭제'];
+    $rowActionItems = [
+        ['icon' => 'view', 'label' => '상세', 'href' => '#'],
+        ['icon' => 'settings', 'label' => '권한', 'href' => '#'],
+    ];
+    $hoverMenuIcons = [
+        '이름 변경' => 'edit',
+        '공유 링크' => 'settings',
+        '삭제' => 'trash',
+        '다운로드' => 'download',
+        '복제' => 'copy',
+    ];
+    $hoverMenuPrimaryActionItems = collect($hoverMenuPrimaryItems)
+        ->map(fn ($label) => ['icon' => $hoverMenuIcons[$label] ?? 'settings', 'label' => $label, 'href' => '#'])
+        ->all();
+    $hoverMenuSecondaryActionItems = collect($hoverMenuSecondaryItems)
+        ->map(fn ($label) => ['icon' => $hoverMenuIcons[$label] ?? 'settings', 'label' => $label, 'href' => '#'])
+        ->all();
 @endphp
 
-<x-layouts.app title="Shared DataTable 테스트">
+<x-layouts.app title="데이터 테이블">
     <section class="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
         <aside class="surface-card surface-card--muted lg:sticky lg:top-6 lg:self-start">
             <div class="ui-divider border-b pb-4">
@@ -28,34 +42,14 @@
                 </p>
             </div>
 
-            <nav class="mt-4 space-y-2">
-                <a
-                    href="{{ route('dashboard') }}"
-                    title="대시보드 허브"
-                    class="flex items-center justify-between rounded-lg border border-[#d8d8d8] bg-[#f5f5f5] px-3 py-2 text-sm text-[#4f4f4f] transition hover:bg-[#ededed] hover:text-[#1f1f1f] dark:border-[#2a2a2a] dark:bg-[#1a1a1a] dark:text-[#b9bbc0] dark:hover:bg-[#222222] dark:hover:text-[#d6d6dd]"
-                >
-                    <span>허브 홈</span>
-                    <span class="text-xs">00</span>
-                </a>
-
-                @foreach ($modules as $moduleItem)
-                    <a
-                        href="{{ $moduleItem['href'] }}"
-                        title="{{ $moduleItem['title'] }}"
-                        class="flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition {{ $moduleItem['key'] === $module['key'] ? 'border-[#cfcfcf] bg-[#ececec] text-[#1f1f1f] dark:border-[#343434] dark:bg-[#222222] dark:text-[#f3f3f3]' : 'border-[#d8d8d8] bg-[#f5f5f5] text-[#4f4f4f] hover:bg-[#ededed] hover:text-[#1f1f1f] dark:border-[#2a2a2a] dark:bg-[#1a1a1a] dark:text-[#b9bbc0] dark:hover:bg-[#222222] dark:hover:text-[#d6d6dd]' }}"
-                    >
-                        <span>{{ $moduleItem['title'] }}</span>
-                        <span class="text-xs">{{ $moduleItem['order'] }}</span>
-                    </a>
-                @endforeach
-            </nav>
+            @include('dashboard.partials.sidebar-nav', ['modules' => $modules, 'module' => $module])
         </aside>
 
         <div class="space-y-4">
             <section class="surface-card surface-card--raised">
                 <div class="flex flex-wrap items-end justify-between gap-3">
                     <div>
-                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Shared List Framework</p>
+                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">목록 프레임워크</p>
                         <h2 class="mt-2 text-2xl font-semibold text-gray-900 dark:text-gray-100">DataTable Playground</h2>
                     </div>
                     <p class="text-sm text-gray-500 dark:text-gray-400">Samples + Live</p>
@@ -107,10 +101,12 @@
                                             <td class="{{ $sampleCellClass }} text-center"><span class="{{ $sampleBadgeStrongClass }}">활성</span></td>
                                             <td class="{{ $sampleCellClass }} text-center"><span class="{{ $sampleBadgeMutedClass }}">Admin</span></td>
                                             <td class="{{ $sampleCellClass }} text-center">
-                                                <div class="flex items-center justify-center gap-2">
-                                                    @foreach ($rowActionButtons as $actionLabel)
-                                                        <button type="button" class="{{ $sampleActionButtonClass }}" title="{{ $actionLabel }}" aria-label="{{ $actionLabel }}">{{ $actionLabel }}</button>
-                                                    @endforeach
+                                                <div class="flex justify-end">
+                                                    <div
+                                                        data-table-actions
+                                                        data-trigger-label="행 관리"
+                                                        data-items='@json($rowActionItems)'
+                                                    ></div>
                                                 </div>
                                             </td>
                                         </tr>
@@ -120,10 +116,12 @@
                                             <td class="{{ $sampleCellClass }} text-center"><span class="{{ $sampleBadgeMutedClass }}">비활성</span></td>
                                             <td class="{{ $sampleCellClass }} text-center"><span class="inline-flex rounded-full border border-[#d8d8d8] bg-transparent px-2.5 py-1 text-xs font-medium text-[#555555] dark:border-[#343434] dark:text-[#b9bbc0]">Operator</span></td>
                                             <td class="{{ $sampleCellClass }} text-center">
-                                                <div class="flex items-center justify-center gap-2">
-                                                    @foreach ($rowActionButtons as $actionLabel)
-                                                        <button type="button" class="{{ $sampleActionButtonClass }}" title="{{ $actionLabel }}" aria-label="{{ $actionLabel }}">{{ $actionLabel }}</button>
-                                                    @endforeach
+                                                <div class="flex justify-end">
+                                                    <div
+                                                        data-table-actions
+                                                        data-trigger-label="행 관리"
+                                                        data-items='@json($rowActionItems)'
+                                                    ></div>
                                                 </div>
                                             </td>
                                         </tr>
@@ -261,13 +259,12 @@
                                                 </div>
                                             </td>
                                             <td class="{{ $sampleCellClass }} text-center">
-                                                <div class="inline-flex flex-col items-center gap-2">
-                                                    <button type="button" class="{{ $sampleActionButtonClass }}" title="더보기 메뉴" aria-label="더보기 메뉴">더보기</button>
-                                                    <div class="{{ $sampleMenuClass }}">
-                                                        @foreach ($hoverMenuPrimaryItems as $menuItemLabel)
-                                                            <button type="button" class="{{ $sampleMenuItemClass }}">{{ $menuItemLabel }}</button>
-                                                        @endforeach
-                                                    </div>
+                                                <div class="flex justify-end">
+                                                    <div
+                                                        data-table-actions
+                                                        data-trigger-label="더보기 메뉴"
+                                                        data-items='@json($hoverMenuPrimaryActionItems)'
+                                                    ></div>
                                                 </div>
                                             </td>
                                         </tr>
@@ -287,13 +284,12 @@
                                                 </div>
                                             </td>
                                             <td class="{{ $sampleCellClass }} text-center">
-                                                <div class="inline-flex flex-col items-center gap-2">
-                                                    <button type="button" class="{{ $sampleActionButtonClass }}" title="더보기 메뉴" aria-label="더보기 메뉴">더보기</button>
-                                                    <div class="{{ $sampleMenuClass }}">
-                                                        @foreach ($hoverMenuSecondaryItems as $menuItemLabel)
-                                                            <button type="button" class="{{ $sampleMenuItemClass }}">{{ $menuItemLabel }}</button>
-                                                        @endforeach
-                                                    </div>
+                                                <div class="flex justify-end">
+                                                    <div
+                                                        data-table-actions
+                                                        data-trigger-label="더보기 메뉴"
+                                                        data-items='@json($hoverMenuSecondaryActionItems)'
+                                                    ></div>
                                                 </div>
                                             </td>
                                         </tr>
@@ -301,6 +297,74 @@
                                 </table>
                             </div>
                     </section>
+
+                <section class="{{ $sampleCardClass }}">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Sortable Headers</p>
+                            <h4 class="mt-2 text-base font-semibold text-gray-900 dark:text-gray-100">정렬 가능 헤더 + 상태 셀 샘플</h4>
+                        </div>
+                        <span class="meta-badge">Sort</span>
+                    </div>
+
+                    <div class="{{ $sampleTableWrapClass }}">
+                        <table class="{{ $sampleTableClass }}" title="정렬 가능 헤더와 상태 셀 샘플">
+                            <thead class="border-b border-[#dddddd] dark:border-[#2a2a2a]">
+                                <tr>
+                                    <th class="{{ $sampleHeadCellClass }} text-left">오더번호</th>
+                                    <th class="{{ $sampleHeadCellClass }} text-left">
+                                        <button type="button" class="inline-flex items-center gap-1 text-sm font-semibold text-[#1f1f1f] transition hover:text-[#6a6a6a] dark:text-[#d6d6dd] dark:hover:text-[#9ea1a8]" title="기사명 오름차순 정렬 중">
+                                            기사명
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-3.5 w-3.5" aria-hidden="true">
+                                                <path stroke-linecap="round" d="M6 15l6-6l6 6" />
+                                            </svg>
+                                        </button>
+                                    </th>
+                                    <th class="{{ $sampleHeadCellClass }} text-center">
+                                        <button type="button" class="inline-flex items-center gap-1 text-sm font-semibold text-[#1f1f1f] transition hover:text-[#6a6a6a] dark:text-[#d6d6dd] dark:hover:text-[#9ea1a8]" title="상태 내림차순 정렬 중">
+                                            상태
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-3.5 w-3.5" aria-hidden="true">
+                                                <path stroke-linecap="round" d="M6 9l6 6l6-6" />
+                                            </svg>
+                                        </button>
+                                    </th>
+                                    <th class="{{ $sampleHeadCellClass }} text-left">
+                                        <button type="button" class="inline-flex items-center gap-1 text-sm font-semibold text-[#8b8b8b] dark:text-[#6d6d6d]" title="금액 정렬 안 함">
+                                            금액
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-3.5 w-3.5" aria-hidden="true">
+                                                <path stroke-linecap="round" d="M6 9l6 6l6-6" />
+                                            </svg>
+                                        </button>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-[#dddddd] dark:divide-[#2a2a2a]">
+                                <tr class="bg-[#f7f7f7] dark:bg-[#1a1a1a]">
+                                    <td class="{{ $sampleCellClass }}">ORD-20260801-001</td>
+                                    <td class="{{ $sampleCellClass }}">정다은</td>
+                                    <td class="{{ $sampleCellClass }} text-center"><span class="{{ $sampleBadgeStrongClass }}">배차 대기</span></td>
+                                    <td class="{{ $sampleCellClass }}">45,000원</td>
+                                </tr>
+                                <tr class="bg-[#f7f7f7] dark:bg-[#1a1a1a]">
+                                    <td class="{{ $sampleCellClass }}">ORD-20260801-002</td>
+                                    <td class="{{ $sampleCellClass }}">이영희</td>
+                                    <td class="{{ $sampleCellClass }} text-center"><span class="{{ $sampleBadgeMutedClass }}">배차 완료</span></td>
+                                    <td class="{{ $sampleCellClass }}">36,000원</td>
+                                </tr>
+                                <tr class="bg-[#f7f7f7] dark:bg-[#1a1a1a]">
+                                    <td class="{{ $sampleCellClass }}">ORD-20260801-003</td>
+                                    <td class="{{ $sampleCellClass }}">박서연</td>
+                                    <td class="{{ $sampleCellClass }} text-center"><span class="{{ $sampleBadgeMutedClass }}">배차 완료</span></td>
+                                    <td class="{{ $sampleCellClass }}">28,000원</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <p class="mt-3 text-sm leading-6 text-gray-500 dark:text-gray-400">
+                        헤더 클릭 시 정렬 방향(asc/desc)이 전환되고, 현재 정렬 상태를 화살표 아이콘으로 표시합니다. 정렬되지 않은 컬럼은 흐린 아이콘을 유지합니다.
+                    </p>
+                </section>
 
                 <section class="{{ $sampleCardClass }}">
                     <div class="flex flex-wrap items-end justify-between gap-3">

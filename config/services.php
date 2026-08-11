@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'order_ai' => [
+        'api_key' => env('ORDER_AI_API_KEY'),
+        'base_url' => env('ORDER_AI_BASE_URL', 'https://api.openai.com/v1'),
+        'model' => env('ORDER_AI_MODEL', 'gpt-4.1-mini'),
+        'timeout' => (int) env('ORDER_AI_TIMEOUT', 60),
+        'verify_ssl' => filter_var(env('ORDER_AI_VERIFY_SSL', true), FILTER_VALIDATE_BOOL),
+    ],
+
 ];

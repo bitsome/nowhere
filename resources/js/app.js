@@ -1,12 +1,19 @@
 import { createApp, h, ref } from 'vue';
 
 import DataTablePlayground from './shared/components/DataTable/DataTablePlayground.vue';
+import DialogPlayground from './modules/dialog/DialogPlayground.vue';
+import ButtonPlayground from './shared/components/Button/ButtonPlayground.vue';
+import IconPlayground from './shared/components/Icon/IconPlayground.vue';
+import ModalPlayground from './shared/components/Modal/ModalPlayground.vue';
 import DropdownActionMenu from './shared/components/Dropdown/DropdownActionMenu.vue';
 import DropdownPlayground from './shared/components/Dropdown/DropdownPlayground.vue';
+import DropdownTypesPlayground from './shared/components/Dropdown/DropdownTypesPlayground.vue';
+import BaseLoading from './shared/components/Loading/BaseLoading.vue';
 import ToastContainer from './shared/components/Toast/ToastContainer.vue';
 import ToastEditorField from './shared/components/ToastEditor/ToastEditorField.vue';
 import ToastEditorPlayground from './shared/components/ToastEditor/ToastEditorPlayground.vue';
 import ToastViewerField from './shared/components/ToastEditor/ToastViewerField.vue';
+import { createToastBridge } from './shared/utils/toast-bridge.js';
 import HeaderNotificationMount from './shared/layouts/AppLayout/components/Header/Notification/HeaderNotificationMount.vue';
 import {
     appendNotification,
@@ -15,6 +22,13 @@ import {
     onNotificationChange,
     readNotifications,
 } from './shared/notifications/notificationStore.js';
+import { initializeOrderAiStructuring } from './business/order/ai-structuring.js';
+import { mountOrderGroupTypeSync, mountOrderLineItemEditors } from './business/order/line-items.js';
+import { mountOrderCardList, mountOrderDataTable, mountOrderViewToggle, mountOrderTabMenu, mountViewToggleDemo } from './business/order/workspace.js';
+import { mountUserDataTable } from './business/users/user-table.js';
+import { mountUserRowActions } from './business/users/user-actions.js';
+import { mountTableActions } from './business/row-actions.js';
+import { mountUploadGallery } from './business/gallery.js';
 
 function escapeHtml(value) {
     return String(value)
@@ -56,40 +70,6 @@ function buildNotificationItem(notification) {
     `;
 }
 
-function createToastBridge(target, autoCloseDelay = 2800) {
-    const items = ref([]);
-    let toastSequence = 0;
-
-    createApp({
-        setup() {
-            const closeToast = (item) => {
-                items.value = items.value.filter((toastItem) => toastItem.id !== item.id);
-            };
-
-            return () => h(ToastContainer, {
-                autoCloseDelay,
-                items: items.value,
-                onClose: closeToast,
-            });
-        },
-    }).mount(target);
-
-    return ({ message, title, type = 'info' }) => {
-        if (!message) {
-            return;
-        }
-
-        items.value = [
-            ...items.value,
-            {
-                id: `notification-toast-${toastSequence += 1}`,
-                message,
-                title: title || '',
-                type,
-            },
-        ];
-    };
-}
 
 function initializeDashboardNotificationTest() {
     const root = document.querySelector('[data-dashboard-notification-test]');
@@ -235,6 +215,7 @@ function getDropdownPlaygroundProps(target) {
         dashboardUrl: target.dataset.dashboardUrl || '#',
         description: target.dataset.description || '',
         logoutUrl: target.dataset.logoutUrl || '#',
+        myOrdersUrl: target.dataset.myOrdersUrl || '#',
         notificationUrl: target.dataset.notificationUrl || '/dashboard/modules/notification',
         profileUrl: target.dataset.profileUrl || '#',
         title: target.dataset.title || 'Dashboard',
@@ -254,6 +235,151 @@ function mountDropdownPlaygrounds() {
     });
 }
 
+function mountDropdownTypesPlaygrounds() {
+    const targets = document.querySelectorAll('[data-dropdown-types-playground]');
+
+    if (!targets.length) {
+        return;
+    }
+
+    targets.forEach((target) => {
+        createApp(DropdownTypesPlayground, {
+            variant: target.dataset.dropdownTypesPlayground || 'trigger',
+        }).mount(target);
+    });
+}
+
+function mountToastPlaygrounds() {
+    const targets = document.querySelectorAll('[data-toast-playground]');
+
+    if (!targets.length) {
+        return;
+    }
+
+    targets.forEach((target) => {
+        const pushToast = createToastBridge(target);
+
+        document.querySelectorAll('[data-toast-push]').forEach((button) => {
+            button.addEventListener('click', () => {
+                pushToast({
+                    message: button.dataset.toastMessage || '토스트 메시지입니다.',
+                    title: button.dataset.toastTitle || '',
+                    type: button.dataset.toastPush || 'info',
+                });
+            });
+        });
+    });
+}
+
+function mountLoadingPlaygrounds() {
+    const targets = document.querySelectorAll('[data-loading-playground]');
+
+    if (!targets.length) {
+        return;
+    }
+
+    targets.forEach((target) => {
+        const active = ref(false);
+
+        createApp({
+            setup() {
+                return () => h(BaseLoading, { active: active.value });
+            },
+        }).mount(target);
+
+        document.querySelectorAll('[data-loading-toggle]').forEach((button) => {
+            button.addEventListener('click', () => {
+                active.value = true;
+
+                window.setTimeout(() => {
+                    active.value = false;
+                }, 2000);
+            });
+        });
+    });
+}
+
+function mountDialogPlaygrounds() {
+    const targets = document.querySelectorAll('[data-dialog-playground]');
+
+    if (!targets.length) {
+        return;
+    }
+
+    targets.forEach((target) => {
+        createApp(DialogPlayground).mount(target);
+    });
+}
+
+function mountDialogs() {
+    const targets = document.querySelectorAll('[data-dialog]');
+
+    if (!targets.length) {
+        return;
+    }
+
+    const closeDialog = (dialog) => {
+        dialog.hidden = true;
+    };
+
+    document.addEventListener('click', (event) => {
+        const openTrigger = event.target.closest('[data-dialog-open]');
+
+        if (openTrigger) {
+            const dialog = document.querySelector(openTrigger.dataset.dialogOpen);
+
+            if (dialog) {
+                dialog.hidden = false;
+            }
+
+            return;
+        }
+
+        const closeTrigger = event.target.closest('[data-dialog-close]');
+
+        if (closeTrigger) {
+            const dialog = closeTrigger.closest('[data-dialog]');
+
+            if (dialog) {
+                closeDialog(dialog);
+            }
+
+            return;
+        }
+
+        const confirmTrigger = event.target.closest('[data-dialog-confirm]');
+
+        if (confirmTrigger) {
+            const dialog = confirmTrigger.closest('[data-dialog]');
+
+            if (dialog) {
+                dialog.dispatchEvent(new CustomEvent('dialog:confirm', { detail: { dialog } }));
+                closeDialog(dialog);
+            }
+        }
+    });
+
+    targets.forEach((dialog) => {
+        dialog.addEventListener('click', (event) => {
+            if (event.target === dialog || event.target.classList.contains('dialog__backdrop')) {
+                closeDialog(dialog);
+            }
+        });
+    });
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') {
+            return;
+        }
+
+        targets.forEach((dialog) => {
+            if (!dialog.hidden) {
+                closeDialog(dialog);
+            }
+        });
+    });
+}
+
 function mountDataTablePlaygrounds() {
     const targets = document.querySelectorAll('[data-datatable-playground]');
 
@@ -265,6 +391,43 @@ function mountDataTablePlaygrounds() {
         createApp(DataTablePlayground).mount(target);
     });
 }
+
+function mountButtonPlaygrounds() {
+    const targets = document.querySelectorAll('[data-button-playground]');
+
+    if (!targets.length) {
+        return;
+    }
+
+    targets.forEach((target) => {
+        createApp(ButtonPlayground).mount(target);
+    });
+}
+
+function mountIconPlaygrounds() {
+    const targets = document.querySelectorAll('[data-icon-playground]');
+
+    if (!targets.length) {
+        return;
+    }
+
+    targets.forEach((target) => {
+        createApp(IconPlayground).mount(target);
+    });
+}
+
+function mountModalPlaygrounds() {
+    const targets = document.querySelectorAll('[data-modal-playground]');
+
+    if (!targets.length) {
+        return;
+    }
+
+    targets.forEach((target) => {
+        createApp(ModalPlayground).mount(target);
+    });
+}
+
 
 function mountToastEditorPlaygrounds() {
     const targets = document.querySelectorAll('[data-toast-editor-playground]');
@@ -329,6 +492,38 @@ function mountDropdownActionMenus() {
     });
 }
 
+
+
+
+
+
+function mountAlerts() {
+    document.querySelectorAll('[data-alert-close]').forEach((button) => {
+        button.addEventListener('click', () => {
+            button.closest('.alert')?.remove();
+        });
+    });
+}
+
+function mountConfirmForms() {
+    document.querySelectorAll('form[data-confirm-message]').forEach((form) => {
+        form.addEventListener('submit', (event) => {
+            event.preventDefault();
+
+            confirmDialog({
+                title: '확인',
+                confirmLabel: '확인',
+                danger: true,
+                description: form.dataset.confirmMessage || '계속하시겠습니까?',
+            }).then((confirmed) => {
+                if (confirmed) {
+                    form.submit();
+                }
+            });
+        });
+    });
+}
+
 function mountFlashToasts() {
     const targets = document.querySelectorAll('[data-toast-flash]');
 
@@ -360,12 +555,34 @@ function mountHeaderNotifications() {
 
 document.addEventListener('DOMContentLoaded', () => {
     initializeDashboardNotificationTest();
+    initializeOrderAiStructuring();
+    mountOrderGroupTypeSync();
+    mountOrderLineItemEditors();
     mountFlashToasts();
+    mountAlerts();
+    mountConfirmForms();
     mountDataTablePlaygrounds();
+    mountButtonPlaygrounds();
+    mountIconPlaygrounds();
+    mountModalPlaygrounds();
     mountToastEditorFields();
     mountToastEditorPlaygrounds();
     mountToastViewerFields();
     mountHeaderNotifications();
     mountDropdownActionMenus();
     mountDropdownPlaygrounds();
+    mountDropdownTypesPlaygrounds();
+    mountToastPlaygrounds();
+    mountLoadingPlaygrounds();
+    mountDialogPlaygrounds();
+    mountDialogs();
+    mountUserDataTable();
+    mountUserRowActions();
+    mountOrderDataTable();
+    mountOrderCardList();
+    mountOrderViewToggle();
+    mountOrderTabMenu();
+    mountViewToggleDemo();
+    mountTableActions();
+    mountUploadGallery();
 });

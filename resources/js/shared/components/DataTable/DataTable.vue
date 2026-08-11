@@ -66,6 +66,14 @@ const props = defineProps({
         type: String,
         default: '',
     },
+    selectable: {
+        type: Boolean,
+        default: false,
+    },
+    selectedKeys: {
+        type: Array,
+        default: () => [],
+    },
     showFilter: {
         type: Boolean,
         default: false,
@@ -77,6 +85,14 @@ const props = defineProps({
     showSearch: {
         type: Boolean,
         default: true,
+    },
+    sortDirection: {
+        type: String,
+        default: '',
+    },
+    sortKey: {
+        type: String,
+        default: '',
     },
     title: {
         type: String,
@@ -90,9 +106,13 @@ const props = defineProps({
 
 const emit = defineEmits([
     'row-click',
+    'select-all',
     'update:filterValue',
     'update:page',
     'update:searchValue',
+    'update:selectedKeys',
+    'update:sortDirection',
+    'update:sortKey',
 ]);
 
 const cardProps = computed(() => {
@@ -116,8 +136,27 @@ const normalizedColumns = computed(() => {
             className: column.className || '',
             key: column.key,
             label: column.label || column.key,
+            sortable: Boolean(column.sortable),
             width: column.width || '',
         }));
+});
+
+const resolveRowKey = (row, rowIndex) => {
+    return row?.[props.rowKey] ?? row?.id ?? row?.uuid ?? `${rowIndex}`;
+};
+
+const selectedSet = computed(() => new Set(props.selectedKeys));
+
+const visibleKeys = computed(() => {
+    return props.rows.map((row, index) => resolveRowKey(row, index));
+});
+
+const allVisibleSelected = computed(() => {
+    return visibleKeys.value.length > 0 && visibleKeys.value.every((key) => selectedSet.value.has(key));
+});
+
+const someVisibleSelected = computed(() => {
+    return visibleKeys.value.some((key) => selectedSet.value.has(key));
 });
 
 const resolvedTotal = computed(() => {
@@ -172,6 +211,48 @@ const handlePage = (nextPage) => {
     emit('update:page', nextPage);
 };
 
+const handleSort = (column) => {
+    if (!column.sortable) {
+        return;
+    }
+
+    if (props.sortKey !== column.key) {
+        emit('update:sortKey', column.key);
+        emit('update:sortDirection', 'asc');
+
+        return;
+    }
+
+    const nextDirection = props.sortDirection === 'asc'
+        ? 'desc'
+        : (props.sortDirection === 'desc' ? '' : 'asc');
+
+    emit('update:sortDirection', nextDirection);
+
+    if (nextDirection === '') {
+        emit('update:sortKey', '');
+    }
+};
+
+const handleSelectAll = (event) => {
+    const checked = event.target.checked;
+    const nextKeys = checked
+        ? Array.from(new Set([...props.selectedKeys, ...visibleKeys.value]))
+        : props.selectedKeys.filter((key) => !visibleKeys.value.includes(key));
+
+    emit('update:selectedKeys', nextKeys);
+    emit('select-all', { checked, keys: visibleKeys.value });
+};
+
+const handleSelectToggle = ({ row, rowIndex }) => {
+    const key = resolveRowKey(row, rowIndex);
+    const nextKeys = selectedSet.value.has(key)
+        ? props.selectedKeys.filter((item) => item !== key)
+        : [...props.selectedKeys, key];
+
+    emit('update:selectedKeys', nextKeys);
+};
+
 const handleRowClick = (payload) => {
     emit('row-click', payload);
 };
@@ -213,7 +294,16 @@ const handleRowClick = (payload) => {
 
         <div class="datatable-frame">
             <table class="datatable-table" title="데이터 테이블">
-                <TableHeader :columns="normalizedColumns">
+                <TableHeader
+                    :columns="normalizedColumns"
+                    :selectable="selectable"
+                    :all-selected="allVisibleSelected"
+                    :some-selected="someVisibleSelected"
+                    :sort-key="sortKey"
+                    :sort-direction="sortDirection"
+                    @select-all="handleSelectAll"
+                    @sort="handleSort"
+                >
                     <template #header="{ column }">
                         <slot
                             :name="`header-${column.key}`"
@@ -237,7 +327,10 @@ const handleRowClick = (payload) => {
                                 :columns="normalizedColumns"
                                 :row="row"
                                 :row-index="rowIndex"
+                                :selectable="selectable"
+                                :selected="selectedSet.has(resolveRowKey(row, rowIndex))"
                                 @row-click="handleRowClick"
+                                @select-toggle="handleSelectToggle"
                             >
                                 <template #cell="{ column, row: slotRow, rowIndex: slotRowIndex, value }">
                                     <slot

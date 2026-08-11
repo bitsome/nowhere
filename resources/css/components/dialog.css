@@ -1,0 +1,190 @@
+/* 공용 Dialog (BaseDialog.vue / x-dialog 공통) */
+.dialog[hidden] {
+    display: none;
+}
+
+.dialog {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+
+.dialog__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(20, 20, 20, 0.45);
+}
+
+.dialog__panel {
+    position: relative;
+    z-index: 1;
+    width: min(420px, 100%);
+    border: 1px solid var(--color-panel-border);
+    border-radius: 10px;
+    background: var(--color-panel-bg);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+html.dark .dialog__panel {
+    border-color: var(--color-dark-panel-border);
+    background: var(--color-dark-panel-bg);
+}
+
+.dialog__panel--md {
+    width: min(540px, 100%);
+}
+
+.dialog__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 1.25rem 1.25rem 0;
+}
+
+.dialog__title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.dialog__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: #6a6a6a;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+}
+
+.dialog__close:hover {
+    background: #ededed;
+    color: #1f1f1f;
+}
+
+html.dark .dialog__close {
+    color: #9ea1a8;
+}
+
+html.dark .dialog__close:hover {
+    background: #222222;
+    color: #d6d6dd;
+}
+
+.dialog__body {
+    padding: 0.75rem 1.25rem 1.25rem;
+}
+
+.dialog__description {
+    margin: 0;
+    color: #6a6a6a;
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+html.dark .dialog__description {
+    color: #9ea1a8;
+}
+
+.dialog__footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 0.875rem 1.25rem;
+    border-top: 1px solid var(--color-panel-border);
+}
+
+html.dark .dialog__footer {
+    border-top-color: var(--color-dark-panel-border);
+}
+
+/* 다이얼로그 푸터 버튼 (blade x-dialog 전용, BaseButton variant와 동일 룩) */
+.dialog__button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 2.75rem;
+    padding: 0 1rem;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.dialog__button--secondary {
+    border-color: #d8d8d8;
+    background: #f5f5f5;
+    color: #4f4f4f;
+}
+
+.dialog__button--secondary:hover {
+    background: #ededed;
+    color: #2d2d2d;
+}
+
+html.dark .dialog__button--secondary {
+    border-color: #2a2a2a;
+    background: #1a1a1a;
+    color: #b9bbc0;
+}
+
+html.dark .dialog__button--secondary:hover {
+    background: #222222;
+    color: #d6d6dd;
+}
+
+.dialog__button--confirm {
+    border-color: #d0d0d0;
+    background: #ececec;
+    color: #1f1f1f;
+}
+
+.dialog__button--confirm:hover {
+    border-color: #c7c7c7;
+    background: #e4e4e4;
+}
+
+html.dark .dialog__button--confirm {
+    border-color: #343434;
+    background: #252526;
+    color: #d6d6dd;
+}
+
+html.dark .dialog__button--confirm:hover {
+    background: #2d2d30;
+    color: #f3f3f3;
+}
+
+.dialog__button--danger {
+    border-color: #1f1f1f;
+    background: #1f1f1f;
+    color: #ffffff;
+}
+
+.dialog__button--danger:hover {
+    background: #3a3a3a;
+}
+
+html.dark .dialog__button--danger {
+    border-color: #4a4a4a;
+    background: #3a3a3a;
+    color: #ffffff;
+}
+
+html.dark .dialog__button--danger:hover {
+    background: #4d4d4d;
+}
+

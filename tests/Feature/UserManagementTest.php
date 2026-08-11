@@ -16,7 +16,7 @@ test('authenticated users can view the user management list', function () {
     ]);
 
     $this->actingAs($viewer)
-        ->get(route('dashboard.modules.users'))
+        ->get(route('dashboard.business.users'))
         ->assertSuccessful()
         ->assertSee('회원관리')
         ->assertSee($managedUser->name)
@@ -41,7 +41,7 @@ test('authenticated users can filter the user list', function () {
     ]);
 
     $this->actingAs($viewer)
-        ->get(route('dashboard.modules.users', [
+        ->get(route('dashboard.business.users', [
             'role' => User::ROLE_DRIVER,
             'status' => User::STATUS_ACTIVE,
             'search' => '운영',
@@ -62,13 +62,13 @@ test('authenticated users can view the user detail and permission pages', functi
     ]);
 
     $this->actingAs($viewer)
-        ->get(route('dashboard.modules.users.show', $managedUser))
+        ->get(route('dashboard.business.users.show', $managedUser))
         ->assertSuccessful()
         ->assertSee($managedUser->email)
         ->assertSee($managedUser->role);
 
     $this->actingAs($viewer)
-        ->get(route('dashboard.modules.users.permissions', $managedUser))
+        ->get(route('dashboard.business.users.permissions', $managedUser))
         ->assertSuccessful()
         ->assertSee('board.view')
         ->assertSee('dispatch.assign');
@@ -87,22 +87,22 @@ test('authenticated users can update user role status and permissions', function
     ]);
 
     $this->actingAs($viewer)
-        ->patch(route('dashboard.modules.users.role.update', $managedUser), [
+        ->patch(route('dashboard.business.users.role.update', $managedUser), [
             'role' => User::ROLE_ADMIN,
         ])
         ->assertSessionHas('status');
 
     $this->actingAs($viewer)
-        ->patch(route('dashboard.modules.users.status.update', $managedUser), [
+        ->patch(route('dashboard.business.users.status.update', $managedUser), [
             'status' => User::STATUS_SUSPENDED,
         ])
         ->assertSessionHas('status');
 
     $this->actingAs($viewer)
-        ->patch(route('dashboard.modules.users.permissions.update', $managedUser), [
+        ->patch(route('dashboard.business.users.permissions.update', $managedUser), [
             'permissions' => ['board.view', 'board.update', 'dispatch.assign'],
         ])
-        ->assertRedirect(route('dashboard.modules.users.permissions', $managedUser))
+        ->assertRedirect(route('dashboard.business.users.permissions', $managedUser))
         ->assertSessionHas('status');
 
     $managedUser->refresh();
@@ -124,7 +124,7 @@ test('user id 1 can assign admin but cannot assign super admin', function () {
     ]);
 
     $this->actingAs($viewer)
-        ->patch(route('dashboard.modules.users.role.update', $managedUser), [
+        ->patch(route('dashboard.business.users.role.update', $managedUser), [
             'role' => User::ROLE_ADMIN,
         ])
         ->assertSessionHas('status');
@@ -132,8 +132,8 @@ test('user id 1 can assign admin but cannot assign super admin', function () {
     expect($managedUser->fresh()->role)->toBe(User::ROLE_ADMIN);
 
     $this->actingAs($viewer)
-        ->from(route('dashboard.modules.users.show', $managedUser))
-        ->patch(route('dashboard.modules.users.role.update', $managedUser), [
+        ->from(route('dashboard.business.users.show', $managedUser))
+        ->patch(route('dashboard.business.users.role.update', $managedUser), [
             'role' => User::ROLE_SUPER_ADMIN,
         ])
         ->assertSessionHasErrors('role');
@@ -169,7 +169,7 @@ test('super admin user id 1 can assign subordinate permissions', function () {
     ]);
 
     $this->actingAs($viewer)
-        ->patch(route('dashboard.modules.users.permissions.update', $managedUser), [
+        ->patch(route('dashboard.business.users.permissions.update', $managedUser), [
             'permissions' => ['board.view', 'board.create', 'dispatch.assign'],
         ])
         ->assertSessionHas('status');
@@ -191,8 +191,8 @@ test('delegated user can only assign lower permissions they already have', funct
     ]);
 
     $this->actingAs($viewer)
-        ->from(route('dashboard.modules.users.permissions', $managedUser))
-        ->patch(route('dashboard.modules.users.permissions.update', $managedUser), [
+        ->from(route('dashboard.business.users.permissions', $managedUser))
+        ->patch(route('dashboard.business.users.permissions.update', $managedUser), [
             'permissions' => ['board.view', 'dispatch.assign'],
         ])
         ->assertSessionHasErrors('permissions');
@@ -211,8 +211,8 @@ test('admin cannot assign admin or higher role to another user', function () {
     ]);
 
     $this->actingAs($viewer)
-        ->from(route('dashboard.modules.users.show', $managedUser))
-        ->patch(route('dashboard.modules.users.role.update', $managedUser), [
+        ->from(route('dashboard.business.users.show', $managedUser))
+        ->patch(route('dashboard.business.users.role.update', $managedUser), [
             'role' => User::ROLE_ADMIN,
         ])
         ->assertSessionHasErrors('role');
@@ -232,15 +232,15 @@ test('admin cannot manage user with same or higher role', function () {
     ]);
 
     $this->actingAs($viewer)
-        ->from(route('dashboard.modules.users.show', $sameLevelUser))
-        ->patch(route('dashboard.modules.users.status.update', $sameLevelUser), [
+        ->from(route('dashboard.business.users.show', $sameLevelUser))
+        ->patch(route('dashboard.business.users.status.update', $sameLevelUser), [
             'status' => User::STATUS_SUSPENDED,
         ])
         ->assertSessionHasErrors('user');
 
     $this->actingAs($viewer)
-        ->from(route('dashboard.modules.users.permissions', $sameLevelUser))
-        ->patch(route('dashboard.modules.users.permissions.update', $sameLevelUser), [
+        ->from(route('dashboard.business.users.permissions', $sameLevelUser))
+        ->patch(route('dashboard.business.users.permissions.update', $sameLevelUser), [
             'permissions' => ['board.view'],
         ])
         ->assertSessionHasErrors('user');

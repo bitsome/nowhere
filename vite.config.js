@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from 'vite';
 import laravel from 'laravel-vite-plugin';
 import { bunny } from 'laravel-vite-plugin/fonts';
 import vue from '@vitejs/plugin-vue';
+import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, process.cwd(), '');
@@ -13,7 +14,10 @@ export default defineConfig(({ mode }) => {
     return {
         plugins: [
             laravel({
-                input: ['resources/css/app.css', 'resources/js/app.js'],
+                input: [
+                    'resources/css/app.css',
+                    'resources/js/app.js',
+                ],
                 refresh: true,
                 fonts: [
                     bunny('Instrument Sans', {
@@ -22,12 +26,12 @@ export default defineConfig(({ mode }) => {
                 ],
             }),
             vue(),
+            tailwindcss(),
         ],
         server: {
-            cors: {
-                origin: appUrl.origin,
-            },
+            cors: true,
             host: '0.0.0.0',
+            allowedHosts: true,
             hmr: {
                 clientPort: devPort,
                 host: devHost,

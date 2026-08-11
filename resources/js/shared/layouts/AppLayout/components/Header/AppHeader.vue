@@ -75,7 +75,7 @@ const headerNotifications = computed(() => {
                         <input
                             type="search"
                             :placeholder="searchPlaceholder"
-                            class="h-10 w-full rounded-lg border border-[#d6d6d6] bg-[#f3f3f3] px-3 text-sm text-[#1f1f1f] outline-none transition focus:border-[#b9b9b9] dark:border-[#2a2a2a] dark:bg-[#141414] dark:text-[#d6d6dd] dark:focus:border-[#3a3a3a]"
+                            class="h-10 w-full rounded-lg border border-[#d6d6d6] bg-[#f3f3f3] px-3 text-sm text-[#1f1f1f] outline-none transition focus:border-[#b9b9b9] dark:border-[#2a2a2a] dark:bg-[#171717] dark:text-[#d6d6dd] dark:focus:border-[#3a3a3a]"
                             @input="handleSearch"
                         >
                     </label>

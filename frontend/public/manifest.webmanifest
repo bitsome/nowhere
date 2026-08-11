@@ -1,0 +1,10 @@
+{
+    "name": "NoWhere 마켓",
+    "short_name": "NoWhere",
+    "description": "드라이버 오더 마켓 — 오더 등록/수주/채팅/커뮤니티",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#36adff",
+    "lang": "ko"
+}

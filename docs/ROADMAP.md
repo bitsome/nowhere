@@ -28,7 +28,7 @@
 ## Phase 2
 
 ### Shared Module
-- 상태: `진행 중`
+- 상태: `완료`
 - 원칙
   - 공통 기능만 개발한다.
   - 한 번에 전부 만들지 않고 단계별로 쪼개서 진행한다.
@@ -59,7 +59,7 @@
   - 이후 모든 운영 페이지에서 재사용할 수 있는 구조로 유지
 
 ### STEP 2-3
-- 상태: `진행 중`
+- 상태: `완료`
 - 범위
   - Base Components
     - BaseButton
@@ -76,7 +76,7 @@
     - BaseBadge
     - BaseLoading
     - Shared DataTable 1차
-  - 예정
+    - Shared DataTable 2차 (정렬 · 행 선택)
 - 메모
   - 목적은 많은 컴포넌트를 만드는 것이 아니라 프로젝트 전체에서 재사용할 공통 UI 기준을 만드는 것이다.
   - 버튼, 입력, 카드, 배지, 로딩만 먼저 고정하고 실제 화면 전체에 재사용한다.
@@ -84,7 +84,7 @@
   - 목록 화면은 공통 `DataTable`을 기준으로 재사용하고, 각 모듈은 컬럼과 데이터 정의만 제공하는 구조를 유지한다.
 
 ### STEP 2-4
-- 상태: `예정`
+- 상태: `완료`
 - 범위
   - Feedback
     - Loading
@@ -92,12 +92,13 @@
     - Confirm Dialog
     - Alert
 - 메모
-  - `Loading`은 새 베이스 컴포넌트를 추가로 만드는 것이 아니라 `BaseLoading`을 실제 피드백 계층에서 재사용하는 단계다.
+  - `Loading`은 `BaseLoading`을 실제 피드백 계층(DataTable 로딩, 버튼 로딩, 전체 화면 로딩)에서 재사용한다.
   - `Toast`, `Confirm Dialog`, `Alert`는 사용자 반응과 상태 전달을 위한 공통 피드백 기능으로 묶는다.
-  - Shared Module의 다음 확장 포인트는 API보다 먼저 사용자 피드백 계층을 안정화하는 것이다.
+  - 알림 배너(`x-alert`)와 토스트(`createToastBridge`)를 실제 업무 화면(오더 등록, 검증 오류)에 적용 완료.
+   - 컴포넌트별 사용 규칙은 `docs/FOUNDATION.md`를 기준으로 유지한다.
 
 ### STEP 2-5
-- 상태: `진행 중`
+- 상태: `완료`
 - 범위
   - API
     - Axios
@@ -111,12 +112,12 @@
   - 인터셉터에서 공통 에러 처리와 인증 흐름 확장 지점을 제공한다.
   - `request`, `requestData`, `ensureCsrfCookie` 헬퍼를 통해 재사용 가능한 호출 규약을 제공한다.
   - API 계층은 실제 화면 로직이 아니라 공통 통신 규약을 담당한다.
+  - 실제 서비스 계층 연결 완료: 오더 AI 구조화(`postData`), 파일 관리(`getData`), 이미지 업로드(`postData`).
+  - 사용 규약은 `docs/API.md`를 기준으로 유지한다.
 
 ## 현재 우선순위
-1. `BaseButton`, `BaseInput`, `BaseCard`, `BaseBadge`, `BaseLoading`를 실제 화면에 점진적으로 적용
-2. `STEP 2-4`의 `Feedback` 구조 설계
-3. `Toast`, `Confirm Dialog`, `Alert` 공통 규약 확정
-4. `STEP 2-5`의 `shared/api` 사용 규약을 실제 서비스 계층으로 연결
+1. `Order Module` (Business Queue 1순위) — 진행 중
+2. Shared Module(STEP 2) — 완료
 
 ## 작업 원칙
 - 한 번에 하나의 기능만 개발한다.
@@ -124,5 +125,6 @@
 - JavaScript만 사용한다.
 - TypeScript는 사용하지 않는다.
 - Vue 3 Composition API와 `script setup`만 사용한다.
-- CSS Framework는 사용하지 않고 기존 CSS 기준으로 유지한다.
+- **독립 프론트엔드(frontend/)는 Naive UI를 사용한다** (외부 개발자 UI 라이브러리 채택).
+- 기존 CSS 규칙은 유지하되, Naive UI 적용 화면은 라이브러리 테마를 우선한다.
 - 기존 컴포넌트를 우선 재사용한다.

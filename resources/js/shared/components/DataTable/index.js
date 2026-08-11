@@ -1,5 +1,6 @@
 export { default as DataTable } from './DataTable.vue';
 export { default as DataTablePlayground } from './DataTablePlayground.vue';
+export { default as GalleryTable } from './GalleryTable.vue';
 export { default as TableBody } from './TableBody.vue';
 export { default as TableCell } from './TableCell.vue';
 export { default as TableColumn } from './TableColumn.vue';

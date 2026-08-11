@@ -143,3 +143,32 @@
 .dark .shared-dropdown__item:disabled {
     color: #6d6d6d;
 }
+
+/* 테이블 행 액션 트리거 (점 3개) */
+button.shared-table-actions__trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 0.375rem;
+    background: transparent;
+    color: #6a6a6a;
+    cursor: pointer;
+}
+
+button.shared-table-actions__trigger:hover {
+    background: transparent;
+    color: #1f1f1f;
+}
+
+.dark button.shared-table-actions__trigger {
+    color: #9ea1a8;
+}
+
+.dark button.shared-table-actions__trigger:hover {
+    background: transparent;
+    color: #d6d6dd;
+}

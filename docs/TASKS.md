@@ -33,16 +33,22 @@
 - [x] Board 첨부파일 File Module 연결
 - [x] Shared Toast UI Editor / Viewer Module
 - [x] Form 2차 BaseInput 계층 재구성
+- [x] Modal 공통 구조 정리
+- [x] Dialog 공통 구조 정리
+- [x] Dashboard 카드(Card) 모듈 등록
+- [x] Dashboard 리스트(List) 모듈 등록
+- [x] Dashboard 폼(Form) 모듈 등록
+- [x] Dashboard 토스트(Toast) 모듈 등록
+- [x] Dashboard 로딩·빈 상태(Loading/Empty) 모듈 등록
+- [x] Dashboard 알림 배너(Alert) 모듈 등록
+- [x] Foundation 규약 명세 문서(docs/FOUNDATION.md) 작성
+- [x] STEP 2-5 API 규약 문서(docs/API.md) 작성
+- [x] 비즈니스/데모 라우트 분리 (dashboard.business.* vs dashboard.modules.*)
+- [x] 비즈니스 프론트엔드 분리 (resources/js/business/*, app.js 모노리스 축소)
+- [x] 권한 검증 Policy 도입 (Board/Order/User Policy + 라우트 can: 미들웨어)
+- [x] 대시보드 공용 컴포넌트 적용 (x-alert 로그인 안내 · Empty State 오더 카드)
 
 ## Current
-- [ ] Modal 공통 구조 정리
-
-## Next
-- [ ] Dialog 공통 구조 정리
-- [ ] Loading 공통 구조 정리
-- [ ] Empty State 공통 구조 정리
-- [ ] DataTable 2차 정리
-- [ ] Foundation 완료 선언
 - [ ] Order Module
 
 ## 원칙
@@ -54,13 +60,13 @@
 - 현재 작업이 완료되면 종료하고, 다음 작업은 이 문서를 갱신한 뒤 시작한다.
 
 ## Module
-- Shared
+- Business
 
 ## Step
-- STEP 2 완료
+- STEP 2 완료 · Shared Module(Foundation + API) 마감
 
 ## Current Work
-- 공통 Modal 계층을 Foundation 기준으로 정리하고 재사용 가능한 오버레이 구조를 확정한다.
+- 공통 Foundation(DataTable 2차 · Loading · Empty State · Feedback)과 API 규약(STEP 2-5)을 완료 선언하고, 다음 작업은 Order Module이다.
 
 ## Scope
 - 공통 `ToastEditor` / `ToastViewer` 구조 추가 완료
@@ -76,14 +82,14 @@
 
 ### Foundation
 - [x] 1. DataTable 1차 List Framework
-- [ ] 1. DataTable 2차 정리
+- [x] 1. DataTable 2차 정리 (정렬 · 행 선택)
 - [x] 2. Form Components 1차
 - [x] 2. Form Components 2차 BaseInput 계층 재구성
-- [ ] 3. Modal
-- [ ] 4. Dialog
+- [x] 3. Modal
+- [x] 4. Dialog
 - [x] 5. Toast
-- [ ] 6. Loading
-- [ ] 7. Empty State
+- [x] 6. Loading
+- [x] 7. Empty State
 - [x] 8. Search 1차
 - [x] 9. Filter 1차
 - [x] 10. Pagination 1차
@@ -97,65 +103,6 @@
 - [ ] 11. Order
 - [ ] 12. Dispatch
 - [ ] 13. Driver
-
-### 작업 순서 원칙
-- 현재는 `Foundation`만 작업한다.
-- `Order`, `Dispatch`, `Driver`는 Foundation 완료 전까지 착수하지 않는다.
-- 공통 컴포넌트 수정이 필요한 일은 Business 단계로 넘기지 않고 Foundation 단계에서 마감한다.
-
-## Do Not
-- Button 구현 금지
-- Order 개발 금지
-- Dispatch 개발 금지
-- Driver 개발 금지
-- WebSocket 구현 금지
-- Redis 구현 금지
-- Pusher 구현 금지
-- 실시간 갱신 구현 금지
-- 읽음 API 구현 금지
-- 삭제 API 구현 금지
-- Animation 구현 금지
-- Sub Menu 구현 금지
-- Keyboard Navigation 구현 금지
-- Search 구현 금지
-- Icon Library 구현 금지
-- API 구현 금지
-- Router 구현 금지
-- Permission 구현 금지
-- Notification 구현 금지
-- User Menu 구현 금지
-- 무한스크롤 구현 금지
-- 페이지네이션 구현 금지
-- 실제 알림 서버 구현 금지
-- 회원등록 구현 금지
-- 회원삭제 구현 금지
-- 회원 일반정보 수정 구현 금지
-- 프로필 수정 기능 구현 금지
-- File Module UI 선구현 금지
-- Profile 파일 연결 선구현 금지
-- Order 파일 연결 선구현 금지
-- Driver 파일 연결 선구현 금지
-- Drag & Drop 구현 금지
-- Multiple Upload 구현 금지
-- Progress 구현 금지
-- Folder 구현 금지
-- Crop/Compress/PDF/Video Preview 구현 금지
-- 조직도 구현 금지
-- 부서관리 구현 금지
-- 직급관리 구현 금지
-- 새로운 기능 자체 선구현 금지
-- Spatie 설치 전 권한 로직 전면 교체 금지
-- 임시 users.role/users.permissions 즉시 제거 금지
-- 대시보드와 무관한 기존 인증 흐름 수정 금지
-- 현재 작업과 무관한 페이지 수정 금지
-- 현재 작업과 무관한 Route 수정 금지
-- 현재 작업과 무관한 Store 수정 금지
-- Board 1차 범위(목록/상세/등록/수정/삭제/검색) 외 기능 선구현 금지
-- 댓글 기능 선구현 금지
-- FAQ 기능 선구현 금지
-- 좋아요/신고/북마크 기능 선구현 금지
-- 공지 상단 고정 기능 선구현 금지
-- 실시간 게시판 알림 기능 선구현 금지
 
 ## 완료 기준
 - 다음 작업이 지정되기 전까지 임의 구현 금지

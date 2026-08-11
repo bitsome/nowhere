@@ -1,4 +1,4 @@
-<x-layouts.app title="Notification 테스트">
+<x-layouts.app title="알림">
     <div data-notification-toast></div>
     <section class="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]" data-dashboard-notification-test>
         <aside class="page-panel panel-gray lg:sticky lg:top-6 lg:self-start">
@@ -10,27 +10,7 @@
                 </p>
             </div>
 
-            <nav class="mt-4 space-y-2">
-                <a
-                    href="{{ route('dashboard') }}"
-                    title="대시보드 허브"
-                    class="flex items-center justify-between rounded-lg border border-[#d8d8d8] bg-[#f5f5f5] px-3 py-2 text-sm text-[#4f4f4f] transition hover:bg-[#ededed] hover:text-[#1f1f1f] dark:border-[#2a2a2a] dark:bg-[#1a1a1a] dark:text-[#b9bbc0] dark:hover:bg-[#222222] dark:hover:text-[#d6d6dd]"
-                >
-                    <span>허브 홈</span>
-                    <span class="text-xs">00</span>
-                </a>
-
-                @foreach ($modules as $moduleItem)
-                    <a
-                        href="{{ $moduleItem['href'] }}"
-                        title="{{ $moduleItem['title'] }}"
-                        class="flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition {{ $moduleItem['key'] === $module['key'] ? 'border-[#cfcfcf] bg-[#ececec] text-[#1f1f1f] dark:border-[#343434] dark:bg-[#222222] dark:text-[#f3f3f3]' : 'border-[#d8d8d8] bg-[#f5f5f5] text-[#4f4f4f] hover:bg-[#ededed] hover:text-[#1f1f1f] dark:border-[#2a2a2a] dark:bg-[#1a1a1a] dark:text-[#b9bbc0] dark:hover:bg-[#222222] dark:hover:text-[#d6d6dd]' }}"
-                    >
-                        <span>{{ $moduleItem['title'] }}</span>
-                        <span class="text-xs">{{ $moduleItem['order'] }}</span>
-                    </a>
-                @endforeach
-            </nav>
+            @include('dashboard.partials.sidebar-nav', ['modules' => $modules, 'module' => $module])
 
             <div class="mt-6 rounded-[10px] border border-[#dddddd] bg-[#f7f7f7] p-4 dark:border-[#2a2a2a] dark:bg-[#1a1a1a]">
                 <p class="text-sm text-gray-500 dark:text-gray-400">테스트 규칙</p>

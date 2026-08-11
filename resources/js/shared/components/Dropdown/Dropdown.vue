@@ -8,6 +8,14 @@ const props = defineProps({
         type: String,
         default: 'right',
     },
+    menuClass: {
+        type: String,
+        default: '',
+    },
+    teleport: {
+        type: Boolean,
+        default: false,
+    },
     width: {
         type: String,
         default: '240px',
@@ -17,7 +25,9 @@ const props = defineProps({
 const emit = defineEmits(['close', 'open', 'toggle']);
 
 const rootElement = ref(null);
+const triggerElement = ref(null);
 const isOpen = ref(false);
+const menuPosition = ref(null);
 
 const dropdownClasses = computed(() => [
     'shared-dropdown',
@@ -29,9 +39,39 @@ const dropdownStyle = computed(() => ({
     '--dropdown-width': props.width,
 }));
 
+const resolveTeleportPosition = () => {
+    const rect = triggerElement.value?.getBoundingClientRect();
+
+    if (!rect) {
+        return null;
+    }
+
+    const position = {
+        position: 'fixed',
+        minWidth: '0',
+        top: `${rect.bottom + 8}px`,
+    };
+
+    if (props.align === 'left') {
+        position.left = `${rect.left}px`;
+    } else {
+        position.right = `${Math.max(0, window.innerWidth - rect.right)}px`;
+    }
+
+    return position;
+};
+
 const openDropdown = () => {
     if (isOpen.value) {
         return;
+    }
+
+    if (props.teleport) {
+        menuPosition.value = resolveTeleportPosition();
+    }
+
+    if (typeof document !== 'undefined') {
+        document.dispatchEvent(new CustomEvent('shared-dropdown:close'));
     }
 
     isOpen.value = true;
@@ -68,6 +108,9 @@ const handleDocumentClick = (event) => {
 provide('shared-dropdown-context', {
     closeDropdown,
     isOpen,
+    menuClass: computed(() => props.menuClass),
+    menuPosition,
+    teleport: computed(() => props.teleport),
 });
 
 onMounted(() => {
@@ -76,6 +119,7 @@ onMounted(() => {
     }
 
     document.addEventListener('click', handleDocumentClick);
+    document.addEventListener('shared-dropdown:close', closeDropdown);
 });
 
 onBeforeUnmount(() => {
@@ -84,6 +128,7 @@ onBeforeUnmount(() => {
     }
 
     document.removeEventListener('click', handleDocumentClick);
+    document.removeEventListener('shared-dropdown:close', closeDropdown);
 });
 </script>
 
@@ -93,7 +138,11 @@ onBeforeUnmount(() => {
         :class="dropdownClasses"
         :style="dropdownStyle"
     >
-        <div class="shared-dropdown__trigger" @click.stop="toggleDropdown">
+        <div
+            ref="triggerElement"
+            class="shared-dropdown__trigger"
+            @click.stop="toggleDropdown"
+        >
             <slot
                 name="trigger"
                 :is-open="isOpen"

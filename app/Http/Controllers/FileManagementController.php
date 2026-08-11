@@ -21,10 +21,10 @@ class FileManagementController extends Controller
     {
         $user = $this->resolveActor();
 
-        return view('dashboard.modules.files', [
+        return view('dashboard.business.files', [
             'managerFiles' => Media::query()->latest()->get(),
-            'module' => DashboardWorkspaceController::findWorkspaceModule('files'),
-            'modules' => DashboardWorkspaceController::workspaceModules(),
+            'module' => DashboardWorkspaceController::findBusinessModule('files'),
+            'modules' => DashboardWorkspaceController::businessModules(),
             'uploadFiles' => $this->fileService->getFiles($user, self::COLLECTION_NAME),
             'user' => $user,
         ]);
@@ -80,7 +80,7 @@ class FileManagementController extends Controller
         }
 
         return redirect()
-            ->route('dashboard.modules.files')
+            ->route('dashboard.business.files')
             ->with('status', '파일이 업로드되었습니다.');
     }
 
@@ -100,7 +100,7 @@ class FileManagementController extends Controller
         }
 
         return redirect()
-            ->route('dashboard.modules.files')
+            ->route('dashboard.business.files')
             ->with('status', '파일이 삭제되었습니다.');
     }
 
@@ -157,8 +157,8 @@ class FileManagementController extends Controller
         return [
             'collection_name' => $media->collection_name,
             'created_at' => $media->created_at?->toDateTimeString(),
-            'delete_url' => route('dashboard.modules.files.destroy', $media),
-            'download_url' => route('dashboard.modules.files.download', $media),
+            'delete_url' => route('dashboard.business.files.destroy', $media),
+            'download_url' => route('dashboard.business.files.download', $media),
             'file_name' => $media->file_name,
             'id' => $media->id,
             'mime_type' => $media->mime_type,

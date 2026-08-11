@@ -1,0 +1,154 @@
+/* ===== 갤러리형 테이블 (GalleryTable.vue) ===== */
+.gallery-table__grid {
+    display: grid;
+    gap: 0.625rem;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.gallery-table__card {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #dddddd;
+    border-radius: 10px;
+    background: #f7f7f7;
+    padding: 0.625rem;
+}
+
+html.dark .gallery-table__card {
+    border-color: #2a2a2a;
+    background: #1a1a1a;
+}
+
+.gallery-table__thumb {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 120px;
+    overflow: hidden;
+    border: 1px solid #dddddd;
+    border-radius: 10px;
+    background: #f3f3f3;
+}
+
+html.dark .gallery-table__thumb {
+    border-color: #2a2a2a;
+    background: #181818;
+}
+
+.gallery-table__image {
+    width: 100%;
+    height: 120px;
+    object-fit: contain;
+}
+
+.gallery-table__placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 1rem;
+    text-align: center;
+    font-size: 0.8125rem;
+    color: #6a6a6a;
+}
+
+html.dark .gallery-table__placeholder {
+    color: #9ea1a8;
+}
+
+.gallery-table__placeholder-name {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 600;
+    color: #1f1f1f;
+}
+
+html.dark .gallery-table__placeholder-name {
+    color: #d6d6dd;
+}
+
+.gallery-table__meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-top: 0.75rem;
+    min-height: 66px;
+}
+
+.gallery-table__title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #1f1f1f;
+}
+
+html.dark .gallery-table__title {
+    color: #d6d6dd;
+}
+
+.gallery-table__subtitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.75rem;
+    color: #6a6a6a;
+}
+
+html.dark .gallery-table__subtitle {
+    color: #9ea1a8;
+}
+
+.gallery-table__info {
+    font-size: 0.75rem;
+    color: #6a6a6a;
+}
+
+html.dark .gallery-table__info {
+    color: #9ea1a8;
+}
+
+.gallery-table__actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: auto;
+    padding-top: 0.75rem;
+}
+
+.gallery-table__empty {
+    border: 1px dashed #d8d8d8;
+    border-radius: 10px;
+    background: #f7f7f7;
+    padding: 2.5rem 1rem;
+    text-align: center;
+}
+
+html.dark .gallery-table__empty {
+    border-color: #2a2a2a;
+    background: #1a1a1a;
+}
+
+.gallery-table__empty-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #1f1f1f;
+}
+
+html.dark .gallery-table__empty-title {
+    color: #d6d6dd;
+}
+
+.gallery-table__empty-description {
+    margin-top: 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: #6a6a6a;
+}
+
+html.dark .gallery-table__empty-description {
+    color: #9ea1a8;
+}
+

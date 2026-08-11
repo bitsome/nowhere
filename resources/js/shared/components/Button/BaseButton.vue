@@ -46,6 +46,7 @@ const variantClassMap = {
     ghost: 'border-transparent bg-transparent text-[#4f4f4f] hover:bg-[#ededed] hover:text-[#1f1f1f] dark:text-[#b9bbc0] dark:hover:bg-[#222222] dark:hover:text-[#d6d6dd]',
     primary: 'border-[#d0d0d0] bg-[#ececec] text-[#1f1f1f] hover:border-[#c7c7c7] hover:bg-[#e4e4e4] dark:border-[#343434] dark:bg-[#252526] dark:text-[#d6d6dd] dark:hover:bg-[#2d2d30] dark:hover:text-[#f3f3f3]',
     secondary: 'border-[#d8d8d8] bg-[#f5f5f5] text-[#4f4f4f] hover:bg-[#ededed] hover:text-[#2d2d2d] dark:border-[#2a2a2a] dark:bg-[#1a1a1a] dark:text-[#b9bbc0] dark:hover:bg-[#222222] dark:hover:text-[#d6d6dd]',
+    danger: 'border-[#512727] bg-transparent text-[#512727] hover:border-[#451e1e] hover:bg-[#f3e9e9] hover:text-[#451e1e] dark:border-[#c47070] dark:text-[#c47070] dark:hover:border-[#d08080] dark:hover:bg-[#2a1d1d] dark:hover:text-[#d98a8a]',
 };
 
 const classes = computed(() => [

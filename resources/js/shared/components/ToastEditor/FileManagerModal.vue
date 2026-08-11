@@ -5,6 +5,7 @@ import { destroyData, getData } from '../../api/index.js';
 import BaseButton from '../Button/BaseButton.vue';
 import BaseCard from '../Card/BaseCard.vue';
 import BaseIcon from '../Icon/BaseIcon.vue';
+import BaseModal from '../Modal/BaseModal.vue';
 import FormGroup from '../Form/FormGroup.vue';
 import BaseInput from '../Form/BaseInput.vue';
 import { uploadImagesToFileManager } from './plugins/ImageUpload.js';
@@ -206,37 +207,17 @@ watch(searchKeyword, () => {
 </script>
 
 <template>
-    <Teleport to="body">
-        <div v-if="open" class="nowhere-file-manager-modal">
-            <div class="nowhere-file-manager-modal__backdrop" @click="closeModal"></div>
-
-            <section
-                class="nowhere-file-manager-modal__panel"
-                role="dialog"
-                aria-modal="true"
-                aria-label="이미지 파일관리"
-            >
-                <header class="nowhere-file-manager-modal__header">
-                    <div>
-                        <p class="nowhere-file-manager-modal__eyebrow">NoWhere File Manager</p>
-                        <h3 class="nowhere-file-manager-modal__title">이미지 선택</h3>
-                        <p class="nowhere-file-manager-modal__description">
-                            업로드, 기존 이미지 선택, 검색, 삭제를 한 번에 처리하고 선택한 이미지를 Markdown으로 삽입합니다.
-                        </p>
-                    </div>
-
-                    <BaseButton
-                        variant="ghost"
-                        class="nowhere-file-manager-modal__icon-button"
-                        title="이미지 파일관리 닫기"
-                        aria-label="이미지 파일관리 닫기"
-                        @click="closeModal"
-                    >
-                        <BaseIcon name="close" :size="18" />
-                    </BaseButton>
-                </header>
-
-                <div class="nowhere-file-manager-modal__toolbar">
+    <BaseModal
+        :open="open"
+        size="xl"
+        aria-label="이미지 파일관리"
+        eyebrow="NoWhere File Manager"
+        title="이미지 선택"
+        description="업로드, 기존 이미지 선택, 검색, 삭제를 한 번에 처리하고 선택한 이미지를 Markdown으로 삽입합니다."
+        close-label="이미지 파일관리 닫기"
+        @close="closeModal"
+    >
+        <div class="nowhere-file-manager-modal__toolbar">
                     <FormGroup
                         label="이미지 검색"
                         for-id="file-manager-modal-search"
@@ -370,7 +351,7 @@ watch(searchKeyword, () => {
                     </div>
                 </div>
 
-                <footer class="nowhere-file-manager-modal__footer">
+                <template #footer>
                     <p class="nowhere-file-manager-modal__footer-text">
                         선택한 이미지는 Markdown 여러 줄로 자동 삽입됩니다.
                     </p>
@@ -396,8 +377,6 @@ watch(searchKeyword, () => {
                             <span>삽입</span>
                         </BaseButton>
                     </div>
-                </footer>
-            </section>
-        </div>
-    </Teleport>
+                </template>
+    </BaseModal>
 </template>

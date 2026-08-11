@@ -145,39 +145,7 @@
     box-shadow: none;
 }
 
-.nowhere-file-manager-modal {
-    position: fixed;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 1rem;
-    z-index: 999;
-}
-
-.nowhere-file-manager-modal__backdrop {
-    position: absolute;
-    inset: 0;
-    background: rgba(15, 15, 15, 0.68);
-}
-
-.nowhere-file-manager-modal__panel {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    width: min(1280px, 100%);
-    max-height: calc(100vh - 2rem);
-    padding: 1.25rem;
-    border: 1px solid #dddddd;
-    border-radius: 12px;
-    background: #f7f7f7;
-    overflow: hidden;
-}
-
-.nowhere-file-manager-modal__header,
 .nowhere-file-manager-modal__toolbar,
-.nowhere-file-manager-modal__footer,
 .nowhere-file-manager-modal__file-body,
 .nowhere-file-manager-modal__file-actions {
     display: flex;
@@ -186,26 +154,16 @@
     gap: 0.75rem;
 }
 
-.nowhere-file-manager-modal__header,
-.nowhere-file-manager-modal__footer {
+.nowhere-file-manager-modal__toolbar {
     flex-wrap: wrap;
 }
 
-.nowhere-file-manager-modal__eyebrow {
-    margin: 0;
-    color: #6a6a6a;
-    font-size: 0.85rem;
-    font-weight: 600;
+.nowhere-file-manager-modal__search {
+    display: grid;
+    gap: 0.5rem;
+    min-width: min(100%, 320px);
 }
 
-.nowhere-file-manager-modal__title {
-    margin: 0.35rem 0 0;
-    color: #1f1f1f;
-    font-size: 1.1rem;
-    font-weight: 700;
-}
-
-.nowhere-file-manager-modal__description,
 .nowhere-file-manager-modal__footer-text,
 .nowhere-file-manager-modal__dropzone-description,
 .nowhere-file-manager-modal__file-meta {
@@ -215,10 +173,8 @@
     line-height: 1.6;
 }
 
-.nowhere-file-manager-modal__search {
-    display: grid;
-    gap: 0.5rem;
-    min-width: min(100%, 320px);
+.nowhere-file-manager-modal__footer-text {
+    margin: 0 auto 0 0;
 }
 
 .nowhere-file-manager-modal__label,
@@ -227,10 +183,6 @@
     color: #1f1f1f;
     font-size: 0.92rem;
     font-weight: 600;
-}
-
-.nowhere-file-manager-modal__toolbar {
-    flex-wrap: wrap;
 }
 
 .nowhere-file-manager-modal__toolbar-actions,
@@ -264,6 +216,13 @@
 
 .nowhere-file-manager-modal__dropzone.is-disabled {
     opacity: 0.6;
+}
+
+.nowhere-file-manager-modal__toolbar + input,
+.nowhere-file-manager-modal__toolbar + .nowhere-file-manager-modal__dropzone,
+.nowhere-file-manager-modal__dropzone + .nowhere-file-manager-modal__meta,
+.nowhere-file-manager-modal__meta + .nowhere-file-manager-modal__content {
+    margin-top: 1rem;
 }
 
 .nowhere-file-manager-modal__content {
@@ -335,13 +294,6 @@
 }
 
 @media (max-width: 767px) {
-    .nowhere-file-manager-modal__panel {
-        width: calc(100vw - 1rem);
-        max-height: calc(100vh - 1rem);
-        margin: 0.5rem auto;
-        padding: 1rem;
-    }
-
     .nowhere-file-manager-modal__file-body {
         flex-direction: column;
     }
@@ -352,13 +304,6 @@
     }
 }
 
-.dark .nowhere-file-manager-modal__panel {
-    border-color: #2a2a2a;
-    background: #1a1a1a;
-}
-
-.dark .nowhere-file-manager-modal__eyebrow,
-.dark .nowhere-file-manager-modal__description,
 .dark .nowhere-file-manager-modal__footer-text,
 .dark .nowhere-file-manager-modal__dropzone-description,
 .dark .nowhere-file-manager-modal__file-meta,
@@ -366,7 +311,6 @@
     color: #9ea1a8;
 }
 
-.dark .nowhere-file-manager-modal__title,
 .dark .nowhere-file-manager-modal__label,
 .dark .nowhere-file-manager-modal__dropzone-title,
 .dark .nowhere-file-manager-modal__file-name {

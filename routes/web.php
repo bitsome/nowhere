@@ -7,13 +7,24 @@ use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\BoardManagementController;
 use App\Http\Controllers\DashboardWorkspaceController;
 use App\Http\Controllers\FileManagementController;
+use App\Http\Controllers\OrderManagementController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UserManagementController;
+use App\Models\Order;
 use Illuminate\Support\Facades\Route;
 
+// 메인 진입점 — 로그인 사용자는 독립 프론트엔드(SPA)로, 비로그인은 기존 테스트 페이지로
 Route::get('/', function () {
-    return view('welcome');
-});
+    if (auth()->check()) {
+        return redirect()->away(config('app.frontend_url'));
+    }
+
+    return view('welcome', [
+        'orders' => collect(),
+        'orderRows' => [],
+        'statusOptions' => Order::statusOptions(),
+    ]);
+})->name('home');
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
@@ -29,29 +40,59 @@ Route::middleware('guest')->group(function () {
 
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardWorkspaceController::class, 'index'])->name('dashboard');
-    Route::prefix('/dashboard/modules')->name('dashboard.modules.')->group(function () {
-        Route::get('/notification', [DashboardWorkspaceController::class, 'notification'])->name('notification');
+    Route::get('/market', [DashboardWorkspaceController::class, 'market'])->name('market');
+    Route::get('/my-orders', [DashboardWorkspaceController::class, 'myOrders'])->name('my-orders');
+
+    // 비즈니스 (언제든 재개발 대상) — 공통/데모와 분리
+    Route::prefix('/dashboard/business')->name('dashboard.business.')->group(function () {
         Route::get('/files', [FileManagementController::class, 'index'])->name('files');
         Route::get('/files/library', [FileManagementController::class, 'library'])->name('files.library');
         Route::post('/files', [FileManagementController::class, 'store'])->name('files.store');
         Route::get('/files/{media}/download', [FileManagementController::class, 'download'])->name('files.download');
         Route::delete('/files/{media}', [FileManagementController::class, 'destroy'])->name('files.destroy');
-        Route::get('/boards', [BoardManagementController::class, 'index'])->name('boards');
-        Route::get('/boards/create', [BoardManagementController::class, 'create'])->name('boards.create');
-        Route::post('/boards', [BoardManagementController::class, 'store'])->name('boards.store');
-        Route::get('/boards/{board}', [BoardManagementController::class, 'show'])->name('boards.show');
-        Route::get('/boards/{board}/edit', [BoardManagementController::class, 'edit'])->name('boards.edit');
-        Route::patch('/boards/{board}', [BoardManagementController::class, 'update'])->name('boards.update');
-        Route::delete('/boards/{board}', [BoardManagementController::class, 'destroy'])->name('boards.destroy');
+        Route::get('/boards', [BoardManagementController::class, 'index'])->name('boards')->middleware('can:viewAny,App\Models\Board');
+        Route::get('/boards/create', [BoardManagementController::class, 'create'])->name('boards.create')->middleware('can:create,App\Models\Board');
+        Route::post('/boards', [BoardManagementController::class, 'store'])->name('boards.store')->middleware('can:create,App\Models\Board');
+        Route::get('/boards/{board}', [BoardManagementController::class, 'show'])->name('boards.show')->middleware('can:view,board');
+        Route::get('/boards/{board}/edit', [BoardManagementController::class, 'edit'])->name('boards.edit')->middleware('can:update,board');
+        Route::patch('/boards/{board}', [BoardManagementController::class, 'update'])->name('boards.update')->middleware('can:update,board');
+        Route::delete('/boards/{board}', [BoardManagementController::class, 'destroy'])->name('boards.destroy')->middleware('can:delete,board');
         Route::get('/users', [UserManagementController::class, 'index'])->name('users');
         Route::get('/users/{user}', [UserManagementController::class, 'show'])->name('users.show');
         Route::get('/users/{user}/permissions', [UserManagementController::class, 'permissions'])->name('users.permissions');
-        Route::patch('/users/{user}/role', [UserManagementController::class, 'updateRole'])->name('users.role.update');
-        Route::patch('/users/{user}/status', [UserManagementController::class, 'updateStatus'])->name('users.status.update');
-        Route::patch('/users/{user}/permissions', [UserManagementController::class, 'updatePermissions'])->name('users.permissions.update');
+        Route::patch('/users/{user}/role', [UserManagementController::class, 'updateRole'])->name('users.role.update')->middleware('can:manage,user');
+        Route::patch('/users/{user}/status', [UserManagementController::class, 'updateStatus'])->name('users.status.update')->middleware('can:manage,user');
+        Route::patch('/users/{user}/permissions', [UserManagementController::class, 'updatePermissions'])->name('users.permissions.update')->middleware('can:manage,user');
+        Route::get('/nowhere', [DashboardWorkspaceController::class, 'nowhere'])->name('nowhere');
+        Route::get('/order', [DashboardWorkspaceController::class, 'order'])->name('order');
+        Route::get('/order/create', [OrderManagementController::class, 'create'])->name('order.create')->middleware('can:create,App\Models\Order');
+        Route::post('/order/structure-summary', [OrderManagementController::class, 'structureSummary'])->name('order.structure')->middleware('can:create,App\Models\Order');
+        Route::post('/order/store-structured', [OrderManagementController::class, 'storeStructured'])->name('order.storeStructured')->middleware('can:create,App\Models\Order');
+        Route::post('/order', [OrderManagementController::class, 'store'])->name('order.store')->middleware('can:create,App\Models\Order');
+        Route::get('/order/{order}/edit', [OrderManagementController::class, 'edit'])->name('order.edit');
+        Route::patch('/order/{order}', [OrderManagementController::class, 'update'])->name('order.update');
+        Route::post('/order/{order}/status', [OrderManagementController::class, 'transition'])->name('order.status.transition')->middleware('can:transition,order');
+        Route::post('/order/{order}/claim', [OrderManagementController::class, 'claim'])->name('order.claim')->middleware('can:create,App\Models\Order');
+        Route::get('/order/{order}', [OrderManagementController::class, 'show'])->name('order.show');
+    });
+
+    // 컴포넌트 데모 (안정 기준)
+    Route::prefix('/dashboard/modules')->name('dashboard.modules.')->group(function () {
+        Route::get('/notification', [DashboardWorkspaceController::class, 'notification'])->name('notification');
         Route::get('/dropdown', [DashboardWorkspaceController::class, 'dropdown'])->name('dropdown');
+        Route::get('/tabs', [DashboardWorkspaceController::class, 'tabs'])->name('tabs');
         Route::get('/datatable', [DashboardWorkspaceController::class, 'datatable'])->name('datatable');
         Route::get('/editor', [DashboardWorkspaceController::class, 'editor'])->name('editor');
+        Route::get('/dialog', [DashboardWorkspaceController::class, 'dialog'])->name('dialog');
+        Route::get('/components', [DashboardWorkspaceController::class, 'components'])->name('components');
+        Route::get('/buttons', [DashboardWorkspaceController::class, 'buttons'])->name('buttons');
+        Route::get('/modal', [DashboardWorkspaceController::class, 'modal'])->name('modal');
+        Route::get('/cards', [DashboardWorkspaceController::class, 'cards'])->name('cards');
+        Route::get('/lists', [DashboardWorkspaceController::class, 'lists'])->name('lists');
+        Route::get('/forms', [DashboardWorkspaceController::class, 'forms'])->name('forms');
+        Route::get('/toast', [DashboardWorkspaceController::class, 'toast'])->name('toast');
+        Route::get('/loading', [DashboardWorkspaceController::class, 'loading'])->name('loading');
+        Route::get('/alert', [DashboardWorkspaceController::class, 'alert'])->name('alert');
     });
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

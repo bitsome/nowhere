@@ -26,7 +26,7 @@ test('users with board view permission can access board list and search', functi
     ]);
 
     $this->actingAs($viewer)
-        ->get(route('dashboard.modules.boards', ['search' => '공지']))
+        ->get(route('dashboard.business.boards', ['search' => '공지']))
         ->assertSuccessful()
         ->assertSee('공지 테스트')
         ->assertDontSee('자유 테스트');
@@ -43,21 +43,21 @@ test('board create edit and detail pages render shared toast editor and viewer m
     ]);
 
     $this->actingAs($editor)
-        ->get(route('dashboard.modules.boards.create'))
+        ->get(route('dashboard.business.boards.create'))
         ->assertSuccessful()
         ->assertSee('data-toast-editor-field', false)
         ->assertSee('data-allow-images="true"', false)
-        ->assertSee(route('dashboard.modules.files.library'), false)
-        ->assertSee(route('dashboard.modules.files.store'), false)
+        ->assertSee(route('dashboard.business.files.library'), false)
+        ->assertSee(route('dashboard.business.files.store'), false)
         ->assertSee('게시글 본문은 공통 ToastEditor 기준으로 작성하며, NoWhere 이미지 버튼은 File Manager 모달을 열어 다중 선택 이미지를 Markdown으로 삽입합니다.');
 
     $this->actingAs($editor)
-        ->get(route('dashboard.modules.boards.edit', $board))
+        ->get(route('dashboard.business.boards.edit', $board))
         ->assertSuccessful()
         ->assertSee('data-toast-editor-field', false);
 
     $this->actingAs($editor)
-        ->get(route('dashboard.modules.boards.show', $board))
+        ->get(route('dashboard.business.boards.show', $board))
         ->assertSuccessful()
         ->assertSee('data-toast-viewer-field', false)
         ->assertSee('data-toast-viewer-source', false);
@@ -72,7 +72,7 @@ test('users can create board post with board create permission', function () {
     ]);
 
     $this->actingAs($writer)
-        ->post(route('dashboard.modules.boards.store'), [
+        ->post(route('dashboard.business.boards.store'), [
             'type' => Board::TYPE_NOTICE,
             'title' => '신규 공지',
             'content' => "# 신규 공지\n\n게시글 본문입니다.",
@@ -108,7 +108,7 @@ test('users can update board post with board update permission', function () {
         ->toMediaCollection(Board::ATTACHMENT_COLLECTION, 'public');
 
     $this->actingAs($editor)
-        ->patch(route('dashboard.modules.boards.update', $board), [
+        ->patch(route('dashboard.business.boards.update', $board), [
             'type' => $board->type,
             'title' => '수정 후 제목',
             'content' => $board->content,
@@ -134,7 +134,7 @@ test('users can delete board post with board delete permission', function () {
     $board = Board::factory()->create();
 
     $this->actingAs($manager)
-        ->delete(route('dashboard.modules.boards.destroy', $board))
+        ->delete(route('dashboard.business.boards.destroy', $board))
         ->assertSessionHas('status');
 
     expect(Board::query()->whereKey($board->id)->exists())->toBeFalse();
@@ -149,7 +149,7 @@ test('users with board view permission can create board post but cannot update o
     $board = Board::factory()->create();
 
     $this->actingAs($viewer)
-        ->post(route('dashboard.modules.boards.store'), [
+        ->post(route('dashboard.business.boards.store'), [
             'type' => Board::TYPE_NOTICE,
             'title' => '권한 없는 등록',
             'content' => '본문',
@@ -161,8 +161,8 @@ test('users with board view permission can create board post but cannot update o
     expect(Board::query()->where('title', '권한 없는 등록')->exists())->toBeTrue();
 
     $this->actingAs($viewer)
-        ->from(route('dashboard.modules.boards.show', $board))
-        ->patch(route('dashboard.modules.boards.update', $board), [
+        ->from(route('dashboard.business.boards.show', $board))
+        ->patch(route('dashboard.business.boards.update', $board), [
             'type' => $board->type,
             'title' => '권한 없는 수정',
             'content' => $board->content,
@@ -172,7 +172,7 @@ test('users with board view permission can create board post but cannot update o
         ->assertSessionHasErrors('permission');
 
     $this->actingAs($viewer)
-        ->from(route('dashboard.modules.boards.show', $board))
-        ->delete(route('dashboard.modules.boards.destroy', $board))
+        ->from(route('dashboard.business.boards.show', $board))
+        ->delete(route('dashboard.business.boards.destroy', $board))
         ->assertSessionHasErrors('permission');
 });

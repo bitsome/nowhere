@@ -70,8 +70,8 @@
                         N
                     </span>
                     <div>
-                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#1f1f1f] dark:text-[#d6d6dd]">Nowhere</p>
-                        <p class="text-sm text-[#6a6a6a] dark:text-[#9ea1a8]">Business Operation Platform</p>
+                        <p class="m-0 text-xs font-semibold uppercase tracking-[0.2em] text-[#1f1f1f] dark:text-[#d6d6dd]">Nowhere</p>
+                        <p class="m-0 text-xs leading-5 text-[#6a6a6a] dark:text-[#9ea1a8]">Business Operation Platform</p>
                     </div>
                 </a>
 
@@ -124,6 +124,7 @@
                             data-description="{{ auth()->user()->email }}"
                             data-dashboard-url="{{ route('dashboard') }}"
                             data-notification-url="{{ route('dashboard.modules.notification') }}"
+                            data-my-orders-url="{{ route('my-orders') }}"
                             data-profile-url="{{ route('profile.edit') }}"
                             data-logout-url="{{ route('logout') }}"
                             data-csrf-token="{{ csrf_token() }}"

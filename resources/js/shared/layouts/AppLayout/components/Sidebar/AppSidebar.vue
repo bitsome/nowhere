@@ -42,7 +42,7 @@ const isVisible = (item) => item.visible !== false;
 
                 <button
                     type="button"
-                    class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#d6d6d6] bg-[#f3f3f3] text-[#4f4f4f] transition hover:bg-[#ededed] hover:text-[#1f1f1f] dark:border-[#2a2a2a] dark:bg-[#141414] dark:text-[#b9bbc0] dark:hover:bg-[#222222] dark:hover:text-[#d6d6dd]"
+                    class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-[#d6d6d6] bg-[#f3f3f3] text-[#4f4f4f] transition hover:bg-[#ededed] hover:text-[#1f1f1f] dark:border-[#2a2a2a] dark:bg-[#171717] dark:text-[#b9bbc0] dark:hover:bg-[#222222] dark:hover:text-[#d6d6dd]"
                     @click="$emit('toggle')"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4" aria-hidden="true">

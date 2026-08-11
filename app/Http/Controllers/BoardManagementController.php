@@ -7,7 +7,6 @@ use App\Models\User;
 use App\Services\FileService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
@@ -18,7 +17,6 @@ class BoardManagementController extends Controller
     public function index(Request $request): View
     {
         $actor = $this->resolveActor();
-        $this->assertHasPermission($actor, 'board.view');
 
         $search = trim((string) $request->string('search'));
         $type = trim((string) $request->string('type'));
@@ -32,15 +30,15 @@ class BoardManagementController extends Controller
             ->latest()
             ->get();
 
-        return view('dashboard.modules.boards.index', [
+        return view('dashboard.business.boards.index', [
             'boards' => $boards,
             'filters' => [
                 'search' => $search,
                 'status' => $status,
                 'type' => $type,
             ],
-            'module' => DashboardWorkspaceController::findWorkspaceModule('boards'),
-            'modules' => DashboardWorkspaceController::workspaceModules(),
+            'module' => DashboardWorkspaceController::findBusinessModule('boards'),
+            'modules' => DashboardWorkspaceController::businessModules(),
             'statusOptions' => Board::statusOptions(),
             'typeLabels' => Board::typeLabels(),
             'typeOptions' => Board::typeOptions(),
@@ -51,19 +49,18 @@ class BoardManagementController extends Controller
     public function show(Board $board): View
     {
         $actor = $this->resolveActor();
-        $this->assertHasPermission($actor, 'board.view');
 
         $board->load('user');
         $board->increment('view_count');
         $board->refresh()->load('user');
 
-        return view('dashboard.modules.boards.show', [
+        return view('dashboard.business.boards.show', [
             'attachmentFiles' => $this->fileService->getFiles($board, Board::ATTACHMENT_COLLECTION),
             'board' => $board,
             'canDelete' => $actor->hasPermission('board.delete'),
             'canUpdate' => $actor->hasPermission('board.update'),
-            'module' => DashboardWorkspaceController::findWorkspaceModule('boards'),
-            'modules' => DashboardWorkspaceController::workspaceModules(),
+            'module' => DashboardWorkspaceController::findBusinessModule('boards'),
+            'modules' => DashboardWorkspaceController::businessModules(),
             'statusOptions' => Board::statusOptions(),
             'typeLabels' => Board::typeLabels(),
         ]);
@@ -72,16 +69,15 @@ class BoardManagementController extends Controller
     public function create(): View
     {
         $actor = $this->resolveActor();
-        $this->assertCanCreateBoard($actor);
 
-        return view('dashboard.modules.boards.create', [
+        return view('dashboard.business.boards.create', [
             'attachmentFiles' => collect(),
             'board' => new Board([
                 'status' => Board::STATUS_PUBLISHED,
                 'type' => Board::TYPE_NOTICE,
             ]),
-            'module' => DashboardWorkspaceController::findWorkspaceModule('boards'),
-            'modules' => DashboardWorkspaceController::workspaceModules(),
+            'module' => DashboardWorkspaceController::findBusinessModule('boards'),
+            'modules' => DashboardWorkspaceController::businessModules(),
             'statusOptions' => Board::statusOptions(),
             'typeLabels' => Board::typeLabels(),
             'typeOptions' => Board::typeOptions(),
@@ -91,7 +87,6 @@ class BoardManagementController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $actor = $this->resolveActor();
-        $this->assertCanCreateBoard($actor);
 
         $validated = $this->validateBoard($request);
 
@@ -111,22 +106,21 @@ class BoardManagementController extends Controller
         }
 
         return redirect()
-            ->route('dashboard.modules.boards.show', $board)
+            ->route('dashboard.business.boards.show', $board)
             ->with('status', '게시글이 등록되었습니다.');
     }
 
     public function edit(Board $board): View
     {
         $actor = $this->resolveActor();
-        $this->assertHasPermission($actor, 'board.update');
 
         $board->load('user');
 
-        return view('dashboard.modules.boards.edit', [
+        return view('dashboard.business.boards.edit', [
             'attachmentFiles' => $this->fileService->getFiles($board, Board::ATTACHMENT_COLLECTION),
             'board' => $board,
-            'module' => DashboardWorkspaceController::findWorkspaceModule('boards'),
-            'modules' => DashboardWorkspaceController::workspaceModules(),
+            'module' => DashboardWorkspaceController::findBusinessModule('boards'),
+            'modules' => DashboardWorkspaceController::businessModules(),
             'statusOptions' => Board::statusOptions(),
             'typeLabels' => Board::typeLabels(),
             'typeOptions' => Board::typeOptions(),
@@ -136,7 +130,6 @@ class BoardManagementController extends Controller
     public function update(Request $request, Board $board): RedirectResponse
     {
         $actor = $this->resolveActor();
-        $this->assertHasPermission($actor, 'board.update');
 
         $validated = $this->validateBoard($request);
 
@@ -157,19 +150,18 @@ class BoardManagementController extends Controller
         }
 
         return redirect()
-            ->route('dashboard.modules.boards.show', $board)
+            ->route('dashboard.business.boards.show', $board)
             ->with('status', '게시글이 수정되었습니다.');
     }
 
     public function destroy(Board $board): RedirectResponse
     {
         $actor = $this->resolveActor();
-        $this->assertHasPermission($actor, 'board.delete');
 
         $board->delete();
 
         return redirect()
-            ->route('dashboard.modules.boards')
+            ->route('dashboard.business.boards')
             ->with('status', '게시글이 삭제되었습니다.');
     }
 
@@ -215,26 +207,6 @@ class BoardManagementController extends Controller
             ->getMedia(Board::ATTACHMENT_COLLECTION)
             ->filter(fn (Media $media) => in_array($media->id, $removeAttachmentIds, false))
             ->each(fn (Media $media) => $this->fileService->delete($media));
-    }
-
-    private function assertHasPermission(User $actor, string $permission): void
-    {
-        if (! $actor->hasPermission($permission)) {
-            throw ValidationException::withMessages([
-                'permission' => '현재 계정에는 해당 게시판 작업 권한이 없습니다.',
-            ]);
-        }
-    }
-
-    private function assertCanCreateBoard(User $actor): void
-    {
-        if ($actor->hasPermission('board.create') || $actor->hasPermission('board.view')) {
-            return;
-        }
-
-        throw ValidationException::withMessages([
-            'permission' => '현재 계정에는 게시글 등록 권한이 없습니다.',
-        ]);
     }
 
     private function resolveActor(): User

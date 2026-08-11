@@ -13,7 +13,7 @@ test('dashboard hub shows toast ui editor module link', function () {
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertSuccessful()
-        ->assertSee('Toast UI Editor 테스트')
+        ->assertSee('에디터')
         ->assertSee(route('dashboard.modules.editor'), false);
 });
 
@@ -26,9 +26,9 @@ test('authenticated users can access toast ui editor dashboard module page', fun
         ->get(route('dashboard.modules.editor'))
         ->assertSuccessful()
         ->assertSee('Toast UI Editor / Viewer')
-        ->assertSee('Shared Editor Framework')
+        ->assertSee('에디터 프레임워크')
         ->assertSee('Live Test')
-        ->assertSee('Toast UI Editor 테스트')
+        ->assertSee('에디터')
         ->assertSee('에디터를 불러오는 중입니다.')
         ->assertSee('data-toast-editor-playground', false)
         ->assertSee('data-base-markdown-editor-playground', false);
