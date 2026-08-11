@@ -71,15 +71,24 @@ const marketMenu = [
     { label: '알림', key: 'notifications' },
 ];
 
-const profileDotMenu = [
-    { label: theme.isDark ? '라이트 모드' : '다크 모드', key: 'theme' },
-];
+const profileDotMenu = computed(() => {
+    const menus = [
+        { label: theme.isDark ? '라이트 모드' : '다크 모드', key: 'theme' },
+    ];
+
+    if (auth.isAdmin) {
+        menus.push({ label: '운영 관리', key: 'admin' });
+    }
+
+    return menus;
+});
 
 function doMenu(key) {
     switch (key) {
         case 'profile': router.push({ name: 'profile' }); break;
         case 'notifications': router.push({ name: 'notifications' }); break;
         case 'order-create': router.push({ name: 'order-create' }); break;
+        case 'admin': router.push({ name: 'admin' }); break;
         case 'theme': theme.toggle(); break;
         default: emit('action', key); break;
     }

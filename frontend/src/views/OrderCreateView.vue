@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { useMessage } from 'naive-ui';
 import { useRoute, useRouter } from 'vue-router';
 import { apiCreateOrder, apiCreateSetOrders, apiOrder, apiOrders, apiStructureOrder, apiTransitionOrder, apiUpdateOrder } from '../api/orders';
 import { getApiErrorMessage } from '../api/client';
@@ -11,6 +12,7 @@ import SetGroupCard from '../components/orders/SetGroupCard.vue';
 const route = useRoute();
 const router = useRouter();
 const ui = useUiStore();
+const message = useMessage();
 
 // 헤더 필터 버튼 → 필터 모달 열기 (마켓과 동일한 신호)
 const filterOpen = ref(false);
@@ -249,6 +251,30 @@ const applyStructured = (s) => {
 
 const SERVICE_LABELS = { pickup: '픽업', sending: '공항샌딩', landing: '공항랜딩' };
 
+// AI 구조화 결과 요약 (읽기 전용) — 입력 폼은 직접 등록(manual)에서만 제공
+const structuredPreview = computed(() => {
+    if (mode.value !== 'ai') return null;
+
+    const hasValue =
+        form.pickup_location || form.dropoff_location || form.service_date ||
+        form.service_time || form.vehicle_type || form.flight_number ||
+        form.passenger_count != null || form.expected_revenue != null;
+
+    if (!hasValue) return null;
+
+    return {
+        route: [form.pickup_location, form.dropoff_location].filter(Boolean).join(' → '),
+        service_date: form.service_date,
+        service_time: form.service_time,
+        vehicle_type: form.vehicle_type,
+        flight_number: form.flight_number,
+        passenger_count: form.passenger_count,
+        luggage_count: form.luggage_count,
+        expected_revenue: form.expected_revenue,
+        service_type: SERVICE_LABELS[form.service_type] ?? form.service_type,
+    };
+});
+
 // 일정(AI 구조화) 테이블 표시용 행 — 날짜/요일/금액 포함 (금액은 없으면 빈칸)
 const lineItemRows = computed(() =>
     (lineItems.value ?? []).map((item) => ({
@@ -386,6 +412,163 @@ const addSetLine = () => {
         expected_revenue: null,
         vehicle_type: '',
     });
+};
+
+// ── 셋트: 여러 줄 한 번에 입력 → 각 줄을 오더로 파싱 ──
+const bulkInput = ref('');
+const bulkError = ref('');
+
+const VEHICLE_HINTS = ['카니발', '스타리아', '스타렉스', '그랜저', '쏘렌토', '리무진', '모닝', '레이', '버스', '트럭'];
+
+// "8/10 09:00 인천공항→명동 카니발 3명 200000원" → 셋트 일정 1건
+const parseSetLine = (line) => {
+    const item = {
+        scheduled_time: '',
+        service_date: '',
+        service_time: '',
+        service_type: 'pickup',
+        pickup_location: '',
+        dropoff_location: '',
+        flight_number: '',
+        passenger_count: null,
+        luggage_count: null,
+        expected_revenue: null,
+        vehicle_type: '',
+    };
+
+    // 날짜: 2026-08-10 / 8-10 / 8/10 / 8.10
+    let match = line.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+
+    if (match) {
+        item.service_date = `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}`;
+    } else {
+        match = line.match(/(\d{1,2})[/.](\d{1,2})/);
+
+        if (match) {
+            const year = new Date().getFullYear();
+
+            item.service_date = `${year}-${match[1].padStart(2, '0')}-${match[2].padStart(2, '0')}`;
+        }
+    }
+
+    // 시간: 09:00 / 9:30 (24시간제)
+    match = line.match(/(\d{1,2}):(\d{2})/);
+
+    if (match) {
+        item.service_time = `${match[1].padStart(2, '0')}:${match[2]}`;
+    } else {
+        // 한글 시간: 오전 9시 / 오후 3시 30분 / 새벽 6시
+        match = line.match(/(오전|오후|새벽|저녁|아침|낮)\s*(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분?)?/);
+
+        if (match) {
+            const ampm = match[1];
+            let hour = parseInt(match[2], 10);
+            const minute = match[3] ? parseInt(match[3], 10) : 0;
+
+            if (ampm === '오후' || ampm === '저녁') {
+                hour = hour < 12 ? hour + 12 : hour;
+            }
+
+            if ((ampm === '오전' || ampm === '아침') && hour === 12) {
+                hour = 0;
+            }
+
+            item.service_time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+        }
+    }
+
+    // 인원: 3명
+    match = line.match(/(\d+)\s*명/);
+
+    if (match) {
+        item.passenger_count = parseInt(match[1], 10);
+    }
+
+    // 금액: 200000원 / 200,000원 / 20만원
+    match = line.match(/(\d{1,3}(?:,\d{3})+|\d+)\s*만원/);
+
+    if (match) {
+        item.expected_revenue = parseFloat(match[1].replace(/,/g, '')) * 10000;
+    } else {
+        match = line.match(/(\d{1,3}(?:,\d{3})*|\d+)\s*원/);
+
+        if (match) {
+            item.expected_revenue = parseFloat(match[1].replace(/,/g, ''));
+        }
+    }
+
+    // 차량: 알려진 차량명 매칭
+    const vehicle = VEHICLE_HINTS.find((v) => line.includes(v));
+
+    if (vehicle) {
+        item.vehicle_type = vehicle;
+    }
+
+    // 노선: 출발 → 도착 (날짜/시간/금액/인원/차량 토큰을 뺀 나머지에서 분리)
+    let rest = line
+        .replace(/\d{4}-\d{1,2}-\d{1,2}/, '')
+        .replace(/(\d{1,2})[/.](\d{1,2})/, '')
+        .replace(/\d{1,2}:\d{2}/, '')
+        .replace(/(오전|오후|새벽|저녁|아침|낮)\s*\d{1,2}\s*시(?:\s*\d{1,2}\s*분?)?/, '')
+        .replace(/[\d,]+만?원/, '')
+        .replace(/\d+\s*명(?![가-힣])/, '');
+
+    VEHICLE_HINTS.forEach((v) => {
+        rest = rest.replace(v, '');
+    });
+
+    rest = rest
+        .replace(/->/g, ' → ')
+        .replace(/[→~>]+/g, ' → ')
+        .replace(/-+/g, ' ')
+        .replace(/에서/g, ' → ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const [pickup, ...dropParts] = rest.split(' → ').map((part) => part.trim()).filter(Boolean);
+
+    if (pickup) {
+        item.pickup_location = pickup;
+    }
+
+    if (dropParts.length) {
+        item.dropoff_location = dropParts.join(' → ');
+    }
+
+    return item;
+};
+
+const convertBulkToSet = () => {
+    bulkError.value = '';
+
+    const lines = bulkInput.value
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean);
+
+    if (lines.length === 0) {
+        bulkError.value = '입력할 내용이 없습니다.';
+        return;
+    }
+
+    const added = [];
+
+    lines.forEach((line) => {
+        const item = parseSetLine(line);
+
+        // 노선·날짜·시간 중 하나라도 해석되면 추가 (부분 입력 허용)
+        if (item.pickup_location || item.dropoff_location || item.service_date || item.service_time) {
+            setLineItems.value.push(item);
+            added.push(line);
+        } else {
+            bulkError.value = '해석하지 못한 줄이 있습니다. 형식을 확인해 주세요.';
+        }
+    });
+
+    if (added.length) {
+        message.success(`셋트 일정 ${added.length}건이 추가되었습니다.`);
+        bulkInput.value = '';
+    }
 };
 
 const removeSetLine = (index) => {
@@ -573,7 +756,48 @@ const saveSet = async () => {
             </n-button>
         </n-card>
 
-        <n-card v-if="mode === 'ai' || mode === 'manual'" :bordered="true" class="create-block" title="오더 정보">
+        <!-- AI 구조화 결과 요약 (읽기 전용) -->
+        <n-card v-if="structuredPreview" :bordered="true" class="create-block" title="구조화 결과">
+            <div class="preview-grid">
+                <div v-if="structuredPreview.route" class="preview-item">
+                    <span class="preview-item__label">노선</span>
+                    <strong class="preview-item__value">{{ structuredPreview.route }}</strong>
+                </div>
+                <div v-if="structuredPreview.service_date" class="preview-item">
+                    <span class="preview-item__label">날짜·시간</span>
+                    <strong class="preview-item__value">
+                        {{ structuredPreview.service_date }}
+                        <template v-if="structuredPreview.service_time">{{ structuredPreview.service_time }}</template>
+                    </strong>
+                </div>
+                <div v-if="structuredPreview.service_type" class="preview-item">
+                    <span class="preview-item__label">구분</span>
+                    <strong class="preview-item__value">{{ structuredPreview.service_type }}</strong>
+                </div>
+                <div v-if="structuredPreview.vehicle_type" class="preview-item">
+                    <span class="preview-item__label">차량</span>
+                    <strong class="preview-item__value">{{ structuredPreview.vehicle_type }}</strong>
+                </div>
+                <div v-if="structuredPreview.passenger_count != null" class="preview-item">
+                    <span class="preview-item__label">인원</span>
+                    <strong class="preview-item__value">{{ structuredPreview.passenger_count }}명</strong>
+                </div>
+                <div v-if="structuredPreview.luggage_count != null" class="preview-item">
+                    <span class="preview-item__label">짐</span>
+                    <strong class="preview-item__value">{{ structuredPreview.luggage_count }}개</strong>
+                </div>
+                <div v-if="structuredPreview.flight_number" class="preview-item">
+                    <span class="preview-item__label">항공편</span>
+                    <strong class="preview-item__value">{{ structuredPreview.flight_number }}</strong>
+                </div>
+                <div v-if="structuredPreview.expected_revenue != null" class="preview-item">
+                    <span class="preview-item__label">금액</span>
+                    <strong class="preview-item__value">{{ Number(structuredPreview.expected_revenue).toLocaleString() }}원</strong>
+                </div>
+            </div>
+        </n-card>
+
+        <n-card v-if="mode === 'manual'" :bordered="true" class="create-block" title="오더 정보">
             <n-form label-placement="top" label-width="auto">
                 <div class="create-grid">
                     <n-form-item label="날짜">
@@ -677,6 +901,31 @@ const saveSet = async () => {
             </n-form>
         </n-card>
 
+        <n-card v-if="mode === 'set'" :bordered="true" class="create-block" title="한 번에 입력">
+            <n-input
+                v-model:value="bulkInput"
+                type="textarea"
+                :rows="6"
+                placeholder="각 줄이 하나의 오더가 됩니다.
+예)
+8/10 09:00 인천공항→명동 카니발 3명 200000원
+8/10 14:00 강남에서 강릉 정동진 스타리아 4명 250000원
+8/11 07:30 김포공항→판교 그랜저 2명 15만원"
+            />
+            <div v-if="bulkError" class="bulk-error">{{ bulkError }}</div>
+            <n-button
+                type="primary"
+                class="create-structure-btn"
+                :disabled="!bulkInput.trim()"
+                @click="convertBulkToSet"
+            >
+                셋트로 변환
+            </n-button>
+            <p class="bulk-hint">
+                날짜 / 시간 / 출발→도착 / 차량 / 인원 / 금액 — 알아서 해석됩니다. 변환 후 아래 '셋트 일정'에서 수정할 수 있습니다.
+            </p>
+        </n-card>
+
         <n-card v-if="mode === 'set' && setLineItems.length" bordered class="create-block" title="셋트 일정">
             <div class="set-list">
                 <n-card
@@ -758,6 +1007,49 @@ const saveSet = async () => {
 </template>
 
 <style scoped>
+/* 구조화 결과 요약 */
+.preview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px;
+}
+
+.preview-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(128, 128, 128, 0.05);
+}
+
+.preview-item__label {
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.preview-item__value {
+    font-size: 14px;
+    word-break: break-word;
+}
+
+/* 한 번에 입력 (셋트) */
+.bulk-error {
+    margin: 8px 0 0;
+    color: #e24c4c;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.bulk-hint {
+    margin: 10px 0 0;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.6;
+}
+
 .create-block {
     margin-bottom: 16px;
     border-radius: 16px;

@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import { apiBatchSettle, apiOrders } from '../api/orders';
 import { apiOrderStats } from '../api/stats';
 import { getApiErrorMessage } from '../api/client';
 import { useUiStore } from '../stores/ui';
@@ -60,6 +61,34 @@ const monthlySeries = computed(() => stats.value?.monthly ?? []);
 const maxMonthRevenue = computed(() => Math.max(1, ...monthlySeries.value.map((d) => d.revenue)));
 const monthRevenuePercent = (revenue) => `${Math.max(4, Math.round(((revenue ?? 0) / maxMonthRevenue.value) * 100))}%`;
 const totalMonthRevenue = computed(() => monthlySeries.value.reduce((sum, d) => sum + (d.revenue ?? 0), 0));
+
+// ── 정산 처리 ──
+const settling = ref(false);
+const settleMessage = ref('');
+
+const settleAll = async () => {
+    settling.value = true;
+    settleMessage.value = '';
+
+    try {
+        const { data } = await apiOrders({ scope: 'mine', tab: '완료', per_page: 100 });
+        const rows = Array.isArray(data.data) ? data.data : data.data?.data ?? [];
+        const ids = rows.filter((row) => row.status === 'completed').map((row) => row.id);
+
+        if (!ids.length) {
+            settleMessage.value = '정산 대기 오더가 없습니다.';
+            return;
+        }
+
+        const result = await apiBatchSettle(ids);
+        settleMessage.value = `${result.data.settled ?? ids.length}건이 정산 완료되었습니다.`;
+        await load();
+    } catch (e) {
+        settleMessage.value = getApiErrorMessage(e, '정산에 실패했습니다.');
+    } finally {
+        settling.value = false;
+    }
+};
 
 onMounted(() => {
     load();
@@ -176,6 +205,39 @@ onBeforeUnmount(() => clearInterval(timer));
                         <strong class="dash-card__value">{{ formatWon(summary.revenue) }}원</strong>
                         <span class="dash-card__hint">{{ stats.period.from }} ~ {{ stats.period.to }}</span>
                     </div>
+                    <div v-if="summary.rating != null" class="dash-card">
+                        <span class="dash-card__label">평점</span>
+                        <strong class="dash-card__value">★ {{ summary.rating }}<small class="dash-card__unit">/ 5</small></strong>
+                        <span class="dash-card__hint">리뷰 {{ summary.reviewCount }}개</span>
+                    </div>
+                </div>
+
+                <!-- 정산 현황 -->
+                <div class="dash-card dash-block">
+                    <div class="dash-card__head">
+                        <strong>정산 현황</strong>
+                        <n-button
+                            type="primary"
+                            size="small"
+                            round
+                            :loading="settling"
+                            :disabled="summary.settlementPending === 0"
+                            @click="settleAll"
+                        >
+                            정산 처리
+                        </n-button>
+                    </div>
+                    <div class="settle-grid">
+                        <div class="settle-item">
+                            <span class="settle-item__label">정산 대기</span>
+                            <strong class="settle-item__value">{{ formatWon(summary.settlementPending) }}원</strong>
+                        </div>
+                        <div class="settle-item">
+                            <span class="settle-item__label">정산 완료</span>
+                            <strong class="settle-item__value">{{ formatWon(summary.settled) }}원</strong>
+                        </div>
+                    </div>
+                    <p v-if="settleMessage" class="settle-message">{{ settleMessage }}</p>
                 </div>
 
                 <!-- 7일 매출 + 오더 건수 차트 -->
@@ -480,6 +542,47 @@ html.dark .mini-list__empty {
     margin: 6px 0 4px;
     font-size: 22px;
     font-weight: 700;
+}
+
+.dash-card__unit {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+/* 정산 현황 */
+.settle-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.settle-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(128, 128, 128, 0.05);
+}
+
+.settle-item__label {
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.settle-item__value {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.settle-message {
+    margin: 10px 0 0;
+    font-size: 13px;
+    color: var(--text-muted);
 }
 
 .dash-card__hint {

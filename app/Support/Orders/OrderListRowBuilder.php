@@ -66,9 +66,12 @@ class OrderListRowBuilder
             'isToday' => $this->isToday($order),
             'isTomorrow' => $this->isTomorrow($order),
             'isNew' => $this->isNew($order),
+            'isUrgent' => $this->isUrgent($order),
             'showUrl' => route('dashboard.business.order.show', $order),
             'sortDate' => $order->service_date ?: '',
             'sortTime' => $order->service_time ?: '',
+            'sortCreatedAt' => $order->created_at?->toISOString() ?? '',
+            'amountValue' => (int) ($order->expected_revenue ?? $order->amount_value ?? 0),
         ];
     }
 
@@ -172,5 +175,28 @@ class OrderListRowBuilder
     private function isNew(Order $order): bool
     {
         return $order->created_at !== null && $order->created_at->gte(now()->subHours(2));
+    }
+
+    /**
+     * 임박 여부 — 오늘 서비스이고 현재 시각부터 2시간 이내에 운행이 시작되는 오더 (빨간 임박 배지).
+     * 서비스 시각은 사용자 로컬(KST) 기준 문자열로 저장되므로, 비교도 KST로 수행한다.
+     */
+    public function isUrgent(Order $order): bool
+    {
+        if (! $order->service_date || ! $order->service_time) {
+            return false;
+        }
+
+        $service = Carbon::parse($order->service_date.' '.$order->service_time, 'Asia/Seoul');
+        $now = Carbon::now('Asia/Seoul');
+
+        if (! $service->isSameDay($now)) {
+            return false;
+        }
+
+        // 서비스 시각까지 남은 분 (미래면 양수)
+        $minutesUntil = (int) floor(($service->getTimestamp() - $now->getTimestamp()) / 60);
+
+        return $minutesUntil > 0 && $minutesUntil <= 120;
     }
 }

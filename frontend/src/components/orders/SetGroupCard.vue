@@ -53,6 +53,7 @@ const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
             </div>
             <div class="set-card__flags">
                 <span v-if="set.isNew" class="set-card__new" title="새로 등록된 셋트">N</span>
+                <span v-if="set.isUrgent" class="set-card__urgent" title="곧 운행 시작">임박</span>
                 <span class="status-badge" :style="{ background: statusColor, borderColor: statusColor }">
                     {{ set.statusLabel }}
                 </span>
@@ -205,6 +206,30 @@ const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
     line-height: 1;
     flex-shrink: 0;
     box-shadow: 0 2px 6px rgba(229, 72, 77, 0.3);
+}
+
+/* 임박 배지 */
+.set-card__urgent {
+    flex-shrink: 0;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: #e5484d;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: -0.2px;
+    box-shadow: 0 1px 4px rgba(229, 72, 77, 0.4);
+    animation: urgent-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes urgent-pulse {
+    0%,
+    100% {
+        box-shadow: 0 1px 4px rgba(229, 72, 77, 0.4);
+    }
+    50% {
+        box-shadow: 0 1px 8px rgba(229, 72, 77, 0.8);
+    }
 }
 
 /* 상태 배지 */

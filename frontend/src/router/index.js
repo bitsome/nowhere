@@ -11,6 +11,7 @@ const ChatView = () => import('../views/ChatView.vue');
 const CommunityView = () => import('../views/CommunityView.vue');
 const UserPageView = () => import('../views/UserPageView.vue');
 const ProfileView = () => import('../views/ProfileView.vue');
+const AdminView = () => import('../views/AdminView.vue');
 
 const routes = [
     { path: '/login', name: 'login', component: LoginView },
@@ -21,6 +22,7 @@ const routes = [
     { path: '/community', name: 'community', component: CommunityView, meta: { requiresAuth: true } },
     { path: '/users/:id(\\d+)', name: 'user-page', component: UserPageView, meta: { requiresAuth: true } },
     { path: '/profile', name: 'profile', component: ProfileView, meta: { requiresAuth: true } },
+    { path: '/admin', name: 'admin', component: AdminView, meta: { requiresAuth: true, adminOnly: true } },
     { path: '/orders/create', name: 'order-create', component: OrderCreateView, meta: { requiresAuth: true } },
     { path: '/orders/:id(\\d+)/edit', name: 'order-edit', component: OrderCreateView, meta: { requiresAuth: true } },
     { path: '/orders/:id(\\d+)', name: 'order-detail', component: OrderDetailView, meta: { requiresAuth: true } },
@@ -40,6 +42,16 @@ router.beforeEach((to) => {
 
     if (to.name === 'login' && token) {
         return { name: 'market' };
+    }
+
+    // 관리자 전용 화면 — 역할이 Admin/Super Admin이 아니면 마켓으로
+    if (to.meta.adminOnly) {
+        const role = localStorage.getItem('auth_user_role') ?? '';
+        const isAdmin = ['Admin', 'Super Admin'].includes(role);
+
+        if (!isAdmin) {
+            return { name: 'market' };
+        }
     }
 });
 

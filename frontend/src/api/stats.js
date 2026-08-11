@@ -1,3 +1,4 @@
 import { apiClient } from './client';
 
-export const apiOrderStats = (days) => apiClient.get('/stats/orders', { params: { days } });
+// mine=true → 로그인 사용자 본인의 오더 기준 통계 (드라이버 대시보드)
+export const apiOrderStats = (days, mine = true) => apiClient.get('/stats/orders', { params: { days, mine } });

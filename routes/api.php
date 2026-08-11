@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\CommunityController;
 use App\Http\Controllers\Api\NotificationController;
@@ -37,6 +38,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/notifications/read', [NotificationController::class, 'markRead']);
     Route::post('/verification/request', [VerificationController::class, 'request']);
     Route::patch('/admin/users/{user}/verification', [VerificationController::class, 'update']);
+    Route::get('/admin/users', [AdminController::class, 'users']);
     Route::get('/chats', [ChatController::class, 'index']);
     Route::post('/chats', [ChatController::class, 'store']);
     Route::get('/chats/{conversation}', [ChatController::class, 'show']);

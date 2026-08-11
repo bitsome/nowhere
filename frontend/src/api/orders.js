@@ -16,7 +16,7 @@ export const apiClaimOrder = (id) => apiClient.post(`/orders/${id}/claim`);
 
 export const apiDuplicateOrder = (id) => apiClient.post(`/orders/${id}/duplicate`);
 
-export const apiTransitionOrder = (id, status) => apiClient.post(`/orders/${id}/status`, { status });
+export const apiTransitionOrder = (id, status, cancelReason = '') => apiClient.post(`/orders/${id}/status`, { status, cancel_reason: cancelReason });
 
 export const apiDetachOrder = (id) => apiClient.post(`/orders/${id}/detach`);
 

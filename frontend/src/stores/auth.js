@@ -8,6 +8,7 @@ export const useAuthStore = defineStore('auth', {
     }),
     getters: {
         isAuthenticated: (state) => Boolean(state.token),
+        isAdmin: (state) => ['Admin', 'Super Admin'].includes(state.user?.role),
     },
     actions: {
         async login(email, password) {
@@ -16,6 +17,7 @@ export const useAuthStore = defineStore('auth', {
             this.token = data.data.token;
             this.user = data.data.user;
             localStorage.setItem('auth_token', this.token);
+            localStorage.setItem('auth_user_role', this.user?.role ?? '');
         },
         async fetchMe() {
             if (!this.isAuthenticated) {
@@ -25,6 +27,7 @@ export const useAuthStore = defineStore('auth', {
             const { data } = await apiMe();
 
             this.user = data.data;
+            localStorage.setItem('auth_user_role', this.user?.role ?? '');
         },
         async logout() {
             try {
@@ -36,6 +39,7 @@ export const useAuthStore = defineStore('auth', {
             this.token = '';
             this.user = null;
             localStorage.removeItem('auth_token');
+            localStorage.removeItem('auth_user_role');
         },
     },
 });

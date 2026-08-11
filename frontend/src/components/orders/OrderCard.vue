@@ -67,7 +67,8 @@ const statusColor = computed(() => STATUS_COLORS[props.order.status] ?? '#909399
                 <div class="order-card__route-top">
                     <span v-if="order.isNew" class="order-card__new" title="새로 등록된 오더">N</span>
                     <strong>{{ order.route }}</strong>
-                    <span v-if="order.isToday" class="order-card__today">오늘</span>
+                    <span v-if="order.isUrgent" class="order-card__urgent" title="곧 운행 시작">임박</span>
+                    <span v-else-if="order.isToday" class="order-card__today">오늘</span>
                     <span v-else-if="order.isTomorrow" class="order-card__tomorrow">내일</span>
                 </div>
                 <div class="order-card__route-bottom">
@@ -303,6 +304,29 @@ const statusColor = computed(() => STATUS_COLORS[props.order.status] ?? '#909399
 .order-card__today {
     background: #18a058;
     color: #ffffff;
+}
+
+.order-card__urgent {
+    flex-shrink: 0;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: -0.2px;
+    background: #e5484d;
+    color: #ffffff;
+    box-shadow: 0 1px 4px rgba(229, 72, 77, 0.4);
+    animation: urgent-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes urgent-pulse {
+    0%,
+    100% {
+        box-shadow: 0 1px 4px rgba(229, 72, 77, 0.4);
+    }
+    50% {
+        box-shadow: 0 1px 8px rgba(229, 72, 77, 0.8);
+    }
 }
 
 .order-card__tomorrow {

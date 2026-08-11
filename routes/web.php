@@ -105,6 +105,10 @@ Route::middleware('auth')->group(function () {
 
 // SPA 폴백 — 프론트엔드(Vue Router)가 처리하는 라우트를 index.html로 안내.
 // Blade(관리자 대시보드)와 /api 라우트는 위에서 우선 매칭되므로 충돌하지 않는다.
+// index.html은 항상 최신 자산(해시 파일명)을 참조하도록 캐시 금지한다.
 Route::fallback(function () {
-    return File::get(public_path('index.html'));
+    return response(File::get(public_path('index.html')), 200, [
+        'Content-Type' => 'text/html',
+        'Cache-Control' => 'no-cache, no-store, must-revalidate',
+    ]);
 });

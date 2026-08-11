@@ -21,9 +21,10 @@ class OrderWorkspaceListBuilder
     /**
      * @param  Collection<int, Order>  $orders
      * @param  Collection<int, OrderGroup>|null  $groups
+     * @param  string  $sort  latest(등록순) | date(서비스순) | amount | amount_asc
      * @return array<int, array<string, mixed>>
      */
-    public function build(Collection $orders, ?Collection $groups = null): array
+    public function build(Collection $orders, ?Collection $groups = null, string $sort = 'date'): array
     {
         [$sets, $singles] = $this->partitionByGroup($orders);
 
@@ -39,7 +40,7 @@ class OrderWorkspaceListBuilder
             $rows[] = $this->rowBuilder->build($order);
         }
 
-        return $this->sortRows($rows);
+        return $this->sortRows($rows, $sort);
     }
 
     /**
@@ -115,6 +116,7 @@ class OrderWorkspaceListBuilder
                 ? (string) $statusLabels->first()
                 : '-',
             'isNew' => $isNew,
+            'isUrgent' => $sortedOrders->contains(fn (Order $order) => $this->rowBuilder->isUrgent($order)),
             'isToday' => $this->isOnDate($firstOrder, 'today'),
             'isTomorrow' => $this->isOnDate($firstOrder, 'tomorrow'),
             'showUrl' => $firstOrder !== null ? route('dashboard.business.order.show', $firstOrder) : '',
@@ -137,6 +139,9 @@ class OrderWorkspaceListBuilder
             'orders' => $memberRows,
             'sortDate' => $firstOrder?->service_date ?: '',
             'sortTime' => $firstOrder?->service_time ?: '',
+            'sortCreatedAt' => $sortedOrders
+                ->max(fn (Order $order) => $order->created_at?->toISOString() ?? '') ?? '',
+            'amountValue' => (int) $sortedOrders->sum(fn (Order $order) => (int) ($order->expected_revenue ?? $order->amount_value ?? 0)),
         ];
     }
 
@@ -171,11 +176,28 @@ class OrderWorkspaceListBuilder
      * @param  array<int, array<string, mixed>>  $rows
      * @return array<int, array<string, mixed>>
      */
-    private function sortRows(array $rows): array
+    private function sortRows(array $rows, string $sort): array
     {
-        return collect($rows)
-            ->sortBy(fn (array $row) => ($row['sortDate'] ?? '').' '.($row['sortTime'] ?? '').' '.($row['key'] ?? ''))
-            ->values()
-            ->all();
+        $sorted = collect($rows);
+
+        return match ($sort) {
+            'date' => $sorted
+                ->sortBy(fn (array $row) => ($row['sortDate'] ?? '').' '.($row['sortTime'] ?? '').' '.($row['key'] ?? ''))
+                ->values()
+                ->all(),
+            'amount' => $sorted
+                ->sortByDesc(fn (array $row) => (int) ($row['amountValue'] ?? 0))
+                ->values()
+                ->all(),
+            'amount_asc' => $sorted
+                ->sortBy(fn (array $row) => (int) ($row['amountValue'] ?? 0))
+                ->values()
+                ->all(),
+            // 등록순 (기본)
+            default => $sorted
+                ->sortByDesc(fn (array $row) => $row['sortCreatedAt'] ?? '')
+                ->values()
+                ->all(),
+        };
     }
 }

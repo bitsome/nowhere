@@ -99,8 +99,8 @@ const SERVICE_FILTER_OPTIONS = [
 ];
 
 const SORT_OPTIONS = [
-    { label: '최신순', value: 'latest' },
-    { label: '날짜순', value: 'date' },
+    { label: '등록순', value: 'latest' },
+    { label: '서비스순', value: 'date' },
     { label: '금액 높은순', value: 'amount' },
     { label: '금액 낮은순', value: 'amount_asc' },
 ];
@@ -352,23 +352,17 @@ watch(
             </n-button>
         </div>
 
-        <div class="market-toolbar">
-            <n-input
-                v-model:value="search"
-                placeholder="노선 · 고객명 검색"
-                clearable
-                round
-                size="large"
-                class="market-search"
-                @keyup.enter="load"
-                @clear="load"
-            />
-            <n-button type="primary" size="large" round @click="load">검색</n-button>
-        </div>
-
         <!-- 필터 모달 -->
         <n-modal v-model:show="filterOpen" preset="card" title="필터" :style="{ maxWidth: '400px' }">
             <div class="filter-body">
+                <label class="filter-label">검색</label>
+                <n-input
+                    v-model:value="search"
+                    placeholder="노선 · 고객명 검색"
+                    clearable
+                    size="large"
+                    @keyup.enter="applyFilter"
+                />
                 <label class="filter-label">서비스 구분</label>
                 <n-select
                     v-model:value="serviceType"
@@ -494,19 +488,6 @@ watch(
     margin: 0;
     color: var(--text-muted);
     font-size: 13px;
-}
-
-.market-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 18px;
-}
-
-.market-search {
-    flex: 1 1 240px;
-    max-width: 360px;
 }
 
 .filter-body {

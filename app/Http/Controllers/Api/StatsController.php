@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Models\Review;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -23,7 +24,12 @@ class StatsController extends Controller
         $from = Carbon::today()->subDays($days - 1);
         $to = Carbon::today()->endOfDay();
 
+        // mine=true → 로그인 사용자 본인의 오더만 집계 (드라이버 대시보드)
+        $mine = $request->boolean('mine');
+        $userId = $mine ? $request->user()->id : null;
+
         $orders = Order::query()
+            ->when($userId !== null, fn ($q) => $q->where('user_id', $userId))
             ->where('created_at', '>=', $from)
             ->where('created_at', '<=', $to)
             ->get();
@@ -74,6 +80,7 @@ class StatsController extends Controller
 
         $upcomingQuery = Order::query()
             ->with('user:id,name')
+            ->when($userId !== null, fn ($q) => $q->where('user_id', $userId))
             ->whereIn('status', $activeStatuses)
             ->where('service_date', '!=', '')
             ->whereNotNull('service_date');
@@ -91,6 +98,7 @@ class StatsController extends Controller
         // 월별 시리즈 (최근 6개월, 생성일 기준)
         $monthFrom = Carbon::today()->startOfMonth()->subMonths(5);
         $monthOrders = Order::query()
+            ->when($userId !== null, fn ($q) => $q->where('user_id', $userId))
             ->where('created_at', '>=', $monthFrom)
             ->where('created_at', '<=', $to)
             ->get();
@@ -132,6 +140,12 @@ class StatsController extends Controller
                             Order::STATUS_CANCELLED,
                         ])
                         ->count(),
+                    'rating' => $userId !== null
+                        ? round((float) Review::where('reviewee_id', $userId)->avg('rating') ?? 0, 1)
+                        : null,
+                    'reviewCount' => $userId !== null
+                        ? Review::where('reviewee_id', $userId)->count()
+                        : 0,
                 ],
                 'daily' => $series,
                 'monthly' => $monthly,

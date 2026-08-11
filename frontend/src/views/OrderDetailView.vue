@@ -243,6 +243,27 @@ const claim = () => run(() => apiClaimOrder(order.value.id), '오더를 내 오�
 const transition = (status) =>
     run(() => apiTransitionOrder(order.value.id, status), `상태가 "${statusOptions.value[status] ?? status}"로 변경되었습니다.`);
 
+// ── 취소 사유 입력 ──
+const cancelOpen = ref(false);
+const cancelReason = ref('');
+
+const requestTransition = (status) => {
+    if (status === 'cancelled') {
+        cancelReason.value = '';
+        cancelOpen.value = true;
+    } else {
+        transition(status);
+    }
+};
+
+const confirmCancel = async () => {
+    cancelOpen.value = false;
+    await run(
+        () => apiTransitionOrder(order.value.id, 'cancelled', cancelReason.value),
+        '오더가 취소되었습니다.',
+    );
+};
+
 // 셋트 그룹에서 개별 오더 분리
 const detach = (siblingId) =>
     run(() => apiDetachOrder(siblingId), '셋트 그룹에서 분리되었습니다.');
@@ -464,11 +485,20 @@ onMounted(refresh);
                             :key="next"
                             size="large"
                             :loading="acting"
-                            @click="transition(next)"
+                            @click="requestTransition(next)"
                         >
                             → {{ statusOptions[next] ?? next }}
                         </n-button>
                     </n-space>
+
+                    <n-alert
+                        v-if="order?.status === 'cancelled' && order.cancel_reason"
+                        type="warning"
+                        :show-icon="true"
+                        class="detail-message"
+                    >
+                        취소 사유: {{ order.cancel_reason }}
+                    </n-alert>
 
                     <n-empty
                         v-else
@@ -513,12 +543,43 @@ onMounted(refresh);
                         </div>
                     </template>
                 </n-modal>
+
+                <!-- 취소 사유 모달 -->
+                <n-modal
+                    v-model:show="cancelOpen"
+                    preset="card"
+                    title="오더 취소"
+                    :style="{ maxWidth: '400px' }"
+                >
+                    <p class="cancel-modal__desc">오더를 취소합니다. 취소 사유를 입력해 주세요. (선택)</p>
+                    <n-input
+                        v-model:value="cancelReason"
+                        type="textarea"
+                        placeholder="예) 차량 수리로 운행 불가"
+                        :maxlength="500"
+                        :rows="3"
+                    />
+                    <template #footer>
+                        <div class="filter-footer">
+                            <n-button @click="cancelOpen = false">닫기</n-button>
+                            <n-button type="error" :loading="acting" @click="confirmCancel">
+                                오더 취소
+                            </n-button>
+                        </div>
+                    </template>
+                </n-modal>
             </template>
         </n-spin>
     </div>
 </template>
 
 <style scoped>
+.cancel-modal__desc {
+    margin: 0 0 12px;
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.6;
+}
 .detail-body {
     display: block;
     min-height: 200px;

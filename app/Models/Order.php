@@ -41,6 +41,7 @@ use InvalidArgumentException;
     'distance_km',
     'expected_revenue',
     'status',
+    'cancel_reason',
     'claimed_at',
     'user_id',
     'original_owner_id',

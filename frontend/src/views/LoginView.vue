@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { getApiErrorMessage } from '../api/client';
@@ -11,6 +11,17 @@ const email = ref('');
 const password = ref('');
 const loading = ref(false);
 const error = ref('');
+
+// 로그인 화면은 뷰포트 1장이므로 window/body 스크롤을 잠근다
+onMounted(() => {
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+});
+
+onBeforeUnmount(() => {
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
+});
 
 const submit = async () => {
     loading.value = true;
@@ -71,11 +82,13 @@ const submit = async () => {
 
 <style scoped>
 .login-wrap {
+    height: 100dvh;
     min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 24px;
+    overflow: hidden;
     background:
         radial-gradient(ellipse at top left, rgba(54, 173, 255, 0.12), transparent 50%),
         radial-gradient(ellipse at bottom right, rgba(47, 84, 235, 0.12), transparent 50%),

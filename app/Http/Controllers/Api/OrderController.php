@@ -70,6 +70,13 @@ class OrderController extends Controller
                 Order::STATUS_TRADING,
                 Order::STATUS_ACCEPTANCE_PENDING,
             ])->where('user_id', '!=', $request->user()->id);
+
+            // 마켓 공개 목록 — 서비스 날짜가 이미 지난 오더는 노출하지 않는다 (날짜 미정 오더는 유지)
+            $query->where(function ($sub) {
+                $sub->where('service_date', '>=', now()->format('Y-m-d'))
+                    ->orWhereNull('service_date')
+                    ->orWhere('service_date', '');
+            });
         }
 
         if (in_array($serviceType, ['pickup', 'sending', 'landing'], true)) {
@@ -130,7 +137,7 @@ class OrderController extends Controller
             default => $query->latest()->paginate($perPage),
         };
 
-        $rows = app(OrderWorkspaceListBuilder::class)->build(collect($orders->items()));
+        $rows = app(OrderWorkspaceListBuilder::class)->build(collect($orders->items()), null, $sort);
 
         // 등록자 신뢰 정보는 마켓에서만 계산 (내 오더에는 불필요)
         if ($scope === 'market') {
@@ -292,9 +299,12 @@ class OrderController extends Controller
      */
     public function transition(Request $request, Order $order): JsonResponse
     {
-        $status = $request->validate([
+        $data = $request->validate([
             'status' => ['required', 'string'],
-        ])['status'];
+            'cancel_reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $status = $data['status'];
 
         if (! $order->canTransitionTo($status)) {
             throw ValidationException::withMessages([
@@ -303,6 +313,11 @@ class OrderController extends Controller
         }
 
         $order->transitionTo($status);
+
+        // 취소 사유 기록
+        if ($status === Order::STATUS_CANCELLED && filled($data['cancel_reason'] ?? null)) {
+            $order->forceFill(['cancel_reason' => $data['cancel_reason']])->save();
+        }
 
         // 상태 변경을 오더 소유자(드라이버/운영자)에게 알림
         $owner = User::query()->find($order->user_id);
