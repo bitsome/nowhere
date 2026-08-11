@@ -1,0 +1,32 @@
+app = "nowhere-api"
+primary_region = "nrt"
+
+[build]
+  image = "nowhere-api:latest"
+
+[env]
+  APP_ENV = "production"
+  APP_DEBUG = "false"
+  APP_URL = "https://nowhere-api.fly.dev"
+  DB_CONNECTION = "sqlite"
+  LOG_CHANNEL = "stderr"
+  FLY_VOLUME = "sqlite_data"
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 8080
+  processes = ["app"]
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+    force_https = true
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]

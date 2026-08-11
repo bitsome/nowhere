@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
+Route::post('/auth/register', [AuthController::class, 'register']);
 Route::post('/auth/login', [AuthController::class, 'login']);
 
 // SSE는 EventSource가 헤더 인증을 못 하므로 ?token= 으로 직접 인증한다 (미들웨어 밖)

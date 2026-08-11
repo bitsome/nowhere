@@ -11,6 +11,35 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+
+    /**
+     * 회원가입 — 새 사용자 등록 후 바로 토큰을 발급한다.
+     */
+    public function register(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:50'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'password' => ['required', 'string', 'min:8'],
+        ], [
+            'email.unique' => '이미 등록된 이메일입니다.',
+            'password.min' => '비밀번호는 8자 이상이어야 합니다.',
+        ]);
+
+        $user = User::create([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'password' => Hash::make($data['password']),
+            'role' => 'driver', // 신규 가입자는 드라이버로 시작
+        ]);
+
+        return response()->json([
+            'data' => [
+                'token' => $user->createToken('frontend')->plainTextToken,
+                'user' => $this->userPayload($user),
+            ],
+        ], 201);
+    }
     /**
      * 이메일·비밀번호로 로그인하고 Sanctum 토큰을 발급한다.
      */
