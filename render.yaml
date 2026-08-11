@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: nowhere-api
+    runtime: docker
+    region: singapore
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: DB_CONNECTION
+        value: sqlite
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: APP_KEY
+        value: base64:BYHymphf0bpoo2H89eGyhTM9XiPhp8+hbWXHHg+kNS8=
