@@ -71,9 +71,9 @@ class OrderController extends Controller
                 Order::STATUS_ACCEPTANCE_PENDING,
             ])->where('user_id', '!=', $request->user()->id);
 
-            // 마켓 공개 목록 — 서비스 날짜가 이미 지난 오더는 노출하지 않는다 (날짜 미정 오더는 유지)
+            // 마켓 공개 목록 — 서비스 날짜가 이미 지난 오더는 노출하지 않는다 (날짜 미정 오더는 유지, KST 기준)
             $query->where(function ($sub) {
-                $sub->where('service_date', '>=', now()->format('Y-m-d'))
+                $sub->where('service_date', '>=', now('Asia/Seoul')->format('Y-m-d'))
                     ->orWhereNull('service_date')
                     ->orWhere('service_date', '');
             });
@@ -114,7 +114,8 @@ class OrderController extends Controller
                 $sub->where('order_number', 'like', "%{$search}%")
                     ->orWhere('customer_name', 'like', "%{$search}%")
                     ->orWhere('pickup_location', 'like', "%{$search}%")
-                    ->orWhere('dropoff_location', 'like', "%{$search}%");
+                    ->orWhere('dropoff_location', 'like', "%{$search}%")
+                    ->orWhere('reservation_company', 'like', "%{$search}%");
             });
         }
 

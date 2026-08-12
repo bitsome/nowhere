@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\CommunityController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\OrderTemplateController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\StatsController;
 use App\Http\Controllers\Api\StreamController;
@@ -55,6 +56,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders/{order}/duplicate', [OrderController::class, 'duplicate'])->middleware('can:create,App\Models\Order');
     Route::post('/orders/{order}/detach', [OrderController::class, 'detachFromGroup'])->middleware('can:update,order');
     Route::post('/orders/{order}/review', [ReviewController::class, 'store']);
+    Route::get('/reviews', [ReviewController::class, 'index']);
+    Route::get('/order-templates', [OrderTemplateController::class, 'index']);
+    Route::post('/order-templates', [OrderTemplateController::class, 'store']);
+    Route::delete('/order-templates/{template}', [OrderTemplateController::class, 'destroy']);
     Route::get('/stats/orders', [StatsController::class, 'orders']);
 
     Route::get('/community/posts', [CommunityController::class, 'index']);

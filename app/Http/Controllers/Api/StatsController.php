@@ -85,8 +85,9 @@ class StatsController extends Controller
             ->where('service_date', '!=', '')
             ->whereNotNull('service_date');
 
-        $todayOrders = (clone $upcomingQuery)->whereDate('service_date', Carbon::today())->get();
-        $tomorrowOrders = (clone $upcomingQuery)->whereDate('service_date', Carbon::tomorrow())->get();
+        // 사용자 로컬(KST) 기준 오늘/내일 (서버가 UTC여도 판정은 KST)
+        $todayOrders = (clone $upcomingQuery)->whereDate('service_date', Carbon::today('Asia/Seoul'))->get();
+        $tomorrowOrders = (clone $upcomingQuery)->whereDate('service_date', Carbon::tomorrow('Asia/Seoul'))->get();
 
         $upcoming = [
             'today' => $todayOrders->count(),

@@ -233,6 +233,11 @@ const handlePage = (nextPage) => {
 let pollTimer = null;
 
 const silentRefresh = () => {
+    // 탭이 숨겨져 있는 동안에는 API 호출을 하지 않는다 (SSE/재진입 시 갱신)
+    if (document.visibilityState === 'hidden') {
+        return;
+    }
+
     load(true).catch(() => {});
 };
 

@@ -3,6 +3,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useMessage } from 'naive-ui';
 import { useRoute, useRouter } from 'vue-router';
 import { apiCreateOrder, apiCreateSetOrders, apiOrder, apiOrders, apiStructureOrder, apiTransitionOrder, apiUpdateOrder } from '../api/orders';
+import { apiCreateTemplate, apiDeleteTemplate, apiTemplates } from '../api/templates';
 import { getApiErrorMessage } from '../api/client';
 import { useUiStore } from '../stores/ui';
 import OrderCard from '../components/orders/OrderCard.vue';
@@ -39,6 +40,7 @@ const SOURCE_TABS = [
 
 // 운행 단계 필터 (백엔드 tab 파라미터)
 const listTab = ref('진행중');
+const listSearch = ref('');
 const STATUS_TABS = [
     { label: '진행중', value: '진행중' },
     { label: '완료', value: '완료' },
@@ -52,6 +54,9 @@ const loadMyOrders = async () => {
     try {
         const params = { scope: 'mine', source: listSource.value, tab: listTab.value, per_page: 30 };
 
+        if (listSearch.value.trim()) {
+            params.search = listSearch.value.trim();
+        }
         if (region.value) {
             params.region = region.value;
         }
@@ -395,8 +400,79 @@ onMounted(() => {
         loadForEdit();
     } else {
         loadMyOrders();
+        loadTemplates();
     }
 });
+
+// ── 오더 등록 템플릿 ──
+const templates = ref([]);
+const templateOpen = ref(false);
+const templateName = ref('');
+const templateSaving = ref(false);
+
+const loadTemplates = async () => {
+    try {
+        const { data } = await apiTemplates();
+        templates.value = data.data;
+    } catch {
+        /* 템플릿 로드 실패는 무시 */
+    }
+};
+
+const templatePayloadFromForm = () => ({
+    service_type: form.service_type,
+    vehicle_type: form.vehicle_type,
+    pickup_location: form.pickup_location,
+    dropoff_location: form.dropoff_location,
+    passenger_count: form.passenger_count,
+    expected_revenue: form.expected_revenue,
+    flight_number: form.flight_number,
+    reservation_company: form.reservation_company,
+});
+
+const applyTemplate = (tpl) => {
+    form.vehicle_type = tpl.vehicle_type ?? '';
+    form.service_type = tpl.service_type ?? 'pickup';
+    form.pickup_location = tpl.pickup_location ?? '';
+    form.dropoff_location = tpl.dropoff_location ?? '';
+    form.flight_number = tpl.flight_number ?? '';
+    form.passenger_count = tpl.passenger_count ?? null;
+    form.expected_revenue = tpl.expected_revenue ?? null;
+    form.reservation_company = tpl.reservation_company ?? '직접예약';
+    success.value = `템플릿 "${tpl.name}"이 적용되었습니다.`;
+};
+
+const saveTemplate = async () => {
+    if (!templateName.value.trim()) {
+        return;
+    }
+
+    templateSaving.value = true;
+
+    try {
+        await apiCreateTemplate({
+            name: templateName.value.trim(),
+            ...templatePayloadFromForm(),
+        });
+        templateOpen.value = false;
+        templateName.value = '';
+        success.value = '템플릿이 저장되었습니다.';
+        await loadTemplates();
+    } catch (e) {
+        error.value = getApiErrorMessage(e, '템플릿 저장에 실패했습니다.');
+    } finally {
+        templateSaving.value = false;
+    }
+};
+
+const removeTemplate = async (tpl) => {
+    try {
+        await apiDeleteTemplate(tpl.id);
+        templates.value = templates.value.filter((t) => t.id !== tpl.id);
+    } catch {
+        /* 삭제 실패는 무시 */
+    }
+};
 
 const addSetLine = () => {
     setLineItems.value.push({
@@ -640,6 +716,25 @@ const saveSet = async () => {
                 </n-radio-group>
             </div>
 
+            <!-- 검색 -->
+            <n-input
+                v-model:value="listSearch"
+                size="large"
+                round
+                clearable
+                placeholder="노선 · 고객명 · 예약처 검색"
+                class="create-search"
+                @keyup.enter="loadMyOrders"
+                @clear="loadMyOrders"
+            >
+                <template #prefix>🔍</template>
+                <template #suffix>
+                    <n-button v-if="listSearch" text type="primary" size="small" @click="loadMyOrders">
+                        검색
+                    </n-button>
+                </template>
+            </n-input>
+
             <!-- 활성 필터 칩 -->
             <div v-if="activeFilterCount > 0" class="create-tags">
                 <n-tag v-if="region" size="medium" round closable @close="region = ''; loadMyOrders()">
@@ -795,6 +890,27 @@ const saveSet = async () => {
                     <strong class="preview-item__value">{{ Number(structuredPreview.expected_revenue).toLocaleString() }}원</strong>
                 </div>
             </div>
+        </n-card>
+
+        <n-card v-if="mode === 'manual' && !isEdit" :bordered="true" class="create-block">
+            <div class="template-head">
+                <strong>템플릿</strong>
+                <n-button size="small" secondary :disabled="!form.pickup_location && !form.dropoff_location" @click="templateOpen = true">
+                    현재 입력 저장
+                </n-button>
+            </div>
+            <div v-if="templates.length" class="template-list">
+                <div v-for="tpl in templates" :key="tpl.id" class="template-chip">
+                    <button type="button" class="template-chip__apply" @click="applyTemplate(tpl)">
+                        <strong>{{ tpl.name }}</strong>
+                        <span class="template-chip__meta">{{ tpl.pickup_location || '-' }} → {{ tpl.dropoff_location || '-' }}</span>
+                    </button>
+                    <button type="button" class="template-chip__del" aria-label="템플릿 삭제" @click="removeTemplate(tpl)">
+                        ✕
+                    </button>
+                </div>
+            </div>
+            <p v-else class="template-empty">자주 쓰는 노선을 템플릿으로 저장해 한 번에 채워 보세요.</p>
         </n-card>
 
         <n-card v-if="mode === 'manual'" :bordered="true" class="create-block" title="오더 정보">
@@ -1001,12 +1117,95 @@ const saveSet = async () => {
         <n-button v-if="mode === 'set'" type="primary" size="large" :loading="saving" @click="saveSet">
             셋트 등록
         </n-button>
+
+        <!-- 템플릿 저장 모달 -->
+        <n-modal v-model:show="templateOpen" preset="card" title="템플릿 저장" :style="{ maxWidth: '400px' }">
+            <p class="template-modal__desc">현재 입력된 노선·차량·금액을 템플릿으로 저장합니다.</p>
+            <n-input v-model:value="templateName" placeholder="템플릿 이름 (예: 강남 → 인천공항)" :maxlength="100" />
+            <template #footer>
+                <div class="filter-footer">
+                    <n-button @click="templateOpen = false">취소</n-button>
+                    <n-button type="primary" :loading="templateSaving" @click="saveTemplate">
+                        저장
+                    </n-button>
+                </div>
+            </template>
+        </n-modal>
         </n-spin>
         </div>
     </div>
 </template>
 
 <style scoped>
+/* 내 오더 검색 */
+.create-search {
+    margin: 4px 0 12px;
+}
+/* 오더 등록 템플릿 */
+.template-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.template-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.template-chip {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.template-chip__apply {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 9px 12px;
+    text-align: left;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.template-chip__meta {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.template-chip__del {
+    padding: 8px 12px;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.template-chip__del:hover {
+    color: #e5484d;
+}
+
+.template-empty {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.template-modal__desc {
+    margin: 0 0 12px;
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.6;
+}
 /* 구조화 결과 요약 */
 .preview-grid {
     display: grid;

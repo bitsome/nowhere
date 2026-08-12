@@ -147,6 +147,7 @@ class OrderListRowBuilder
 
     /**
      * 오늘 운행 여부 (카드 리스트에서 "오늘" 라벨로 사용).
+     * 서비스 날짜는 사용자 로컬(KST) 기준 문자열이므로 KST 오늘과 비교한다.
      */
     private function isToday(Order $order): bool
     {
@@ -154,7 +155,7 @@ class OrderListRowBuilder
             return false;
         }
 
-        return Carbon::parse($order->service_date)->isToday();
+        return Carbon::parse($order->service_date, 'Asia/Seoul')->isSameDay(Carbon::now('Asia/Seoul'));
     }
 
     /**
@@ -166,7 +167,7 @@ class OrderListRowBuilder
             return false;
         }
 
-        return Carbon::parse($order->service_date)->isTomorrow();
+        return Carbon::parse($order->service_date, 'Asia/Seoul')->isSameDay(Carbon::now('Asia/Seoul')->addDay());
     }
 
     /**

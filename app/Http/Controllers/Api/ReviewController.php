@@ -5,12 +5,66 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Review;
+use App\Models\User;
+use App\Notifications\OrderNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 class ReviewController extends Controller
 {
+    /**
+     * 사용자 리뷰 목록 (reviewee 기준) + 평점 요약.
+     *
+     * @return JsonResponse{data: array<int, array<string, mixed>>, summary: array<string, int|float>|null}
+     */
+    public function index(Request $request): JsonResponse
+    {
+        $userId = max(0, (int) $request->integer('user_id'));
+
+        $reviews = Review::query()
+            ->with(['reviewer:id,name', 'order:id,order_number'])
+            ->when($userId > 0, fn ($q) => $q->where('reviewee_id', $userId))
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->get();
+
+        $summary = null;
+
+        if ($userId > 0) {
+            $ratings = Review::query()->where('reviewee_id', $userId);
+
+            $summary = [
+                'rating' => round((float) ($ratings->avg('rating') ?? 0), 1),
+                'count' => $ratings->count(),
+                'distribution' => collect(range(5, 1))
+                    ->map(fn (int $star) => [
+                        'star' => $star,
+                        'count' => Review::query()->where('reviewee_id', $userId)->where('rating', $star)->count(),
+                    ])
+                    ->all(),
+            ];
+        }
+
+        return response()->json([
+            'data' => $reviews->map(fn (Review $review) => [
+                'id' => $review->id,
+                'rating' => $review->rating,
+                'content' => $review->content,
+                'created_at' => $review->created_at?->diffForHumans(),
+                'reviewer' => [
+                    'id' => $review->reviewer?->id,
+                    'name' => $review->reviewer?->name,
+                ],
+                'order' => [
+                    'id' => $review->order?->id,
+                    'order_number' => $review->order?->order_number,
+                ],
+            ]),
+            'summary' => $summary,
+        ]);
+    }
+
     /**
      * 완료/정산된 오더에서 상대방(등록자↔수행자)에게 리뷰를 남긴다.
      */
@@ -61,6 +115,17 @@ class ReviewController extends Controller
             'rating' => $data['rating'],
             'content' => $data['content'],
         ]);
+
+        // 리뷰를 받은 사용자에게 알림
+        $reviewee = User::query()->find($revieweeId);
+
+        if ($reviewee !== null && $reviewee->id !== $actor->id) {
+            $reviewee->notify(new OrderNotification(
+                '새 리뷰 도착',
+                "{$actor->name}님이 오더({$order->order_number})에 리뷰(★{$data['rating']})를 남겼습니다.",
+                $order->id,
+            ));
+        }
 
         return response()->json([
             'data' => $this->serialize($review),

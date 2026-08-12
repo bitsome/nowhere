@@ -84,6 +84,11 @@ class User extends Authenticatable implements HasMedia
         return $this->hasMany(CommunityPost::class);
     }
 
+    public function orderTemplates(): HasMany
+    {
+        return $this->hasMany(OrderTemplate::class);
+    }
+
     public function levelEvents(): HasMany
     {
         return $this->hasMany(UserLevelEvent::class);

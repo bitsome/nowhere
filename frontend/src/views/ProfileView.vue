@@ -6,6 +6,11 @@ import { useAuthStore } from '../stores/auth';
 import { apiUpdateProfile } from '../api/auth';
 import { apiCommunityUser } from '../api/community';
 import { apiClient, getApiErrorMessage } from '../api/client';
+import {
+    isBrowserNotifyEnabled,
+    requestNotifyPermission,
+    setBrowserNotifyEnabled,
+} from '../utils/browserNotify';
 import LevelBadge from '../components/LevelBadge.vue';
 
 const auth = useAuthStore();
@@ -16,6 +21,26 @@ const saving = ref(false);
 const requesting = ref('');
 const error = ref('');
 const success = ref('');
+
+// 브라우저 알림 설정
+const notifyEnabled = ref(isBrowserNotifyEnabled());
+
+const toggleNotify = async (enabled) => {
+    if (enabled && 'Notification' in window && Notification.permission === 'default') {
+        const granted = await requestNotifyPermission();
+
+        if (!granted) {
+            notifyEnabled.value = false;
+            setBrowserNotifyEnabled(false);
+            message.error('브라우저 알림 권한이 거부되었습니다. 브라우저 설정에서 허용해 주세요.');
+
+            return;
+        }
+    }
+
+    setBrowserNotifyEnabled(enabled);
+    message.success(enabled ? '브라우저 알림이 켜졌습니다.' : '브라우저 알림이 꺼졌습니다.');
+};
 const myStats = ref(null);
 
 const form = reactive({
@@ -147,6 +172,42 @@ const logout = async () => {
                 </strong>
             </div>
         </div>
+
+        <!-- 받은 리뷰 -->
+        <n-card v-if="myStats" :bordered="true" class="profile-block">
+            <div class="verify-head">
+                <strong>받은 리뷰</strong>
+                <span class="verify-hint">완료된 운행 후 상대방이 남긴 리뷰입니다</span>
+            </div>
+            <n-empty
+                v-if="!myStats.reviews.length"
+                description="아직 받은 리뷰가 없습니다."
+                :image-size="60"
+                class="profile-reviews-empty"
+            />
+            <div v-else class="profile-review-list">
+                <article v-for="review in myStats.reviews" :key="review.id" class="profile-review">
+                    <div class="profile-review__head">
+                        <span class="profile-review__author">{{ review.reviewer?.name }}</span>
+                        <n-rate :value="review.rating" readonly size="small" color="#ffa940" />
+                    </div>
+                    <p class="profile-review__content" v-text="review.content" />
+                    <span class="profile-review__time">{{ review.created_at }}</span>
+                </article>
+            </div>
+        </n-card>
+
+        <!-- 알림 설정 -->
+        <n-card :bordered="true" class="profile-block">
+            <div class="verify-head">
+                <strong>알림</strong>
+                <span class="verify-hint">새 알림이 왔을 때 데스크톱 알림을 표시합니다 (탭을 닫지 않은 상태)</span>
+            </div>
+            <div class="verify-row">
+                <span class="verify-row__label">브라우저 알림</span>
+                <n-switch :value="notifyEnabled" @update:value="toggleNotify" />
+            </div>
+        </n-card>
 
         <!-- 차량·면허 인증 -->
         <n-card :bordered="true" class="profile-block">

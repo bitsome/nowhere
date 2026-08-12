@@ -48,32 +48,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     window.removeEventListener('popstate', onPopState);
-    stopNotifyPolling();
 });
-
-// ── 알림 배지 실시간 폴링 ──
-// 화면을 보는 동안 30초마다 안읽음 수를 갱신한다 (탭 숨김 시엔 SSE가 담당)
-let notifyTimer = null;
-
-const startNotifyPolling = () => {
-    stopNotifyPolling();
-
-    if (!auth.user) {
-        return;
-    }
-
-    notifications.load().catch(() => {});
-    notifyTimer = setInterval(() => {
-        notifications.load().catch(() => {});
-    }, 30000);
-};
-
-const stopNotifyPolling = () => {
-    if (notifyTimer) {
-        clearInterval(notifyTimer);
-        notifyTimer = null;
-    }
-};
 
 // ── 하단 네비 탭 ──
 const navItems = [
@@ -141,9 +116,6 @@ onMounted(async () => {
     theme.init();
     await auth.fetchMe().catch(() => {});
     initReady.value = true;
-
-    // 알림 배지 폴링 시작 (로그인 상태)
-    startNotifyPolling();
 
     // 로그인 상태에서 첫 상호작용 시 웹 알림 권한 요청 (거절 시 재요청 안 함)
     if (auth.user && 'Notification' in window && Notification.permission === 'default') {
