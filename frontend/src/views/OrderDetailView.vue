@@ -103,18 +103,18 @@ const canEdit = computed(() => Boolean(order.value && ['draft', 'published'].inc
 
 const goEdit = () => router.push({ name: 'order-edit', params: { id: order.value.id } });
 
-// 오더 복제 — 동일 내용을 초안으로 새로 만들어 수정 화면으로 이동
+// 운행 복제 — 동일 내용을 초안으로 새로 만들어 수정 화면으로 이동
 const duplicate = async () => {
     acting.value = true;
     message.value = '';
 
     try {
         const { data } = await apiDuplicateOrder(order.value.id);
-        message.value = '오더가 복제되었습니다. 내용을 확인하고 수정하세요.';
+        message.value = '운행이 복제되었습니다. 내용을 확인하고 수정하세요.';
         messageType.value = 'success';
         router.push({ name: 'order-edit', params: { id: data.data.id } });
     } catch (e) {
-        message.value = getApiErrorMessage(e, '오더 복제에 실패했습니다.');
+        message.value = getApiErrorMessage(e, '운행 복제에 실패했습니다.');
         messageType.value = 'error';
     } finally {
         acting.value = false;
@@ -131,7 +131,7 @@ const openChat = async () => {
     }
 };
 
-// 그룹 일정 행으로 변환 (셋트 오더일 때 그룹 내 모든 오더)
+// 그룹 일정 행으로 변환 (셋트 운행일 때 그룹 내 모든 운행)
 const groupOrderRows = computed(() =>
     (group.value?.orders ?? [])
         .map((sibling) => {
@@ -155,7 +155,7 @@ const groupTotalAmount = computed(() =>
     groupOrderRows.value.reduce((sum, row) => sum + (Number(row.displayAmount) || 0), 0),
 );
 
-// 상태별 색상 (오더 카드와 동일 팔레트)
+// 상태별 색상 (운행 카드와 동일 팔레트)
 const STATUS_COLORS = {
     draft: '#909399',
     published: '#36adff',
@@ -216,7 +216,7 @@ const refresh = async () => {
     try {
         await load();
     } catch (e) {
-        error.value = getApiErrorMessage(e, '오더를 불러오지 못했습니다.');
+        error.value = getApiErrorMessage(e, '운행을 불러오지 못했습니다.');
     } finally {
         loading.value = false;
     }
@@ -239,7 +239,7 @@ const run = async (action, successText) => {
     }
 };
 
-const claim = () => run(() => apiClaimOrder(order.value.id), '오더를 내 오더로 가져왔습니다.');
+const claim = () => run(() => apiClaimOrder(order.value.id), '운행을 내 운행으로 가져왔습니다.');
 const transition = (status) =>
     run(() => apiTransitionOrder(order.value.id, status), `상태가 "${statusOptions.value[status] ?? status}"로 변경되었습니다.`);
 
@@ -260,11 +260,11 @@ const confirmCancel = async () => {
     cancelOpen.value = false;
     await run(
         () => apiTransitionOrder(order.value.id, 'cancelled', cancelReason.value),
-        '오더가 취소되었습니다.',
+        '운행이 취소되었습니다.',
     );
 };
 
-// 셋트 그룹에서 개별 오더 분리
+// 셋트 그룹에서 개별 운행 분리
 const detach = (siblingId) =>
     run(() => apiDetachOrder(siblingId), '셋트 그룹에서 분리되었습니다.');
 
@@ -291,7 +291,7 @@ onMounted(refresh);
         <n-spin :show="loading" class="detail-body">
             <template v-if="order">
                 <n-alert v-if="isCancelled" type="error" :show-icon="true" class="detail-block">
-                    취소된 오더입니다.
+                    취소된 운행입니다.
                 </n-alert>
 
                 <n-card v-else :bordered="true" class="detail-block">
@@ -318,10 +318,10 @@ onMounted(refresh);
                 </n-card>
 
                 <n-card :bordered="true" class="detail-block">
-                    <template #header>오더 정보</template>
+                    <template #header>운행 정보</template>
                     <div class="detail-rows">
                         <div class="detail-row">
-                            <span>오더번호</span>
+                            <span>운행번호</span>
                             <strong>{{ order.order_number }}</strong>
                         </div>
                         <div class="detail-row">
@@ -457,10 +457,10 @@ onMounted(refresh);
                             채팅하기
                         </n-button>
                         <n-button v-if="canEdit" size="large" secondary @click="goEdit">
-                            오더 수정
+                            운행 수정
                         </n-button>
                         <n-button size="large" secondary :loading="acting" @click="duplicate">
-                            오더 복사
+                            운행 복사
                         </n-button>
                     </n-space>
 
@@ -475,7 +475,7 @@ onMounted(refresh);
 
                     <n-space v-if="isClaimable">
                         <n-button type="primary" size="large" :loading="acting" @click="claim">
-                            내 오더로 가져오기
+                            내 운행으로 가져오기
                         </n-button>
                     </n-space>
 
@@ -513,7 +513,7 @@ onMounted(refresh);
                         class="detail-review-btn"
                         @click="openReview"
                     >
-                        ⭐ 리뷰 남기기
+                        리뷰 남기기
                     </n-button>
                 </n-card>
 
@@ -548,10 +548,10 @@ onMounted(refresh);
                 <n-modal
                     v-model:show="cancelOpen"
                     preset="card"
-                    title="오더 취소"
+                    title="운행 취소"
                     :style="{ maxWidth: '400px' }"
                 >
-                    <p class="cancel-modal__desc">오더를 취소합니다. 취소 사유를 입력해 주세요. (선택)</p>
+                    <p class="cancel-modal__desc">운행을 취소합니다. 취소 사유를 입력해 주세요. (선택)</p>
                     <n-input
                         v-model:value="cancelReason"
                         type="textarea"
@@ -563,7 +563,7 @@ onMounted(refresh);
                         <div class="filter-footer">
                             <n-button @click="cancelOpen = false">닫기</n-button>
                             <n-button type="error" :loading="acting" @click="confirmCancel">
-                                오더 취소
+                                운행 취소
                             </n-button>
                         </div>
                     </template>
@@ -637,7 +637,7 @@ onMounted(refresh);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
-/* 오더 정보 — 라벨/값 행 (심플 카드) */
+/* 운행 정보 — 라벨/값 행 (심플 카드) */
 .detail-rows {
     display: flex;
     flex-direction: column;

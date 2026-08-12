@@ -287,6 +287,26 @@ onMounted(() => load(true));
             </template>
         </n-alert>
 
+        <!-- 빠른 정렬 — 드로어를 열지 않아도 바로 바꾼다 (클라이언트 정렬) -->
+        <div class="community-sort">
+            <button
+                type="button"
+                class="community-sort__btn"
+                :class="{ 'community-sort__btn--active': ui.communitySort === 'latest' }"
+                @click="ui.communitySort = 'latest'"
+            >
+                최신순
+            </button>
+            <button
+                type="button"
+                class="community-sort__btn"
+                :class="{ 'community-sort__btn--active': ui.communitySort === 'popular' }"
+                @click="ui.communitySort = 'popular'"
+            >
+                인기순
+            </button>
+        </div>
+
         <n-spin :show="loading" class="community-body">
             <n-empty
                 v-if="!loading && visiblePosts.length === 0"
@@ -317,8 +337,12 @@ onMounted(() => load(true));
                                 <strong>{{ post.user.name }}</strong>
                                 <LevelBadge v-if="post.user.level" :level="post.user.level.level" size="sm" />
                                 <span v-if="post.user.is_vip" class="feed-badge feed-badge--vip">VIP</span>
-                                <span v-if="post.user.is_vehicle_verified" class="feed-badge" title="차량 인증">🚗</span>
-                                <span v-if="post.user.is_license_verified" class="feed-badge" title="면허 인증">🪪</span>
+                                <span v-if="post.user.is_vehicle_verified" class="feed-badge" title="차량 인증">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11" /><path d="M4 11h16a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1z" /><circle cx="7" cy="16" r="1.6" /><circle cx="17" cy="16" r="1.6" /></svg>
+                                </span>
+                                <span v-if="post.user.is_license_verified" class="feed-badge" title="면허 인증">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><rect x="2.5" y="4.5" width="19" height="15" rx="2.5" /><path d="M2.5 9h19" /><circle cx="6.5" cy="13.5" r="1.6" /><path d="M15.5 13h4M15.5 16h4" /></svg>
+                                </span>
                                 <span class="feed-card__time">{{ timeAgo(post.created_at) }}</span>
                             </span>
                         </button>
@@ -328,7 +352,9 @@ onMounted(() => load(true));
                             :options="[{ label: '삭제', key: 'delete' }]"
                             @select="removePost(post)"
                         >
-                            <button type="button" class="feed-card__more">···</button>
+                            <button type="button" class="feed-card__more" aria-label="더보기">
+                                <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><circle cx="5" cy="12" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="19" cy="12" r="1.7" /></svg>
+                            </button>
                         </n-dropdown>
                     </div>
 
@@ -501,6 +527,36 @@ onMounted(() => load(true));
 
 <style scoped>
 .community-alert { margin-bottom: 16px; }
+
+/* 빠른 정렬 칩 — 피드와 동일 폭 정렬 */
+.community-sort {
+    display: flex;
+    gap: 6px;
+    max-width: 600px;
+    margin: 0 auto 12px;
+}
+
+.community-sort__btn {
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.community-sort__btn:hover {
+    border-color: #36adff;
+}
+
+.community-sort__btn--active {
+    border-color: #36adff;
+    background: rgba(54, 173, 255, 0.08);
+    color: #36adff;
+}
 
 .community-body { display: block; min-height: 200px; }
 

@@ -15,14 +15,14 @@ const props = defineProps({
 
 const router = useRouter();
 
-// 셋트 카드 클릭 — 첫 번째 오더 상세로 이동
+// 셋트 카드 클릭 — 첫 번째 운행 상세로 이동
 const open = () => {
     if (props.set.firstOrderId) {
         router.push({ name: 'order-detail', params: { id: props.set.firstOrderId } });
     }
 };
 
-// 상태별 배지 색상 (오더 카드와 동일 팔레트)
+// 상태별 배지 색상 (운행 카드와 동일 팔레트)
 const STATUS_COLORS = {
     draft: '#909399',
     published: '#36adff',

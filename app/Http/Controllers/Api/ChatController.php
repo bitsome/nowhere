@@ -201,6 +201,7 @@ class ChatController extends Controller
                 ? url('/api/chat/images/'.basename($message->image_path))
                 : null,
             'created_at' => $message->created_at?->diffForHumans(),
+            'created_at_iso' => $message->created_at?->toISOString(),
             'read' => $message->read_at !== null,
         ];
     }

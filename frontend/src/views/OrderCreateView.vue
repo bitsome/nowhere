@@ -15,27 +15,38 @@ const router = useRouter();
 const ui = useUiStore();
 const message = useMessage();
 
-// 헤더 필터 버튼 → 필터 모달 열기 (마켓과 동일한 신호)
+// 헤더 필터 버튼 → 필터 모달 열기 / 폼 뒤로가기 → 목록 복귀
 const filterOpen = ref(false);
 watch(
     () => ui.actionSeq,
     () => {
         if (ui.actionName === 'filter') {
             filterOpen.value = true;
+        } else if (ui.actionName === 'order-form:back') {
+            screen.value = 'list';
         }
     },
 );
 
-// 화면 모드: 'list'(내 오더 목록) / 'form'(등록·수정 폼)
+// 화면 모드: 'list'(내 운행 목록) / 'form'(등록·수정 폼)
 const screen = ref(route.params.id ? 'form' : 'list');
+
+// 폼이면 하단 탭을 숨기고 헤더를 뒤로가기 형태로 바꾼다
+watch(
+    screen,
+    (mode) => {
+        ui.orderFormActive = mode === 'form';
+    },
+    { immediate: true },
+);
 const myOrders = ref([]);
 const myOrdersLoading = ref(false);
 
-// 목록 탭: 'received'(받은 오더) / 'registered'(등록 오더)
+// 목록 탭: 'received'(받은 운행) / 'registered'(등록 운행)
 const listSource = ref('received');
 const SOURCE_TABS = [
-    { label: '받은 오더', value: 'received' },
-    { label: '등록 오더', value: 'registered' },
+    { label: '받은 운행', value: 'received' },
+    { label: '등록 운행', value: 'registered' },
 ];
 
 // 운행 단계 필터 (백엔드 tab 파라미터)
@@ -48,11 +59,31 @@ const STATUS_TABS = [
     { label: '초안', value: '초안' },
 ];
 
+// 목록 정렬 (마켓과 동일한 옵션)
+const sort = ref('latest');
+const SORT_OPTIONS = [
+    { label: '등록순', value: 'latest' },
+    { label: '서비스순', value: 'date' },
+    { label: '금액 높은순', value: 'amount' },
+    { label: '금액 낮은순', value: 'amount_asc' },
+];
+
+const changeSort = (value) => {
+    if (sort.value === value) return;
+
+    sort.value = value;
+    loadMyOrders();
+};
+
 const loadMyOrders = async () => {
     myOrdersLoading.value = true;
 
     try {
         const params = { scope: 'mine', source: listSource.value, tab: listTab.value, per_page: 30 };
+
+        if (sort.value !== 'latest') {
+            params.sort = sort.value;
+        }
 
         if (listSearch.value.trim()) {
             params.search = listSearch.value.trim();
@@ -76,7 +107,7 @@ const loadMyOrders = async () => {
         const { data } = await apiOrders(params);
         myOrders.value = data.data;
     } catch (e) {
-        error.value = getApiErrorMessage(e, '오더 목록을 불러오지 못했습니다.');
+        error.value = getApiErrorMessage(e, '운행 목록을 불러오지 못했습니다.');
     } finally {
         myOrdersLoading.value = false;
     }
@@ -119,6 +150,15 @@ const activeFilterCount = computed(() =>
         .filter((v) => v !== null && v !== '').length,
 );
 
+// 필터 활성 여부를 헤더 필터 버튼 점에 반영
+watch(
+    activeFilterCount,
+    (count) => {
+        ui.filterActive = count > 0;
+    },
+    { immediate: true },
+);
+
 const applyFilter = () => {
     filterOpen.value = false;
     loadMyOrders();
@@ -136,7 +176,7 @@ const goCreate = () => {
     screen.value = 'form';
 };
 
-// 셋트/단일 오더 분리
+// 셋트/단일 운행 분리
 const setRows = computed(() => myOrders.value.filter((o) => o.kind === 'set'));
 const singleRows = computed(() => myOrders.value.filter((o) => o.kind !== 'set'));
 
@@ -186,6 +226,7 @@ const form = reactive({
     luggage_count: null,
     expected_revenue: null,
     reservation_company: '직접예약',
+    is_priority: false,
 });
 
 // 날짜 변환: AI의 "8월3일"/"3号" → "YYYY-MM-DD" (연도는 올해 기준)
@@ -345,17 +386,17 @@ const save = async () => {
         }
 
         // 등록/수정 완료 → 목록으로 복귀
-        success.value = isEdit.value ? '오더가 수정되었습니다.' : '오더가 등록되었습니다.';
+        success.value = isEdit.value ? '운행이 수정되었습니다.' : '운행이 등록되었습니다.';
         screen.value = 'list';
         await loadMyOrders();
     } catch (e) {
-        error.value = getApiErrorMessage(e, isEdit.value ? '오더 수정에 실패했습니다.' : '오더 등록에 실패했습니다.');
+        error.value = getApiErrorMessage(e, isEdit.value ? '운행 수정에 실패했습니다.' : '운행 등록에 실패했습니다.');
     } finally {
         saving.value = false;
     }
 };
 
-// 수정 모드: 기존 오더를 불러와 폼에 채운다
+// 수정 모드: 기존 운행을 불러와 폼에 채운다
 const loadForEdit = async () => {
     loading.value = true;
     error.value = '';
@@ -376,6 +417,7 @@ const loadForEdit = async () => {
         form.luggage_count = orderData.luggage_count ?? null;
         form.expected_revenue = orderData.expected_revenue ?? orderData.amount_value ?? null;
         form.reservation_company = orderData.reservation_company ?? '직접예약';
+        form.is_priority = orderData.is_priority ?? false;
 
         lineItems.value = (orderData.line_items ?? []).map((item) => {
             const isoDate = toIsoDate(item.service_date ?? '');
@@ -387,7 +429,7 @@ const loadForEdit = async () => {
             };
         });
     } catch (e) {
-        error.value = getApiErrorMessage(e, '오더를 불러오지 못했습니다.');
+        error.value = getApiErrorMessage(e, '운행을 불러오지 못했습니다.');
     } finally {
         loading.value = false;
     }
@@ -404,7 +446,7 @@ onMounted(() => {
     }
 });
 
-// ── 오더 등록 템플릿 ──
+// ── 운행 등록 템플릿 ──
 const templates = ref([]);
 const templateOpen = ref(false);
 const templateName = ref('');
@@ -490,7 +532,7 @@ const addSetLine = () => {
     });
 };
 
-// ── 셋트: 여러 줄 한 번에 입력 → 각 줄을 오더로 파싱 ──
+// ── 셋트: 여러 줄 한 번에 입력 → 각 줄을 운행으로 파싱 ──
 const bulkInput = ref('');
 const bulkError = ref('');
 
@@ -693,11 +735,11 @@ const saveSet = async () => {
 
 <template>
     <div>
-        <!-- 내 오더 목록 -->
+        <!-- 내 운행 목록 -->
         <template v-if="screen === 'list'">
             <div class="page-head">
-                <p class="page-head__desc">받은 오더와 등록한 오더를 관리합니다.</p>
-                <n-button type="primary" size="large" round @click="goCreate">+ 오더 등록</n-button>
+                <p class="page-head__desc">받은 운행과 등록한 운행을 관리합니다.</p>
+                <n-button type="primary" size="large" round @click="goCreate">+ 운행 등록</n-button>
             </div>
 
             <div class="create-tabs">
@@ -727,7 +769,9 @@ const saveSet = async () => {
                 @keyup.enter="loadMyOrders"
                 @clear="loadMyOrders"
             >
-                <template #prefix>🔍</template>
+                <template #prefix>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.35-4.35" /></svg>
+                </template>
                 <template #suffix>
                     <n-button v-if="listSearch" text type="primary" size="small" @click="loadMyOrders">
                         검색
@@ -735,19 +779,33 @@ const saveSet = async () => {
                 </template>
             </n-input>
 
+            <!-- 빠른 정렬 — 필터 모달 없이 바로 변경 -->
+            <div class="create-sort">
+                <button
+                    v-for="opt in SORT_OPTIONS"
+                    :key="opt.value"
+                    type="button"
+                    class="create-sort__btn"
+                    :class="{ 'create-sort__btn--active': sort === opt.value }"
+                    @click="changeSort(opt.value)"
+                >
+                    {{ opt.label }}
+                </button>
+            </div>
+
             <!-- 활성 필터 칩 -->
             <div v-if="activeFilterCount > 0" class="create-tags">
                 <n-tag v-if="region" size="medium" round closable @close="region = ''; loadMyOrders()">
-                    📍 {{ region }}
+                    지역 {{ region }}
                 </n-tag>
                 <n-tag v-if="vehicleType" size="medium" round closable @close="vehicleType = ''; loadMyOrders()">
-                    🚐 {{ vehicleType }}
+                    차량 {{ vehicleType }}
                 </n-tag>
                 <n-tag v-if="minAmount || maxAmount" size="medium" round closable @close="minAmount = null; maxAmount = null; loadMyOrders()">
-                    💰 {{ minAmount ? Number(minAmount).toLocaleString() : 0 }}~{{ maxAmount ? Number(maxAmount).toLocaleString() : '∞' }}원
+                    금액 {{ minAmount ? Number(minAmount).toLocaleString() : 0 }}~{{ maxAmount ? Number(maxAmount).toLocaleString() : '∞' }}원
                 </n-tag>
                 <n-tag v-if="minPassengers" size="medium" round closable @close="minPassengers = null; loadMyOrders()">
-                    👥 {{ minPassengers }}명 이상
+                    인원 {{ minPassengers }}명 이상
                 </n-tag>
                 <n-button size="small" round tertiary @click="resetFilters(); loadMyOrders()">
                     전체 초기화
@@ -759,7 +817,7 @@ const saveSet = async () => {
             </div>
             <n-empty
                 v-else-if="!myOrders.length"
-                description="오더가 없습니다."
+                description="운행이 없습니다."
                 :image-size="70"
             />
             <div v-else class="my-order-list">
@@ -779,7 +837,7 @@ const saveSet = async () => {
             <n-modal
                 v-model:show="filterOpen"
                 preset="card"
-                title="오더 필터"
+                title="운행 필터"
                 :style="{ maxWidth: '420px' }"
             >
                 <div class="filter-body">
@@ -913,7 +971,7 @@ const saveSet = async () => {
             <p v-else class="template-empty">자주 쓰는 노선을 템플릿으로 저장해 한 번에 채워 보세요.</p>
         </n-card>
 
-        <n-card v-if="mode === 'manual'" :bordered="true" class="create-block" title="오더 정보">
+        <n-card v-if="mode === 'manual'" :bordered="true" class="create-block" title="운행 정보">
             <n-form label-placement="top" label-width="auto">
                 <div class="create-grid">
                     <n-form-item label="날짜">
@@ -970,6 +1028,9 @@ const saveSet = async () => {
                             placeholder="금액"
                         />
                     </n-form-item>
+                    <n-form-item label="긴급">
+                        <n-checkbox v-model:checked="form.is_priority">긴급 운행으로 등록</n-checkbox>
+                    </n-form-item>
                 </div>
             </n-form>
         </n-card>
@@ -1022,7 +1083,7 @@ const saveSet = async () => {
                 v-model:value="bulkInput"
                 type="textarea"
                 :rows="6"
-                placeholder="각 줄이 하나의 오더가 됩니다.
+                placeholder="각 줄이 하나의 운행이 됩니다.
 예)
 8/10 09:00 인천공항→명동 카니발 3명 200000원
 8/10 14:00 강남에서 강릉 정동진 스타리아 4명 250000원
@@ -1111,7 +1172,7 @@ const saveSet = async () => {
         </n-checkbox>
 
         <n-button v-if="mode !== 'set'" type="primary" size="large" :loading="saving" @click="save">
-            {{ isEdit ? '수정 저장' : '오더 등록' }}
+            {{ isEdit ? '수정 저장' : '운행 등록' }}
         </n-button>
 
         <n-button v-if="mode === 'set'" type="primary" size="large" :loading="saving" @click="saveSet">
@@ -1137,11 +1198,47 @@ const saveSet = async () => {
 </template>
 
 <style scoped>
-/* 내 오더 검색 */
+/* 내 운행 검색 */
 .create-search {
     margin: 4px 0 12px;
 }
-/* 오더 등록 템플릿 */
+
+/* 빠른 정렬 칩 */
+.create-sort {
+    display: flex;
+    gap: 6px;
+    margin: -4px 0 12px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.create-sort::-webkit-scrollbar {
+    display: none;
+}
+
+.create-sort__btn {
+    flex-shrink: 0;
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.create-sort__btn:hover {
+    border-color: #36adff;
+}
+
+.create-sort__btn--active {
+    border-color: #36adff;
+    background: rgba(54, 173, 255, 0.08);
+    color: #36adff;
+}
+/* 운행 등록 템플릿 */
 .template-head {
     display: flex;
     align-items: center;
@@ -1258,7 +1355,7 @@ const saveSet = async () => {
     display: block;
 }
 
-/* 내가 등록한 오더 목록 */
+/* 내가 등록한 운행 목록 */
 .my-order-list {
     display: flex;
     flex-direction: column;

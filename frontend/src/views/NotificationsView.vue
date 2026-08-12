@@ -117,7 +117,7 @@ const openNotification = async (notification) => {
                     </div>
                     <div class="notify-card__message">{{ notification.message }}</div>
                     <div class="notify-card__time">
-                        <span v-if="notification.order_id" class="notify-card__order-chip">오더</span>
+                        <span v-if="notification.order_id" class="notify-card__order-chip">운행</span>
                         {{ notification.created_at }}
                     </div>
                 </div>

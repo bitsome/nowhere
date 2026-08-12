@@ -26,8 +26,8 @@ export const LEVEL_LIST = [
 
 // XP 획득 규칙 (백엔드 XP 부여 포인트와 동일)
 export const XP_RULES = [
-    { label: '오더 가져오기 (수락)', xp: 20 },
-    { label: '오더 등록', xp: 10 },
+    { label: '운행 가져오기 (수락)', xp: 20 },
+    { label: '운행 등록', xp: 10 },
     { label: '운행 완료', xp: 50 },
     { label: '정산 완료', xp: 30 },
     { label: '커뮤니티 글 작성', xp: 5 },

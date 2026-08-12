@@ -17,7 +17,7 @@ class SendServerNotification extends Command
         {--to=test@example.com : 수신자 이메일}
         {--title=알림 : 알림 제목}
         {--message=서버에서 보낸 알림입니다. : 알림 내용}
-        {--order= : 연결할 오더 id (선택)}';
+        {--order= : 연결할 운행 id (선택)}';
 
     protected $description = '서버에서 사용자에게 알림을 보낸다 (알림 데모).';
 

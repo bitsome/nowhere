@@ -12,7 +12,7 @@ class OrderDemoSeeder extends Seeder
 {
     public function run(): void
     {
-        // 기존 오더 데이터를 모두 지운다. (line_items는 cascade 삭제)
+        // 기존 운행 데이터를 모두 지운다. (line_items는 cascade 삭제)
         Order::query()->delete();
         OrderGroup::query()->delete();
 
@@ -23,7 +23,7 @@ class OrderDemoSeeder extends Seeder
                 'password' => bcrypt('password'),
             ]);
 
-        // 마켓에 오더를 올리는 등록자 — 테스트 계정은 이 계정의 오더를 가져온다.
+        // 마켓에 운행을 올리는 등록자 — 테스트 계정은 이 계정의 운행을 가져온다.
         $marketUser = User::query()->where('email', 'market@example.com')->first()
             ?? User::factory()->create([
                 'email' => 'market@example.com',
@@ -492,7 +492,7 @@ class OrderDemoSeeder extends Seeder
         // 픽업/샌딩/랜딩 추가 데이터 50건
         $this->seedMarketSingles($user, $marketUser);
 
-        // 배송 흐름(수락 이후) 상태의 오더는 마켓에서 받은(가져온) 오더로 표시한다.
+        // 배송 흐름(수락 이후) 상태의 운행은 마켓에서 받은(가져온) 운행으로 표시한다.
         Order::query()
             ->whereIn('status', [
                 Order::STATUS_ACCEPTED,
@@ -505,7 +505,7 @@ class OrderDemoSeeder extends Seeder
     }
 
     /**
-     * 픽업(서울→강릉) / 샌딩(서울→인천 T1) / 랜딩(인천 T2→서울) 단일 오더를 생성한다.
+     * 픽업(서울→강릉) / 샌딩(서울→인천 T1) / 랜딩(인천 T2→서울) 단일 운행을 생성한다.
      */
     private function seedMarketSingles(User $user, User $marketUser): void
     {
@@ -588,7 +588,7 @@ class OrderDemoSeeder extends Seeder
     }
 
     /**
-     * 단일 오더 필드에서 라인아이템 계약을 만든다.
+     * 단일 운행 필드에서 라인아이템 계약을 만든다.
      *
      * @param  array<string, mixed>  $order
      * @return array<string, mixed>
@@ -625,7 +625,7 @@ class OrderDemoSeeder extends Seeder
     }
 
     /**
-     * 배송 흐름(수락 이후) 상태는 테스트 계정(받은 오더), 그 외는 마켓 등록자로 배정한다.
+     * 배송 흐름(수락 이후) 상태는 테스트 계정(받은 운행), 그 외는 마켓 등록자로 배정한다.
      */
     private function ownerFor(string $status, User $user, User $marketUser): User
     {

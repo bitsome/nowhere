@@ -74,7 +74,7 @@ class OrderManagementController extends Controller
 
         try {
             return response()->json([
-                'message' => '오더 요약을 구조화했습니다.',
+                'message' => '운행 요약을 구조화했습니다.',
                 'structured' => $structurer->structure((string) $request->string('summary')),
             ]);
         } catch (InvalidArgumentException $exception) {
@@ -234,11 +234,11 @@ class OrderManagementController extends Controller
 
         return redirect()
             ->route('dashboard.business.order.show', $order)
-            ->with('status', '오더가 수정되었습니다.');
+            ->with('status', '운행이 수정되었습니다.');
     }
 
     /**
-     * 라이프사이클 규칙에 따라 오더 상태를 전환한다.
+     * 라이프사이클 규칙에 따라 운행 상태를 전환한다.
      */
     public function transition(UpdateOrderStatusRequest $request, Order $order): RedirectResponse
     {
@@ -247,16 +247,16 @@ class OrderManagementController extends Controller
         $status = $request->validated('status');
 
         if (! $order->canTransitionTo($status)) {
-            return back()->with('error', '오더 상태를 전환할 수 없는 단계입니다.');
+            return back()->with('error', '운행 상태를 전환할 수 없는 단계입니다.');
         }
 
         $order->transitionTo($status);
 
-        return back()->with('status', sprintf('오더 상태가 "%s"(으)로 변경되었습니다.', Order::statusOptions()[$status] ?? $status));
+        return back()->with('status', sprintf('운행 상태가 "%s"(으)로 변경되었습니다.', Order::statusOptions()[$status] ?? $status));
     }
 
     /**
-     * 마켓의 공개 오더를 내 오더로 가져온다(수락).
+     * 마켓의 공개 운행을 내 운행으로 가져온다(수락).
      */
     public function claim(Order $order): RedirectResponse
     {
@@ -278,7 +278,7 @@ class OrderManagementController extends Controller
 
         return redirect()
             ->route('dashboard.business.order.show', $order)
-            ->with('status', '오더를 내 오더로 가져왔습니다.');
+            ->with('status', '운행을 내 운행으로 가져왔습니다.');
     }
 
     /**
@@ -332,7 +332,7 @@ class OrderManagementController extends Controller
     }
 
     /**
-     * 첫 번째 유효한 일정에서 오더 루트 라우트 필드(출발지/도착지/항공편/픽업시각/인원/금액)를 파생한다.
+     * 첫 번째 유효한 일정에서 운행 루트 라우트 필드(출발지/도착지/항공편/픽업시각/인원/금액)를 파생한다.
      *
      * @param  array<int|string, array<string, mixed>>  $lineItems
      * @return array<string, mixed>
@@ -497,13 +497,13 @@ class OrderManagementController extends Controller
     }
 
     /**
-     * 구조화된 오더 유형 라벨을 저장용 코드로 변환한다.
+     * 구조화된 운행 유형 라벨을 저장용 코드로 변환한다.
      */
     private function resolveOrderTypeCode(?string $orderType): string
     {
         return match ($orderType) {
-            '공항 오더' => Order::TYPE_AIRPORT,
-            '비즈니스 오더' => Order::TYPE_BUSINESS,
+            '공항 운행' => Order::TYPE_AIRPORT,
+            '비즈니스 운행' => Order::TYPE_BUSINESS,
             default => Order::TYPE_GENERAL,
         };
     }

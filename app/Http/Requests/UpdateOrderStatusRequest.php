@@ -23,7 +23,7 @@ class UpdateOrderStatusRequest extends FormRequest
     public function attributes(): array
     {
         return [
-            'status' => '오더 상태',
+            'status' => '운행 상태',
         ];
     }
 }

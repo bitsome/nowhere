@@ -13,7 +13,7 @@ const message = useMessage();
 const loading = ref(true);
 const error = ref('');
 const data = ref(null);
-const activeTab = ref('posts'); // 'posts' | 'orders' — 글/오더를 탭으로 분리
+const activeTab = ref('posts'); // 'posts' | 'orders' — 글/운행을 탭으로 분리
 
 const load = async () => {
     loading.value = true;
@@ -98,10 +98,10 @@ onMounted(load);
                         <!-- 인증 배지 -->
                         <div class="badge-row">
                             <span v-if="data.user.is_vehicle_verified" class="badge badge--vehicle" title="차량 인증 완료">
-                                🚗 차량 인증
+                                차량 인증
                             </span>
                             <span v-if="data.user.is_license_verified" class="badge badge--license" title="면허증 인증 완료">
-                                🪪 면허 인증
+                                면허 인증
                             </span>
                             <span v-if="data.user.vehicle_info" class="badge badge--car" title="등록 차량">
                                 {{ data.user.vehicle_info }}
@@ -126,7 +126,7 @@ onMounted(load);
                 <!-- 수행 실적 -->
                 <div class="user-stats">
                     <div class="user-stats__card">
-                        <span class="user-stats__label">완료 오더</span>
+                        <span class="user-stats__label">완료 운행</span>
                         <strong class="user-stats__value">{{ data.stats.completed_orders }}<small>건</small></strong>
                     </div>
                     <div class="user-stats__card">
@@ -135,7 +135,7 @@ onMounted(load);
                     </div>
                 </div>
 
-                <!-- 탭 — 올린 글 / 등록한 오더 / 받은 리뷰 -->
+                <!-- 탭 — 올린 글 / 등록한 운행 / 받은 리뷰 -->
                 <div class="user-tabs">
                     <button
                         type="button"
@@ -151,7 +151,7 @@ onMounted(load);
                         :class="{ 'user-tab--active': activeTab === 'orders' }"
                         @click="activeTab = 'orders'"
                     >
-                        등록한 오더 ({{ data.orders.length }})
+                        등록한 운행 ({{ data.orders.length }})
                     </button>
                     <button
                         type="button"
@@ -182,11 +182,11 @@ onMounted(load);
                     </div>
                 </section>
 
-                <!-- 등록한 오더 -->
+                <!-- 등록한 운행 -->
                 <section v-if="activeTab === 'orders'" class="user-section">
                     <n-empty
                         v-if="data.orders.length === 0"
-                        description="등록한 오더가 없습니다."
+                        description="등록한 운행이 없습니다."
                         :image-size="60"
                     />
                     <div v-else class="order-row-list">
@@ -251,8 +251,14 @@ onMounted(load);
                             </a>
                             <div class="post-row__meta">
                                 <span>{{ timeAgo(post.created_at) }}</span>
-                                <span>❤ {{ post.likes_count }}</span>
-                                <span>💬 {{ post.comments_count }}</span>
+                                <span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;vertical-align:-2px;margin-right:2px"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z" /></svg>
+                                    {{ post.likes_count }}
+                                </span>
+                                <span>
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;vertical-align:-2px;margin-right:2px"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.3 8.6 8.6 0 0 1-3.9-.9L3 20l1.2-5.3a8.2 8.2 0 0 1-.7-3.2A8.4 8.4 0 0 1 12 3.2a8.4 8.4 0 0 1 9 8.3z" /></svg>
+                                    {{ post.comments_count }}
+                                </span>
                             </div>
                         </article>
                     </div>
@@ -493,7 +499,7 @@ html.dark .badge--car {
     margin-bottom: 10px;
 }
 
-/* 탭 — 올린 글 / 등록한 오더 */
+/* 탭 — 올린 글 / 등록한 운행 */
 .user-tabs {
     display: flex;
     gap: 8px;

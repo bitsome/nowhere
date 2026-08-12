@@ -10,8 +10,8 @@ use App\Http\Controllers\FileManagementController;
 use App\Http\Controllers\OrderManagementController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\UserManagementController;
-use Illuminate\Support\Facades\File;
 use App\Models\Order;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Route;
 
 // 메인 진입점 — 로그인 사용자는 독립 프론트엔드(SPA)로, 비로그인은 기존 테스트 페이지로
@@ -103,10 +103,18 @@ Route::middleware('auth')->group(function () {
     Route::post('/legacy/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
 });
 
-// SPA 폴백 — 프론트엔드(Vue Router)가 처리하는 라우트를 index.html로 안내.
+// SPA 폴백 — 프론트엔드(Vue Router)가 처리하는 라우트를 해당 index.html로 안내.
 // Blade(관리자 대시보드)와 /api 라우트는 위에서 우선 매칭되므로 충돌하지 않는다.
 // index.html은 항상 최신 자산(해시 파일명)을 참조하도록 캐시 금지한다.
 Route::fallback(function () {
+    // /spa/* 는 Vue SPA(index.html은 public/spa/에 배치) — 루트의 Flutter 앱과 분리
+    if (str_starts_with(request()->path(), 'spa/')) {
+        return response(File::get(public_path('spa/index.html')), 200, [
+            'Content-Type' => 'text/html',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+        ]);
+    }
+
     return response(File::get(public_path('index.html')), 200, [
         'Content-Type' => 'text/html',
         'Cache-Control' => 'no-cache, no-store, must-revalidate',

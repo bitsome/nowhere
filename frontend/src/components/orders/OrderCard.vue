@@ -65,7 +65,8 @@ const statusColor = computed(() => STATUS_COLORS[props.order.status] ?? '#909399
         <div class="order-card__head">
             <div class="order-card__route">
                 <div class="order-card__route-top">
-                    <span v-if="order.isNew" class="order-card__new" title="새로 등록된 오더">N</span>
+                    <span v-if="order.isNew" class="order-card__new" title="새로 등록된 운행">N</span>
+                    <span v-if="order.isPriority" class="order-card__priority" title="긴급 운행">긴급</span>
                     <strong>{{ order.route }}</strong>
                     <span v-if="order.isUrgent" class="order-card__urgent" title="곧 운행 시작">임박</span>
                     <span v-else-if="order.isToday" class="order-card__today">오늘</span>
@@ -100,7 +101,7 @@ const statusColor = computed(() => STATUS_COLORS[props.order.status] ?? '#909399
         </div>
         <div class="order-card__meta">
             <span>{{ order.serviceLabel }}</span>
-            <span v-if="order.flightNumber">✈ {{ order.flightNumber }}</span>
+            <span v-if="order.flightNumber">{{ order.flightNumber }}</span>
             <span class="order-card__amount">{{ order.amount }}</span>
         </div>
         <div
@@ -108,7 +109,7 @@ const statusColor = computed(() => STATUS_COLORS[props.order.status] ?? '#909399
             class="order-card__owner"
         >
             <span class="order-card__owner-name">{{ order.owner.name }}</span>
-            <span v-if="order.owner.review_count > 0" class="order-card__owner-trust">⭐ {{ order.owner.rating }} · 리뷰 {{ order.owner.review_count }}</span>
+            <span v-if="order.owner.review_count > 0" class="order-card__owner-trust">{{ order.owner.rating }}점 · 리뷰 {{ order.owner.review_count }}</span>
             <span v-if="order.owner.completed_count > 0" class="order-card__owner-trust">완료 {{ order.owner.completed_count }}건</span>
         </div>
     </article>
@@ -141,7 +142,7 @@ const statusColor = computed(() => STATUS_COLORS[props.order.status] ?? '#909399
     background: rgba(54, 173, 255, 0.04);
 }
 
-/* 신규 오더 하이라이트 — 슬라이드 인 + 파랑 배경 깜빡임 */
+/* 신규 운행 하이라이트 — 슬라이드 인 + 파랑 배경 깜빡임 */
 .order-card--highlight {
     animation: card-highlight-in 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2), card-highlight-pulse 2.4s ease 0.4s infinite;
     border-color: rgba(54, 173, 255, 0.55);
@@ -272,7 +273,7 @@ const statusColor = computed(() => STATUS_COLORS[props.order.status] ?? '#909399
     color: var(--text-muted);
 }
 
-/* 신규 오더 배지 */
+/* 신규 운행 배지 */
 .order-card__new {
     display: inline-flex;
     align-items: center;
@@ -332,6 +333,19 @@ const statusColor = computed(() => STATUS_COLORS[props.order.status] ?? '#909399
 .order-card__tomorrow {
     background: #ffa940;
     color: #ffffff;
+}
+
+/* 긴급 배지 — 임박(빨강 펄스)과 구분되는 보라 */
+.order-card__priority {
+    flex-shrink: 0;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: -0.2px;
+    background: #722ed1;
+    color: #ffffff;
+    box-shadow: 0 1px 4px rgba(114, 46, 209, 0.4);
 }
 
 .order-card__amount {

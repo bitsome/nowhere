@@ -83,7 +83,7 @@ onMounted(() => {
     form.name = auth.user?.name ?? '';
     form.phone = auth.user?.phone ?? '';
 
-    // 내 실적 (완료 오더·매출·평점) — 실패해도 프로필은 정상 표시
+    // 내 실적 (완료 운행·매출·평점) — 실패해도 프로필은 정상 표시
     apiCommunityUser(auth.user?.id)
         .then(({ data }) => {
             myStats.value = data.data;
@@ -147,8 +147,8 @@ const logout = async () => {
                     <span class="profile-hero__meta">{{ auth.user?.email }}</span>
                     <span class="profile-hero__meta">{{ auth.user?.phone }}</span>
                     <div class="profile-hero__badges">
-                        <span v-if="auth.user?.is_vehicle_verified" class="verify-badge" title="차량 인증 완료">🚗 차량 인증</span>
-                        <span v-if="auth.user?.is_license_verified" class="verify-badge" title="면허 인증 완료">🪪 면허 인증</span>
+                        <span v-if="auth.user?.is_vehicle_verified" class="verify-badge" title="차량 인증 완료">차량 인증</span>
+                        <span v-if="auth.user?.is_license_verified" class="verify-badge" title="면허 인증 완료">면허 인증</span>
                         <n-tag size="small" round>{{ roleLabel }}</n-tag>
                     </div>
                 </div>
@@ -158,7 +158,7 @@ const logout = async () => {
         <!-- 내 실적 -->
         <div v-if="myStats" class="profile-stats">
             <div class="profile-stats__card">
-                <span class="profile-stats__label">완료 오더</span>
+                <span class="profile-stats__label">완료 운행</span>
                 <strong class="profile-stats__value">{{ myStats.stats.completed_orders }}<small>건</small></strong>
             </div>
             <div class="profile-stats__card">
@@ -201,7 +201,7 @@ const logout = async () => {
         <n-card :bordered="true" class="profile-block">
             <div class="verify-head">
                 <strong>알림</strong>
-                <span class="verify-hint">새 알림이 왔을 때 데스크톱 알림을 표시합니다 (탭을 닫지 않은 상태)</span>
+                <span class="verify-hint">새 운행·채팅·알림이 도착하면 화면 상단에 데스크톱 알림으로 알려드립니다.</span>
             </div>
             <div class="verify-row">
                 <span class="verify-row__label">브라우저 알림</span>
@@ -275,7 +275,7 @@ const logout = async () => {
                     ({{ level.min_xp }} → {{ level.next_xp }}점).
                 </template>
                 <template v-else>
-                    최고 레벨에 도달했습니다! 🏆
+                    최고 레벨에 도달했습니다!
                 </template>
             </p>
 
@@ -322,7 +322,7 @@ const logout = async () => {
                 </span>
                 <span class="community-entry__text">
                     <strong>내가 올린 글</strong>
-                    <small>내 프로필·글·오더를 다른 유저에게 보여주는 공개 페이지</small>
+                    <small>내 프로필·글·운행을 다른 유저에게 보여주는 공개 페이지</small>
                 </span>
                 <span class="community-entry__arrow">›</span>
             </button>

@@ -39,6 +39,7 @@ class CommunityController extends Controller
         }
 
         $posts = $query->paginate($perPage);
+
         return response()->json([
             'data' => $posts->map(fn (CommunityPost $post) => $this->serialize($post)),
             'meta' => [
@@ -194,7 +195,7 @@ class CommunityController extends Controller
     }
 
     /**
-     * 유저 페이지 — 프로필(배지 포함), 올린 글, 등록한 오더.
+     * 유저 페이지 — 프로필(배지 포함), 올린 글, 등록한 운행.
      *
      * @return JsonResponse{data: array<string, mixed>}
      */
@@ -206,7 +207,7 @@ class CommunityController extends Controller
             ->limit(30)
             ->get();
 
-        // 등록한 오더 (초안/취소 제외, 최근 10건)
+        // 등록한 운행 (초안/취소 제외, 최근 10건)
         $orders = Order::query()
             ->where('user_id', $user->id)
             ->whereNotIn('status', [
@@ -235,7 +236,7 @@ class CommunityController extends Controller
             $breakdown[(int) $rating]++;
         }
 
-        // 수행 실적: 완료/정산 오더 수와 총 매출
+        // 수행 실적: 완료/정산 운행 수와 총 매출
         $performed = Order::query()
             ->where('user_id', $user->id)
             ->whereIn('status', [Order::STATUS_COMPLETED, Order::STATUS_SETTLED])

@@ -51,7 +51,7 @@ class CommunityDemoSeeder extends Seeder
             ],
             [
                 'user_id' => $me->id,
-                'content' => '이번 주 셋트 오더 12건 모두 소화 완료. 팀원들 고생했습니다 🙌',
+                'content' => '이번 주 셋트 운행 12건 모두 소화 완료. 팀원들 고생했습니다 🙌',
                 'hours_ago' => 26,
             ],
         ];

@@ -23,7 +23,7 @@ class AdminController extends Controller
             ->orderByDesc('created_at')
             ->paginate(20);
 
-        // 완료/정산 오더 수 집계 (User에 orders 관계가 없어 직접 계산)
+        // 완료/정산 운행 수 집계 (User에 orders 관계가 없어 직접 계산)
         $completedCounts = Order::query()
             ->whereIn('user_id', collect($users->items())->pluck('id'))
             ->whereIn('status', [Order::STATUS_COMPLETED, Order::STATUS_SETTLED])

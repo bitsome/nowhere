@@ -7,7 +7,7 @@ use App\Models\User;
 use Illuminate\Database\Seeder;
 
 /**
- * 마켓을 채우는 랜덤 오더 데모 데이터.
+ * 마켓을 채우는 랜덤 운행 데모 데이터.
  * test 계정(데모 뷰어)을 제외한 사용자를 작성자로 삼아 마켓에 노출되게 한다.
  */
 class RandomOrderSeeder extends Seeder
@@ -85,6 +85,6 @@ class RandomOrderSeeder extends Seeder
             $order->forceFill(['created_at' => $createdAt, 'updated_at' => $createdAt])->save();
         }
 
-        $this->command?->info('랜덤 오더 25건을 생성했습니다.');
+        $this->command?->info('랜덤 운행 25건을 생성했습니다.');
     }
 }

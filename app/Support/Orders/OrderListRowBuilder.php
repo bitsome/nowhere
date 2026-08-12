@@ -7,7 +7,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
 /**
- * 오더 목록 행(row)의 공용 데이터 계약을 만든다.
+ * 운행 목록 행(row)의 공용 데이터 계약을 만든다.
  *
  * Blade, Vue, API 응답이 이 구조를 그대로 사용하며,
  * 화면별로 row를 다시 조립하지 않는다.
@@ -39,7 +39,7 @@ class OrderListRowBuilder
     }
 
     /**
-     * 단일 오더 행 계약을 만든다.
+     * 단일 운행 행 계약을 만든다.
      *
      * @return array<string, mixed>
      */
@@ -67,6 +67,7 @@ class OrderListRowBuilder
             'isTomorrow' => $this->isTomorrow($order),
             'isNew' => $this->isNew($order),
             'isUrgent' => $this->isUrgent($order),
+            'isPriority' => (bool) $order->is_priority,
             'showUrl' => route('dashboard.business.order.show', $order),
             'sortDate' => $order->service_date ?: '',
             'sortTime' => $order->service_time ?: '',
@@ -76,7 +77,7 @@ class OrderListRowBuilder
     }
 
     /**
-     * 여러 오더를 행 계약 목록으로 만든다.
+     * 여러 운행을 행 계약 목록으로 만든다.
      *
      * @param  Collection<int, Order>|array<int, Order>  $orders
      * @return array<int, array<string, mixed>>
@@ -171,7 +172,7 @@ class OrderListRowBuilder
     }
 
     /**
-     * 등록 후 1시간 이내 새 오더 여부 (목록에서 N 배지로 표시).
+     * 등록 후 1시간 이내 새 운행 여부 (목록에서 N 배지로 표시).
      */
     private function isNew(Order $order): bool
     {
@@ -179,7 +180,7 @@ class OrderListRowBuilder
     }
 
     /**
-     * 임박 여부 — 오늘 서비스이고 현재 시각부터 2시간 이내에 운행이 시작되는 오더 (빨간 임박 배지).
+     * 임박 여부 — 오늘 서비스이고 현재 시각부터 2시간 이내에 운행이 시작되는 운행 (빨간 임박 배지).
      * 서비스 시각은 사용자 로컬(KST) 기준 문자열로 저장되므로, 비교도 KST로 수행한다.
      */
     public function isUrgent(Order $order): bool

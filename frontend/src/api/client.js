@@ -28,8 +28,11 @@ apiClient.interceptors.response.use(
         if (error.response?.status === 401 && !error.config?.url?.includes('/auth/login')) {
             localStorage.removeItem('auth_token');
 
-            if (window.location.pathname !== '/login') {
-                window.location.href = '/login';
+            const base = import.meta.env.VITE_BASE || '/';
+            const loginUrl = `${base}login`.replace(/\/+/g, '/');
+
+            if (window.location.pathname !== loginUrl) {
+                window.location.href = loginUrl;
             }
         }
 

@@ -210,7 +210,7 @@ class OrderSummaryAiStructurer
     private function systemPrompt(): string
     {
         return <<<'PROMPT'
-중국어 공항 픽업/샌딩 오더 요약을 JSON으로만 구조화한다.
+중국어 공항 픽업/샌딩 운행 요약을 JSON으로만 구조화한다.
 설명 없이 JSON만 출력한다.
 모르는 값은 문자열은 "", 숫자는 null로 둔다.
 
@@ -224,7 +224,7 @@ scheduled_time, service_date, service_month, service_day, service_weekday, servi
 - 여러 일정은 모두 line_items에 넣고 상위 값은 첫 일정 기준으로 채운다
 - 시간은 HH:MM 형식(예: 3.30 → 03:30)
 - service_type은 픽업, 샌딩, 혼합, ""만 사용
-- order_type은 공항 오더, 일반 오더, 비즈니스 오더, ""만 사용
+- order_type은 공항 운행, 일반 운행, 비즈니스 운행, ""만 사용
 - passenger_count, luggage_count, amount_value는 숫자 또는 null
 - flight_number는 항공편 코드만
 - 공항 샌딩: 送机 뒤에 나오는 장소는 픽업 장소에서 공항으로 바래다줌. 도착지가 명시되지 않아도 기본 도착지는 인천공항 → dropoff_location: "인천"
@@ -232,8 +232,8 @@ scheduled_time, service_date, service_month, service_day, service_weekday, servi
 - 경로가 하나뿐이면 있는 쪽만 채운다. 단, 샌딩(送机)이면 도착지는 기본 인천공항
 - 중국어 원문은 한국어 의미로 정리한다
 - n号/n日는 이번 달 n일을 뜻하는 날짜 → service_date: "n号" 형태로 그대로 둔다(월/일 변환 금지)
-- 一起出, 套出, 셋트는 묶음 오더 → group_type: "셋트"
-- 일정(line_items)이 2건 이상이면 묶음 오더 → group_type: "셋트"
+- 一起出, 套出, 셋트는 묶음 운행 → group_type: "셋트"
+- 일정(line_items)이 2건 이상이면 묶음 운행 → group_type: "셋트"
 - 卡起는 카니발부터 가능(스타리아 포함) → vehicle_type에 그대로 넣는다
 - 카니발은 차량 종류 → vehicle_type: "카니발"
 
@@ -286,9 +286,9 @@ PROMPT;
     private function normalizeOrderType(string $orderType): string
     {
         return match (trim($orderType)) {
-            '공항 오더', 'airport', 'airport_order' => '공항 오더',
-            '비즈니스 오더', 'business', 'business_order' => '비즈니스 오더',
-            '일반 오더', 'normal', 'normal_order' => '일반 오더',
+            '공항 운행', 'airport', 'airport_order' => '공항 운행',
+            '비즈니스 운행', 'business', 'business_order' => '비즈니스 운행',
+            '일반 운행', 'normal', 'normal_order' => '일반 운행',
             default => trim($orderType),
         };
     }

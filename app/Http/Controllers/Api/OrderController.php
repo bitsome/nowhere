@@ -19,7 +19,7 @@ use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 class OrderController extends Controller
 {
     /**
-     * 마켓(가져올 수 있는 오더) 또는 내가 받은 오더 목록.
+     * 마켓(가져올 수 있는 운행) 또는 내가 받은 운행 목록.
      *
      * @return JsonResponse{data: array<int, array<string, mixed>>, meta: array<string, mixed>}
      */
@@ -43,7 +43,7 @@ class OrderController extends Controller
         if ($scope === 'mine') {
             $query->where('user_id', $request->user()->id);
 
-            // 등록된 오더(직접 등록) / 받은 오더(마켓에서 가져옴)
+            // 등록된 운행(직접 등록) / 받은 운행(마켓에서 가져옴)
             if ($source === 'registered') {
                 $query->whereNull('claimed_at');
             } else {
@@ -71,7 +71,7 @@ class OrderController extends Controller
                 Order::STATUS_ACCEPTANCE_PENDING,
             ])->where('user_id', '!=', $request->user()->id);
 
-            // 마켓 공개 목록 — 서비스 날짜가 이미 지난 오더는 노출하지 않는다 (날짜 미정 오더는 유지, KST 기준)
+            // 마켓 공개 목록 — 서비스 날짜가 이미 지난 운행은 노출하지 않는다 (날짜 미정 운행은 유지, KST 기준)
             $query->where(function ($sub) {
                 $sub->where('service_date', '>=', now('Asia/Seoul')->format('Y-m-d'))
                     ->orWhereNull('service_date')
@@ -109,6 +109,31 @@ class OrderController extends Controller
             $query->where('passenger_count', '>=', $minPassengers);
         }
 
+        // 마켓 상단 퀵 칩 필터 — new(최신 등록) / urgent(서비스 임박) / today(오늘) / amount(금액순) / priority(긴급)
+        $quick = $request->string('quick')->toString();
+
+        if ($quick === 'amount') {
+            // 금액순은 정렬로 처리
+            $sort = 'amount';
+        }
+
+        if (in_array($quick, ['new', 'urgent', 'today', 'priority'], true)) {
+            $nowKst = now('Asia/Seoul');
+
+            match ($quick) {
+                // 최신 — 2시간 이내 등록 (목록 빌더 isNew와 동일 기준)
+                'new' => $query->where('created_at', '>=', now()->subHours(2)),
+                // 임박 — 오늘 서비스 + 2시간 이내 시작 (isUrgent와 동일 기준)
+                'urgent' => $query
+                    ->where('service_date', $nowKst->format('Y-m-d'))
+                    ->where('service_time', '>=', $nowKst->format('H:i'))
+                    ->where('service_time', '<=', $nowKst->copy()->addMinutes(120)->format('H:i')),
+                'today' => $query->where('service_date', $nowKst->format('Y-m-d')),
+                'priority' => $query->where('is_priority', true),
+                default => null,
+            };
+        }
+
         if ($search !== '') {
             $query->where(function ($sub) use ($search) {
                 $sub->where('order_number', 'like', "%{$search}%")
@@ -140,7 +165,7 @@ class OrderController extends Controller
 
         $rows = app(OrderWorkspaceListBuilder::class)->build(collect($orders->items()), null, $sort);
 
-        // 등록자 신뢰 정보는 마켓에서만 계산 (내 오더에는 불필요)
+        // 등록자 신뢰 정보는 마켓에서만 계산 (내 운행에는 불필요)
         if ($scope === 'market') {
             $rows = $this->withOwnerTrust($rows, $orders->items());
         }
@@ -214,7 +239,7 @@ class OrderController extends Controller
     }
 
     /**
-     * 오더 상세 — 라인아이템, 셋트면 그룹 전체 일정 포함.
+     * 운행 상세 — 라인아이템, 셋트면 그룹 전체 일정 포함.
      *
      * @return JsonResponse{data: array<string, mixed>}
      */
@@ -233,7 +258,7 @@ class OrderController extends Controller
     }
 
     /**
-     * 마켓의 공개 오더를 내 오더로 가져온다(수락).
+     * 마켓의 공개 운행을 내 운행으로 가져온다(수락).
      *
      * @return JsonResponse{data: array<string, mixed>}
      */
@@ -262,13 +287,13 @@ class OrderController extends Controller
             'claimed_at' => now(),
         ])->save();
 
-        // 레벨링: 마켓 오더 가져오기 +20 XP
-        $actor->addXp(20, 'order_claimed', '오더 가져오기 (수락)');
+        // 레벨링: 마켓 운행 가져오기 +20 XP
+        $actor->addXp(20, 'order_claimed', '운행 가져오기 (수락)');
 
         // 가져온 드라이버에게 알림
         $actor->notify(new OrderNotification(
-            '오더 가져오기 완료',
-            "{$order->customer_name}님의 오더({$order->order_number})를 내 오더로 가져왔습니다.",
+            '운행 가져오기 완료',
+            "{$order->customer_name}님의 운행({$order->order_number})를 내 운행으로 가져왔습니다.",
             $order->id,
         ));
 
@@ -278,8 +303,8 @@ class OrderController extends Controller
 
             if ($previousOwner !== null) {
                 $previousOwner->notify(new OrderNotification(
-                    '오더 가져오기됨',
-                    "오더({$order->order_number})가 다른 드라이버에게 가져와졌습니다.",
+                    '운행 가져오기됨',
+                    "운행({$order->order_number})가 다른 드라이버에게 가져와졌습니다.",
                     $order->id,
                 ));
             }
@@ -294,7 +319,7 @@ class OrderController extends Controller
     }
 
     /**
-     * 라이프사이클 규칙에 따라 오더 상태를 전환한다.
+     * 라이프사이클 규칙에 따라 운행 상태를 전환한다.
      *
      * @return JsonResponse{data: array<string, mixed>}
      */
@@ -320,10 +345,10 @@ class OrderController extends Controller
             $order->forceFill(['cancel_reason' => $data['cancel_reason']])->save();
         }
 
-        // 상태 변경을 오더 소유자(드라이버/운영자)에게 알림
+        // 상태 변경을 운행 소유자(드라이버/운영자)에게 알림
         $owner = User::query()->find($order->user_id);
 
-        // 레벨링: 운행 완료 +50, 정산 완료 +30 XP (오더 소유자에게)
+        // 레벨링: 운행 완료 +50, 정산 완료 +30 XP (운행 소유자에게)
         if ($owner !== null) {
             if ($status === Order::STATUS_COMPLETED) {
                 $owner->addXp(50, 'order_completed', '운행 완료');
@@ -334,8 +359,8 @@ class OrderController extends Controller
             $statusLabel = Order::statusOptions()[$order->status] ?? $order->status;
 
             $owner->notify(new OrderNotification(
-                '오더 상태 변경',
-                "오더({$order->order_number})의 상태가 '{$statusLabel}'(으)로 변경되었습니다.",
+                '운행 상태 변경',
+                "운행({$order->order_number})의 상태가 '{$statusLabel}'(으)로 변경되었습니다.",
                 $order->id,
             ));
         }
@@ -349,7 +374,7 @@ class OrderController extends Controller
     }
 
     /**
-     * 완료된 오더를 선택해 일괄 정산 처리한다.
+     * 완료된 운행을 선택해 일괄 정산 처리한다.
      *
      * @return JsonResponse{data: array<string, int>}
      */
@@ -378,7 +403,7 @@ class OrderController extends Controller
     }
 
     /**
-     * 오더를 등록한다 (단일 오더).
+     * 운행을 등록한다 (단일 운행).
      *
      * @return JsonResponse{data: array<string, mixed>}
      */
@@ -407,6 +432,7 @@ class OrderController extends Controller
                 'amount_value' => $data['expected_revenue'] ?? null,
                 'order_type' => Order::TYPE_GENERAL,
                 'status' => Order::STATUS_DRAFT,
+                'is_priority' => $data['is_priority'] ?? false,
                 'user_id' => $request->user()->id,
             ]);
 
@@ -417,8 +443,8 @@ class OrderController extends Controller
             return $order;
         });
 
-        // 레벨링: 오더 등록 +10 XP
-        $request->user()->addXp(10, 'order_created', '오더 등록');
+        // 레벨링: 운행 등록 +10 XP
+        $request->user()->addXp(10, 'order_created', '운행 등록');
 
         return response()->json([
             'data' => [
@@ -430,7 +456,7 @@ class OrderController extends Controller
     }
 
     /**
-     * 오더를 복제한다 — 동일 내용을 초안 상태로 새로 만든다.
+     * 운행을 복제한다 — 동일 내용을 초안 상태로 새로 만든다.
      *
      * @return JsonResponse{data: array<string, int>}
      */
@@ -484,7 +510,7 @@ class OrderController extends Controller
     }
 
     /**
-     * 셋트 오더 등록 — 한 번에 여러 오더를 등록하고 하나의 그룹으로 묶는다.
+     * 셋트 운행 등록 — 한 번에 여러 운행을 등록하고 하나의 그룹으로 묶는다.
      *
      * @return JsonResponse{data: array<string, mixed>}
      */
@@ -558,7 +584,7 @@ class OrderController extends Controller
     }
 
     /**
-     * 오더 정보를 수정한다.
+     * 운행 정보를 수정한다.
      *
      * @return JsonResponse{data: array<string, mixed>}
      */
@@ -582,6 +608,7 @@ class OrderController extends Controller
             'luggage_count' => $data['luggage_count'] ?? $order->luggage_count,
             'expected_revenue' => $data['expected_revenue'] ?? $order->expected_revenue,
             'amount_value' => $data['expected_revenue'] ?? $order->amount_value,
+            'is_priority' => $data['is_priority'] ?? $order->is_priority,
         ]);
 
         if (array_key_exists('line_items', $data)) {
@@ -601,7 +628,7 @@ class OrderController extends Controller
     }
 
     /**
-     * 셋트 그룹에서 개별 오더를 분리한다 — 단일 오더로 전환.
+     * 셋트 그룹에서 개별 운행을 분리한다 — 단일 운행으로 전환.
      *
      * @return JsonResponse{data: array<string, mixed>}
      */
@@ -627,7 +654,7 @@ class OrderController extends Controller
     }
 
     /**
-     * 오더 요약 텍스트를 AI로 구조화한다.
+     * 운행 요약 텍스트를 AI로 구조화한다.
      *
      * @return JsonResponse{data: array<string, mixed>}
      */
@@ -674,6 +701,7 @@ class OrderController extends Controller
             'expected_revenue' => ['nullable', 'integer', 'min:0'],
             'reservation_company' => ['nullable', 'string', 'max:100'],
             'reservation_channel' => ['nullable', 'string', 'max:50'],
+            'is_priority' => ['nullable', 'boolean'],
             'line_items' => ['array'],
             'line_items.*.scheduled_time' => ['nullable', 'string'],
             'line_items.*.service_type' => ['nullable', 'string'],

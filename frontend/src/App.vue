@@ -25,6 +25,13 @@ const initReady = ref(false);
 // 대화방 열림 — 전체 화면 모드 (상·하단 패딩 제거, 하단 네비 숨김)
 const isChatThread = computed(() => route.name === 'chat' && chats.activeId);
 
+// 집중 화면 — 운행 상세·등록/수정 폼에서는 하단 탭을 숨긴다
+const isFocusedScreen = computed(() =>
+    route.name === 'order-detail'
+    || route.name === 'order-edit'
+    || (route.name === 'order-create' && ui.orderFormActive),
+);
+
 // 채팅 화면을 벗어나면(뒤로가기 등) 대화방을 닫아 하단 메뉴를 복원한다
 watch(
     () => route.name,
@@ -53,7 +60,7 @@ onBeforeUnmount(() => {
 // ── 하단 네비 탭 ──
 const navItems = [
     { name: 'market', label: '마켓' },
-    { name: 'order-create', label: '내 오더' },
+    { name: 'order-create', label: '내 운행' },
     { name: 'chat', label: '채팅' },
     { name: 'community', label: '커뮤니티' },
     { name: 'profile', label: '내 정보' },
@@ -71,6 +78,8 @@ const handleHeaderAction = (key) => {
         ui.emitAction('orders:filter');
     } else if (key === 'filter') {
         ui.emitAction('filter');
+    } else if (key === 'order-form:back') {
+        ui.emitAction('order-form:back');
     } else if (key === 'thread:back') {
         chats.close();
     }
@@ -96,9 +105,6 @@ const handleMenuAction = (key) => {
         case 'community:sort-latest':
             ui.communitySort = 'latest';
             ui.emitAction('community:reload');
-            break;
-        case 'notifications':
-            router.push({ name: 'notifications' });
             break;
         case 'theme':
             theme.toggle();
@@ -181,40 +187,14 @@ onMounted(async () => {
                     placement="left"
                 >
                     <div class="drawer-inner">
+                        <!-- 하단 탭과 중복되는 항목은 제거 — 하단 탭에 없는 보조 메뉴만 둔다 -->
                         <div class="drawer-section">
                             <p class="drawer-section__title">탐색</p>
-                            <button
-                                v-for="item in navItems"
-                                :key="item.name"
-                                type="button"
-                                class="drawer-nav-row"
-                                :class="{ 'drawer-nav-row--active': route.name === item.name }"
-                                @click="handleMenuAction(`nav:${item.name}`)"
-                            >
-                                <svg class="drawer-nav-row__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                    <template v-if="item.name === 'market'">
-                                        <path d="M3 10.5L12 3l9 7.5" />
-                                        <path d="M5 9.5V21h14V9.5" />
-                                    </template>
-                                    <template v-else-if="item.name === 'order-create'">
-                                        <path d="M8 6h13M8 12h13M8 18h13" />
-                                        <path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
-                                    </template>
-                                    <template v-else-if="item.name === 'chat'">
-                                        <path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.3 8.6 8.6 0 0 1-3.9-.9L3 20l1.2-5.3a8.2 8.2 0 0 1-.7-3.2A8.4 8.4 0 0 1 12 3.2a8.4 8.4 0 0 1 9 8.3z" />
-                                    </template>
-                                    <template v-else-if="item.name === 'community'">
-                                        <circle cx="9" cy="8" r="3.5" />
-                                        <path d="M2.5 20c.8-3.4 3.4-5 6.5-5s5.7 1.6 6.5 5" />
-                                        <circle cx="17.5" cy="9" r="2.5" />
-                                        <path d="M15.5 15.2c2.6.2 4.6 1.5 5.5 4.3" />
-                                    </template>
-                                    <template v-else-if="item.name === 'profile'">
-                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                                        <circle cx="12" cy="7" r="4" />
-                                    </template>
-                                </svg>
-                                <span>{{ item.label }}</span>
+                            <button type="button" class="drawer-action-row" :class="{ 'drawer-nav-row--active': route.name === 'dashboard' }" @click="handleMenuAction('nav:dashboard')">
+                                <span>대시보드</span>
+                            </button>
+                            <button v-if="auth.isAdmin" type="button" class="drawer-action-row" :class="{ 'drawer-nav-row--active': route.name === 'admin' }" @click="handleMenuAction('nav:admin')">
+                                <span>운영 관리</span>
                             </button>
                         </div>
 
@@ -232,17 +212,7 @@ onMounted(async () => {
                         </div>
 
                         <div class="drawer-section">
-                            <p class="drawer-section__title">통계</p>
-                            <button type="button" class="drawer-action-row" :class="{ 'drawer-nav-row--active': route.name === 'dashboard' }" @click="handleMenuAction('nav:dashboard')">
-                                <span>대시보드</span>
-                            </button>
-                        </div>
-
-                        <div class="drawer-section">
                             <p class="drawer-section__title">계정</p>
-                            <button type="button" class="drawer-action-row" @click="handleMenuAction('notifications')">
-                                <span>{{ notifications.unreadCount > 0 ? `알림 (${notifications.unreadCount})` : '알림' }}</span>
-                            </button>
                             <button type="button" class="drawer-action-row" @click="handleMenuAction('theme')">
                                 <span>{{ theme.isDark ? '라이트 모드' : '다크 모드' }}</span>
                             </button>
@@ -269,7 +239,7 @@ onMounted(async () => {
                     <router-view />
                 </main>
 
-                <nav v-if="auth.isAuthenticated && !chats.activeId" class="bottom-nav">
+                <nav v-if="auth.isAuthenticated && !chats.activeId && !isFocusedScreen" class="bottom-nav">
                     <router-link
                         v-for="item in navItems"
                         :key="item.name"
@@ -278,10 +248,10 @@ onMounted(async () => {
                         :class="{ 'bottom-nav__item--active': route.name === item.name }"
                     >
                         <n-badge
-                            :value="item.name === 'chat' ? chats.unreadTotal : (item.name === 'profile' ? notifications.unreadCount : 0)"
+                            :value="item.name === 'chat' ? chats.unreadTotal : 0"
                             :max="99"
                             class="nav-badge"
-                            :show="(item.name === 'chat' && chats.unreadTotal > 0 && route.name !== 'chat') || (item.name === 'profile' && notifications.unreadCount > 0 && route.name !== 'notifications')"
+                            :show="item.name === 'chat' && chats.unreadTotal > 0 && route.name !== 'chat'"
                         >
                             <svg
                                 class="bottom-nav__icon"
@@ -371,36 +341,10 @@ onMounted(async () => {
     letter-spacing: 0.5px;
 }
 
-.drawer-nav-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-    border: 0;
-    border-radius: 10px;
-    background: transparent;
-    color: var(--text);
-    font-size: 15px;
-    text-align: left;
-    cursor: pointer;
-    padding: 12px 12px;
-    transition: background 0.12s ease;
-}
-
-.drawer-nav-row:hover {
-    background: rgba(0, 0, 0, 0.05);
-}
-
 .drawer-nav-row--active {
     background: rgba(54, 173, 255, 0.1);
     color: #36adff;
     font-weight: 700;
-}
-
-.drawer-nav-row__icon {
-    width: 22px;
-    height: 22px;
-    flex-shrink: 0;
 }
 
 .drawer-action-row {

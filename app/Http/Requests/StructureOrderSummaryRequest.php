@@ -32,7 +32,7 @@ class StructureOrderSummaryRequest extends FormRequest
     public function attributes(): array
     {
         return [
-            'summary' => '오더 요약 입력',
+            'summary' => '운행 요약 입력',
         ];
     }
 }

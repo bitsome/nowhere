@@ -9,6 +9,10 @@ export const useUiStore = defineStore('ui', {
         // 커뮤니티 — 헤더 메뉴 상태
         communityMyPostsOnly: false,
         communitySort: 'latest', // latest | popular
+        // 운행 등록/수정 폼 활성 여부 — 집중 화면에서는 하단 탭을 숨긴다
+        orderFormActive: false,
+        // 마켓/내 운행 필터 활성 여부 — 헤더 필터 버튼에 점 표시용
+        filterActive: false,
         // 액션 버스 (헤더 → 뷰)
         actionName: null,
         actionSeq: 0,

@@ -17,8 +17,13 @@ import { cpSync, rmSync } from 'node:fs';
  */
 const apiProxy = {
     '/api': {
-        target: process.env.VITE_API_PROXY_TARGET || 'http://localhost:8000',
+        // dev 터널(HTTPS)에서 HTTP 서버 API로 Mixed Content 차단을 피하기 위해
+        // vite가 서버 API(114.132.240.52)로 프록시한다 (브라우저는 같은 origin만 봄).
+        // 서버가 HTTP→HTTPS(자체서명) 301 리다이렉트하므로 HTTPS로 직접 연결하고
+        // secure:false 로 자체서명 인증서 검증을 끈다.
+        target: process.env.VITE_API_PROXY_TARGET || 'https://114.132.240.52',
         changeOrigin: true,
+        secure: false,
     },
 };
 
@@ -32,6 +37,9 @@ const syncPublic = () => ({
 });
 
 export default defineConfig({
+    // 서버 배포 시 하위 경로(/spa 등)에 두려면 VITE_BASE 환경변수로 지정한다.
+    // 예) VITE_BASE=/spa/ npm run build
+    base: process.env.VITE_BASE || '/',
     plugins: [
         vue(),
         Components({

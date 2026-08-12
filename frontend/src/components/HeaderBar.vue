@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/auth';
 import { useChatsStore } from '../stores/chats';
 import { useNotificationsStore } from '../stores/notifications';
 import { useThemeStore } from '../stores/theme';
+import { useUiStore } from '../stores/ui';
 
 const emit = defineEmits(['open-drawer', 'action']);
 
@@ -14,6 +15,7 @@ const auth = useAuthStore();
 const chats = useChatsStore();
 const notifications = useNotificationsStore();
 const theme = useThemeStore();
+const ui = useUiStore();
 
 // 스크롤 여부 — glass 헤더에 그림자를 씌워 경계를 명확히 한다.
 const scrolled = ref(false);
@@ -32,32 +34,43 @@ onBeforeUnmount(() => {
 });
 
 const PAGE_LABEL = {
-    market: '오더 마켓', chat: '채팅',
+    market: '운행 마켓', chat: '채팅',
     community: '커뮤니티', profile: '회원정보', notifications: '알림',
-    'user-page': '유저 정보', 'order-create': '오더 등록',
-    'order-edit': '오더 수정', 'order-detail': '오더 상세',
+    'user-page': '유저 정보', 'order-create': '내 운행',
+    'order-edit': '운행 수정', 'order-detail': '운행 상세',
 };
 
 const activeConv = computed(() =>
     chats.activeId ? chats.conversations.find((c) => c.id === chats.activeId) : null,
 );
 
+// 내 운행 등록/수정 폼 — 집중 화면 (뒤로가기 + 하단 탭 숨김)
+const isOrderForm = computed(() => route.name === 'order-create' && ui.orderFormActive);
+
 const label = computed(() => {
     if (route.name === 'chat' && chats.activeId) return activeConv.value?.counterpart?.name ?? '';
+    if (isOrderForm.value) return '운행 등록';
     return PAGE_LABEL[route.name] ?? '';
 });
 // 뒤로가기 + 둥근 유리 헤더 여부
-// 메인페이지(마켓·내오더·채팅목록·커뮤니티·내정보): 플랫 헤더
-// 서브페이지(대화방·오더상세·등록 등): 둥근 유리 헤더
+// 메인페이지(마켓·내운행·채팅목록·커뮤니티·내정보): 플랫 헤더
+// 서브페이지(대화방·운행상세·등록 등): 둥근 유리 헤더
 const showBack = computed(() => {
     if (!route.name) return false;                           // 초기 렌더링 전
     if (route.name === 'chat' && chats.activeId) return true; // 대화방은 glass
     if (route.name === 'chat') return false;                  // 채팅목록은 flat
     if (route.name === 'notifications') return true;          // 알림은 sub-page
+    if (isOrderForm.value) return true;                       // 운행 등록/수정 폼은 glass
     return !['market', 'my-orders', 'community', 'profile', 'order-create'].includes(route.name);
 });
 
 const goBack = () => {
+    // 운행 등록 폼은 내부 화면 전환이므로 목록으로 복귀하도록 액션 전달
+    if (isOrderForm.value) {
+        emit('action', 'order-form:back');
+        return;
+    }
+
     if (window.history.length > 1) {
         router.back();
     } else {
@@ -65,11 +78,12 @@ const goBack = () => {
     }
 };
 
-const marketMenu = [
-    { label: '오더 등록', key: 'order-create' },
-    { label: '회원정보', key: 'profile' },
-    { label: '알림', key: 'notifications' },
-];
+// 알림 벨 — 모든 상위 탭에서 동일하게 노출 (집중 폼에서는 숨김)
+const showBell = computed(() => {
+    if (isOrderForm.value) return false;
+
+    return ['market', 'order-create', 'chat', 'community', 'profile'].includes(route.name);
+});
 
 const profileDotMenu = computed(() => {
     const menus = [
@@ -85,9 +99,6 @@ const profileDotMenu = computed(() => {
 
 function doMenu(key) {
     switch (key) {
-        case 'profile': router.push({ name: 'profile' }); break;
-        case 'notifications': router.push({ name: 'notifications' }); break;
-        case 'order-create': router.push({ name: 'order-create' }); break;
         case 'admin': router.push({ name: 'admin' }); break;
         case 'theme': theme.toggle(); break;
         default: emit('action', key); break;
@@ -130,29 +141,24 @@ function doMenu(key) {
             </div>
 
             <div class="hb__right">
-                <template v-if="['market', 'order-create'].includes(route.name)">
+                <template v-if="route.name === 'market' || (route.name === 'order-create' && !isOrderForm.value)">
                     <button type="button" class="hb-btn" aria-label="필터" @click="$emit('action', 'filter')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4" /></svg>
+                        <span v-if="ui.filterActive" class="hb-filter-dot" />
                     </button>
-                    <router-link to="/notifications" class="hb-btn" aria-label="알림">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
-                        <span v-if="notifications.unreadCount > 0" class="hb-badge">{{ notifications.unreadCount > 99 ? '99+' : notifications.unreadCount }}</span>
-                    </router-link>
-                    <n-dropdown trigger="click" :options="marketMenu" @select="doMenu">
-                        <button type="button" class="hb-btn hb-btn--dots" aria-label="더보기">
-                            <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="12" cy="19" r="1.6" /></svg>
-                        </button>
-                    </n-dropdown>
                 </template>
 
-                <template v-else-if="route.name === 'community'">
+                <template v-if="route.name === 'community'">
                     <button type="button" class="hb-btn" aria-label="글쓰기" @click="$emit('action', 'community:write')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" /></svg>
                     </button>
                 </template>
 
-                <template v-if="route.name === 'chat'">
-                </template>
+                <!-- 알림 벨 — 모든 상위 탭 공통 -->
+                <router-link v-if="showBell" to="/notifications" class="hb-btn" aria-label="알림">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
+                    <span v-if="notifications.unreadCount > 0" class="hb-badge">{{ notifications.unreadCount > 99 ? '99+' : notifications.unreadCount }}</span>
+                </router-link>
 
                 <template v-if="route.name === 'profile'">
                     <n-dropdown trigger="click" :options="profileDotMenu" @select="doMenu">
@@ -190,6 +196,9 @@ html.dark .hb__center{color:#e2e2e2}
 .hb-badge{position:absolute;top:0;right:0;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:#e24c4c;color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center;box-shadow:0 0 0 2px var(--surface)}
 .hb-btn--dots{width:32px;height:32px}
 .hb-btn--dots svg{width:16px;height:16px}
+
+/* 필터 활성 점 */
+.hb-filter-dot{position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:50%;background:#36adff;box-shadow:0 0 0 2px var(--surface)}
 .hb-avatar{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border:0;border-radius:50%;background:var(--accent);color:#fff;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0}
 
 /* 대화방 헤더 — 메시지가 뒤로 비치지 않도록 불투명 (마지막에 정의해 glass 규칙을 덮음) */

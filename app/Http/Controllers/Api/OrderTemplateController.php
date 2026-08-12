@@ -10,7 +10,7 @@ use Illuminate\Http\Request;
 class OrderTemplateController extends Controller
 {
     /**
-     * 내 오더 등록 템플릿 목록 (최신순).
+     * 내 운행 등록 템플릿 목록 (최신순).
      *
      * @return JsonResponse{data: array<int, array<string, mixed>>}
      */

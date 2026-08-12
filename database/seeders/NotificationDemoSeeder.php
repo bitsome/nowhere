@@ -10,7 +10,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
- * 테스트 계정에 오더와 연계된 알림을 심는다 (픽업/샌딩/랜딩 오더 기반).
+ * 테스트 계정에 운행과 연계된 알림을 심는다 (픽업/샌딩/랜딩 운행 기반).
  */
 class NotificationDemoSeeder extends Seeder
 {
@@ -26,7 +26,7 @@ class NotificationDemoSeeder extends Seeder
 
         $items = [];
 
-        // 새 오더 도착 — 가장 최근 1건은 안 읽음, 나머지는 읽음
+        // 새 운행 도착 — 가장 최근 1건은 안 읽음, 나머지는 읽음
         $marketOrders = Order::query()
             ->whereIn('status', [Order::STATUS_PUBLISHED, Order::STATUS_TRADING])
             ->orderByDesc('service_date')
@@ -36,15 +36,15 @@ class NotificationDemoSeeder extends Seeder
         foreach ($marketOrders as $index => $order) {
             $items[] = $this->item(
                 user: $user,
-                title: '새 오더 도착',
-                message: "{$order->pickup_location} → {$order->dropoff_location} 오더가 등록되었습니다.",
+                title: '새 운행 도착',
+                message: "{$order->pickup_location} → {$order->dropoff_location} 운행이 등록되었습니다.",
                 orderId: $order->id,
                 createdAt: now()->subHours($index),
                 readAt: $index === 0 ? null : now()->subMinutes(30),
             );
         }
 
-        // 오더 가져오기 완료 — 최근 1건은 안 읽음
+        // 운행 가져오기 완료 — 최근 1건은 안 읽음
         $claimedOrders = Order::query()
             ->whereNotNull('claimed_at')
             ->orderByDesc('claimed_at')
@@ -54,8 +54,8 @@ class NotificationDemoSeeder extends Seeder
         foreach ($claimedOrders as $index => $order) {
             $items[] = $this->item(
                 user: $user,
-                title: '오더 가져오기 완료',
-                message: "{$order->customer_name}님의 오더({$order->order_number})를 내 오더로 가져왔습니다.",
+                title: '운행 가져오기 완료',
+                message: "{$order->customer_name}님의 운행({$order->order_number})를 내 운행으로 가져왔습니다.",
                 orderId: $order->id,
                 createdAt: now()->subHours(6 + $index * 2),
                 readAt: $index === 0 ? null : now()->subDays(1),
@@ -65,7 +65,7 @@ class NotificationDemoSeeder extends Seeder
         $items[] = $this->item(
             user: $user,
             title: '환영합니다',
-            message: 'NoWhere 오더 마켓에 오신 것을 환영합니다.',
+            message: 'NoWhere 운행 마켓에 오신 것을 환영합니다.',
             orderId: null,
             createdAt: now()->subDays(3),
             readAt: now()->subDays(2),

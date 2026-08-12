@@ -4,10 +4,11 @@ namespace App\Support\Orders;
 
 use App\Models\Order;
 use App\Models\OrderGroup;
+use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
 /**
- * 오더 워크스페이스 목록의 공용 데이터 계약을 만든다.
+ * 운행 워크스페이스 목록의 공용 데이터 계약을 만든다.
  *
  * Single/Set을 묶고, 시간순으로 통합 정렬한 뒤,
  * Blade와 Vue, API 응답이 그대로 사용하는 행 목록을 반환한다.
@@ -97,7 +98,7 @@ class OrderWorkspaceListBuilder
 
         $statusLabels = collect($memberRows)->pluck('statusLabel')->filter()->unique()->values();
 
-        // 셋트 내 오더들의 상태 목록 (중복 제거, 색상은 프론트에서 매핑)
+        // 셋트 내 운행들의 상태 목록 (중복 제거, 색상은 프론트에서 매핑)
         $statuses = $sortedOrders->pluck('status')->filter()->unique()->values()->all();
         $singleStatus = count($statuses) === 1 ? $statuses[0] : 'mixed';
 
@@ -156,9 +157,8 @@ class OrderWorkspaceListBuilder
     }
 
     /**
-     * 셋트 첫 오더의 운행일이 오늘/내일인지 판단.
+     * 셋트 첫 운행의 운행일이 오늘/내일인지 판단.
      *
-     * @param  Order|null  $order
      * @param  'today'|'tomorrow'  $which
      */
     private function isOnDate(?Order $order, string $which): bool
@@ -169,7 +169,7 @@ class OrderWorkspaceListBuilder
 
         $method = 'is'.ucfirst($which);
 
-        return \Carbon\Carbon::parse($order->service_date)->{$method}();
+        return Carbon::parse($order->service_date)->{$method}();
     }
 
     /**

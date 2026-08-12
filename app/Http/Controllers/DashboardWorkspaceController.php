@@ -19,7 +19,7 @@ class DashboardWorkspaceController extends Controller
     }
 
     /**
-     * 공개된 오더를 카드/테이블로 보여주는 마켓 화면.
+     * 공개된 운행을 카드/테이블로 보여주는 마켓 화면.
      * 검색 · 상태/차량/금액/시간/구분 필터를 GET 파라미터로 지원한다.
      */
     public function market(Request $request): View
@@ -28,8 +28,8 @@ class DashboardWorkspaceController extends Controller
     }
 
     /**
-     * 내 오더를 탭(진행중/완료/취소)으로 보여주는 화면.
-     * 내가 등록/가져온 오더만 탭 상태별로 필터링한다.
+     * 내 운행을 탭(진행중/완료/취소)으로 보여주는 화면.
+     * 내가 등록/가져온 운행만 탭 상태별로 필터링한다.
      */
     public function myOrders(Request $request): View
     {
@@ -99,10 +99,10 @@ class DashboardWorkspaceController extends Controller
     }
 
     /**
-     * 로그인 사용자의 오더 마켓 화면을 렌더링한다.
+     * 로그인 사용자의 운행 마켓 화면을 렌더링한다.
      *
-     * 마켓은 가져올 수 있는(공개/거래중/수락 대기) 남의 오더만 보여준다.
-     * 가져오기(claim) 후 오더는 수락 상태가 되어 마켓에서 자동으로 빠진다.
+     * 마켓은 가져올 수 있는(공개/거래중/수락 대기) 남의 운행만 보여준다.
+     * 가져오기(claim) 후 운행은 수락 상태가 되어 마켓에서 자동으로 빠진다.
      */
     private function marketScreenView(Request $request): View
     {
@@ -176,7 +176,7 @@ class DashboardWorkspaceController extends Controller
             'module' => self::findWorkspaceModule('tabs'),
             'demoTabs' => [
                 ['label' => '마켓', 'active' => true, 'url' => route('market')],
-                ['label' => '내가 받은 오더', 'active' => false, 'url' => route('my-orders')],
+                ['label' => '내가 받은 운행', 'active' => false, 'url' => route('my-orders')],
                 ['label' => '워크스페이스', 'active' => false, 'url' => route('dashboard.business.order')],
                 ['label' => '알림', 'count' => 3, 'active' => false, 'url' => '#'],
             ],
@@ -462,8 +462,8 @@ class DashboardWorkspaceController extends Controller
             ],
             [
                 'key' => 'order',
-                'title' => '오더 관리',
-                'description' => '예약(오더) 목록, 등록, 상세, 수정, 취소와 AI 구조화 흐름을 처리합니다.',
+                'title' => '운행 관리',
+                'description' => '예약(운행) 목록, 등록, 상세, 수정, 취소와 AI 구조화 흐름을 처리합니다.',
                 'status' => 'Active',
                 'href' => route('dashboard.business.order'),
                 'order' => '01',
@@ -503,7 +503,7 @@ class DashboardWorkspaceController extends Controller
         return [
             [
                 'key' => 'order',
-                'title' => '오더 관리',
+                'title' => '운행 관리',
                 'description' => '예약과 주문 등록 화면은 선행 참조 데이터가 준비된 뒤 선택 중심 구조로 시작합니다.',
                 'status' => '준비중',
                 'href' => route('dashboard.business.order'),
@@ -511,13 +511,13 @@ class DashboardWorkspaceController extends Controller
             [
                 'key' => 'dispatch',
                 'title' => '배차 관리',
-                'description' => '오더, 기사, 차량, 공통코드가 정리된 뒤 배차 보드와 상태 흐름을 설계합니다.',
+                'description' => '운행, 기사, 차량, 공통코드가 정리된 뒤 배차 보드와 상태 흐름을 설계합니다.',
                 'status' => '준비중',
             ],
             [
                 'key' => 'settlement',
                 'title' => '정산 관리',
-                'description' => '오더와 배차의 확정 데이터가 쌓인 뒤 정산 집계와 상태 흐름을 붙입니다.',
+                'description' => '운행과 배차의 확정 데이터가 쌓인 뒤 정산 집계와 상태 흐름을 붙입니다.',
                 'status' => '준비중',
             ],
         ];

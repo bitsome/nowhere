@@ -38,7 +38,7 @@ const checkNew = async () => {
                 content: item.message,
                 duration: 5000,
                 onClick: () => {
-                    // 오더 관련 알림은 해당 오더 상세로, 아니면 알림 목록으로 이동
+                    // 운행 관련 알림은 해당 운행 상세로, 아니면 알림 목록으로 이동
                     if (item.order_id) {
                         router.push({ name: 'order-detail', params: { id: item.order_id } });
                     } else {

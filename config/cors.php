@@ -21,7 +21,8 @@ return [
 
     'allowed_origins' => explode(',', (string) env('FRONTEND_URL', 'http://localhost:5173')),
 
-    'allowed_origins_patterns' => [],
+    // cloudflared 임시 터널(*.trycloudflare.com)에서도 API 호출 허용
+    'allowed_origins_patterns' => ['~^https://[\w-]+\.trycloudflare\.com$~'],
 
     'allowed_headers' => ['*'],
 

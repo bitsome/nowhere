@@ -66,7 +66,7 @@ class ReviewController extends Controller
     }
 
     /**
-     * 완료/정산된 오더에서 상대방(등록자↔수행자)에게 리뷰를 남긴다.
+     * 완료/정산된 운행에서 상대방(등록자↔수행자)에게 리뷰를 남긴다.
      */
     public function store(Request $request, Order $order): JsonResponse
     {
@@ -80,11 +80,11 @@ class ReviewController extends Controller
         // 운행 완료 후에만 리뷰 가능
         if (! in_array($order->status, [Order::STATUS_COMPLETED, Order::STATUS_SETTLED], true)) {
             throw ValidationException::withMessages([
-                'content' => ['운행이 완료된 오더에서만 리뷰할 수 있습니다.'],
+                'content' => ['운행이 완료된 운행에서만 리뷰할 수 있습니다.'],
             ]);
         }
 
-        // 오더 당사자(등록자 또는 수행자)가 상대방에게만 리뷰 가능
+        // 운행 당사자(등록자 또는 수행자)가 상대방에게만 리뷰 가능
         $driverId = $order->user_id;
         $registrarId = $order->original_owner_id;
 
@@ -97,11 +97,11 @@ class ReviewController extends Controller
 
         if ($revieweeId === null) {
             throw ValidationException::withMessages([
-                'content' => ['리뷰할 수 없는 오더입니다.'],
+                'content' => ['리뷰할 수 없는 운행입니다.'],
             ]);
         }
 
-        // 오더당 1회만 리뷰 가능
+        // 운행당 1회만 리뷰 가능
         if (Review::query()->where('order_id', $order->id)->where('reviewer_id', $actor->id)->exists()) {
             throw ValidationException::withMessages([
                 'content' => ['이미 리뷰를 작성했습니다.'],
@@ -122,7 +122,7 @@ class ReviewController extends Controller
         if ($reviewee !== null && $reviewee->id !== $actor->id) {
             $reviewee->notify(new OrderNotification(
                 '새 리뷰 도착',
-                "{$actor->name}님이 오더({$order->order_number})에 리뷰(★{$data['rating']})를 남겼습니다.",
+                "{$actor->name}님이 운행({$order->order_number})에 리뷰(★{$data['rating']})를 남겼습니다.",
                 $order->id,
             ));
         }

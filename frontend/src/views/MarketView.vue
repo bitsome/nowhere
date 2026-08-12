@@ -33,6 +33,7 @@ const minAmount = ref(null);
 const maxAmount = ref(null);
 const minPassengers = ref(null);
 const sort = ref('latest');
+const quick = ref('');
 const page = ref(1);
 
 // 필터·검색 상태 기억 (재방문 시 유지)
@@ -54,6 +55,7 @@ minAmount.value = savedState.minAmount ?? null;
 maxAmount.value = savedState.maxAmount ?? null;
 minPassengers.value = savedState.minPassengers ?? null;
 sort.value = savedState.sort ?? 'latest';
+quick.value = savedState.quick ?? '';
 
 const persistState = () => {
     try {
@@ -67,6 +69,7 @@ const persistState = () => {
             maxAmount: maxAmount.value,
             minPassengers: minPassengers.value,
             sort: sort.value,
+            quick: quick.value,
         }));
     } catch {
         /* 저장 실패 무시 */
@@ -83,12 +86,36 @@ const resetFilters = () => {
     maxAmount.value = null;
     minPassengers.value = null;
     sort.value = 'latest';
+    quick.value = '';
+};
+
+// 빠른 뷰 칩 — 최신/임박/오늘/금액/긴급 (서버 quick 파라미터와 1:1)
+const QUICK_OPTIONS = [
+    { label: '최신', value: 'new' },
+    { label: '임박', value: 'urgent' },
+    { label: '오늘', value: 'today' },
+    { label: '금액', value: 'amount' },
+    { label: '긴급', value: 'priority' },
+];
+
+const toggleQuick = (value) => {
+    quick.value = quick.value === value ? '' : value;
+    load();
 };
 
 // 활성 필터 개수 (초기화 버튼 표시용)
 const activeFilterCount = computed(() =>
-    [serviceType.value, date.value, region.value, vehicleType.value, minAmount.value, maxAmount.value, minPassengers.value, sort.value !== 'latest' ? sort.value : '']
+    [serviceType.value, date.value, region.value, vehicleType.value, minAmount.value, maxAmount.value, minPassengers.value, sort.value !== 'latest' ? sort.value : '', quick.value !== '' ? quick.value : '']
         .filter(Boolean).length,
+);
+
+// 필터 활성 여부를 헤더 필터 버튼 점에 반영
+watch(
+    activeFilterCount,
+    (count) => {
+        ui.filterActive = count > 0;
+    },
+    { immediate: true },
 );
 
 const SERVICE_FILTER_OPTIONS = [
@@ -160,19 +187,22 @@ const load = async (silent = false) => {
         if (sort.value !== 'latest') {
             params.sort = sort.value;
         }
+        if (quick.value) {
+            params.quick = quick.value;
+        }
 
         const { data } = await apiOrders(params);
         notifyNewOrders(data.data);
         orders.value = data.data;
         pagination.value = data.meta.pagination;
     } catch (e) {
-        error.value = getApiErrorMessage(e, '오더 목록을 불러오지 못했습니다.');
+        error.value = getApiErrorMessage(e, '운행 목록을 불러오지 못했습니다.');
     } finally {
         loading.value = false;
     }
 };
 
-// 새 오더 감지 — 첫 페이지, 필터 없이 보는 상태에서만 토스트로 알린다.
+// 새 운행 감지 — 첫 페이지, 필터 없이 보는 상태에서만 토스트로 알린다.
 let knownTopKey = null;
 let baselineDone = false;
 let prevKeys = new Set();
@@ -201,14 +231,14 @@ const notifyNewOrders = (rows) => {
     const topKey = rows[0]?.key ?? null;
     if (topKey && topKey !== knownTopKey) {
         notification.info({
-            title: '새 오더가 도착했어요',
-            content: '마켓에 새로운 오더가 등록되었습니다.',
+            title: '새 운행이 도착했어요',
+            content: '마켓에 새로운 운행이 등록되었습니다.',
             duration: 4000,
         });
     }
     knownTopKey = topKey;
 
-    // 신규 오더 카드 하이라이트 (이전 목록에 없던 key)
+    // 신규 운행 카드 하이라이트 (이전 목록에 없던 key)
     const newKeys = rows.filter((r) => !prevKeys.has(r.key)).map((r) => r.key);
     if (newKeys.length) {
         const next = new Set(highlightKeys.value);
@@ -229,7 +259,7 @@ const handlePage = (nextPage) => {
     load();
 };
 
-// 실시간 반영 — 새 오더가 등록되면 화면을 조용히 갱신한다 (30초 폴링, 백그라운드 시 중지)
+// 실시간 반영 — 새 운행이 등록되면 화면을 조용히 갱신한다 (30초 폴링, 백그라운드 시 중지)
 let pollTimer = null;
 
 const silentRefresh = () => {
@@ -299,7 +329,7 @@ watch(
                 closable
                 @close="date = ''; load()"
             >
-                📅 {{ date }}
+                날짜 {{ date }}
             </n-tag>
             <n-tag
                 v-if="region"
@@ -308,7 +338,7 @@ watch(
                 closable
                 @close="region = ''; load()"
             >
-                📍 {{ region }}
+                지역 {{ region }}
             </n-tag>
             <n-tag
                 v-if="vehicleType"
@@ -317,7 +347,7 @@ watch(
                 closable
                 @close="vehicleType = ''; load()"
             >
-                🚐 {{ vehicleType }}
+                차량 {{ vehicleType }}
             </n-tag>
             <n-tag
                 v-if="minAmount || maxAmount"
@@ -326,7 +356,7 @@ watch(
                 closable
                 @close="minAmount = null; maxAmount = null; load()"
             >
-                💰 {{ minAmount ? minAmount.toLocaleString() : 0 }}~{{ maxAmount ? maxAmount.toLocaleString() : '∞' }}원
+                금액 {{ minAmount ? minAmount.toLocaleString() : 0 }}~{{ maxAmount ? maxAmount.toLocaleString() : '∞' }}원
             </n-tag>
             <n-tag
                 v-if="minPassengers"
@@ -335,16 +365,7 @@ watch(
                 closable
                 @close="minPassengers = null; load()"
             >
-                👥 {{ minPassengers }}명 이상
-            </n-tag>
-            <n-tag
-                v-if="sort !== 'latest'"
-                size="medium"
-                round
-                closable
-                @close="sort = 'latest'; load()"
-            >
-                {{ SORT_OPTIONS.find(o => o.value === sort)?.label }}
+                인원 {{ minPassengers }}명 이상
             </n-tag>
             <n-button
                 v-if="activeFilterCount > 0"
@@ -355,6 +376,20 @@ watch(
             >
                 전체 초기화
             </n-button>
+        </div>
+
+        <!-- 빠른 뷰 칩 — 최신/임박/오늘/금액/긴급 (서버 quick 파라미터) -->
+        <div class="market-sort">
+            <button
+                v-for="opt in QUICK_OPTIONS"
+                :key="opt.value"
+                type="button"
+                class="market-sort__btn"
+                :class="{ 'market-sort__btn--active': quick === opt.value }"
+                @click="toggleQuick(opt.value)"
+            >
+                {{ opt.label }}
+            </button>
         </div>
 
         <!-- 필터 모달 -->
@@ -451,7 +486,7 @@ watch(
 
             <n-empty
                 v-else-if="orders.length === 0"
-                description="가져올 수 있는 오더가 없습니다."
+                description="가져올 수 있는 운행이 없습니다."
             />
             <div v-else class="order-grid">
                 <SetGroupCard
@@ -493,6 +528,42 @@ watch(
     margin: 0;
     color: var(--text-muted);
     font-size: 13px;
+}
+
+/* 빠른 정렬 칩 — 가로 스크롤 허용 */
+.market-sort {
+    display: flex;
+    gap: 6px;
+    margin: -4px 0 12px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.market-sort::-webkit-scrollbar {
+    display: none;
+}
+
+.market-sort__btn {
+    flex-shrink: 0;
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.market-sort__btn:hover {
+    border-color: #36adff;
+}
+
+.market-sort__btn--active {
+    border-color: #36adff;
+    background: rgba(54, 173, 255, 0.08);
+    color: #36adff;
 }
 
 .filter-body {

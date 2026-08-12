@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from '../../stores/auth';
 import { useChatsStore } from '../../stores/chats';
 import MessageBubble from './MessageBubble.vue';
+import { getChatTimestamp, isSameDay, formatDayLabel } from '../../utils/chatTime';
 
 const auth = useAuthStore();
 const store = useChatsStore();
@@ -26,6 +27,53 @@ const pickImage = (event) => {
 };
 
 const activeConversation = computed(() => store.activeConversation);
+
+// 메시지 목록 + 날짜 구분선/그룹 메타
+// 그룹 = 같은 상대 + 같은 분(HH:MM) 연속 메시지.
+// - 그룹 시작: 아바타·이름 노출
+// - 그룹 마지막: 그 아래에 시간만 표시 (중간 말풍선엔 시간 생략)
+// - 날짜: 오늘은 시간만, 이전 날짜는 구분선
+const minuteKeyOf = (msg) => {
+    const ts = getChatTimestamp(msg.created_at_iso ?? msg.created_at);
+
+    return ts ? `${ts.getFullYear()}-${ts.getMonth()}-${ts.getDate()}-${ts.getHours()}-${ts.getMinutes()}` : null;
+};
+
+const messageRows = computed(() => {
+    const rows = [];
+    let prevDayKey = null;
+    let prevUserId = null;
+    let prevMinuteKey = null;
+    const now = new Date();
+
+    for (let i = 0; i < store.messages.length; i++) {
+        const msg = store.messages[i];
+        const next = store.messages[i + 1];
+        const ts = getChatTimestamp(msg.created_at_iso ?? msg.created_at);
+        const dayKey = ts ? `${ts.getFullYear()}-${ts.getMonth()}-${ts.getDate()}` : null;
+        const minuteKey = minuteKeyOf(msg);
+        const showSep = Boolean(ts && dayKey && dayKey !== prevDayKey && !isSameDay(ts, now));
+
+        const isGroupStart = !(msg.user_id === prevUserId && minuteKey && minuteKey === prevMinuteKey);
+        const isGroupEnd = !(next && next.user_id === msg.user_id && minuteKey && minuteKeyOf(next) === minuteKey);
+
+        rows.push({
+            msg,
+            showSep,
+            dayLabel: showSep ? formatDayLabel(ts) : '',
+            isFirst: isGroupStart,
+            isLast: isGroupEnd,
+        });
+
+        if (dayKey) {
+            prevDayKey = dayKey;
+        }
+        prevUserId = msg.user_id;
+        prevMinuteKey = minuteKey;
+    }
+
+    return rows;
+});
 
 const scrollToBottom = async () => {
     await nextTick();
@@ -122,14 +170,14 @@ onMounted(() => {
 <template>
     <div class="chat-thread">
         <div ref="threadEl" class="chat-thread__messages" @scroll="onThreadScroll">
-            <!-- 연결된 오더 정보 카드 -->
+            <!-- 연결된 운행 정보 카드 -->
             <button
                 v-if="activeConversation?.order"
                 type="button"
                 class="chat-order-card"
                 @click="router.push({ name: 'order-detail', params: { id: activeConversation.order.id } })"
             >
-                <span class="chat-order-card__tag">오더</span>
+                <span class="chat-order-card__tag">운행</span>
                 <span class="chat-order-card__route">{{ activeConversation.order.route }}</span>
                 <span class="chat-order-card__meta">
                     {{ activeConversation.order.service_date }} {{ activeConversation.order.service_time }} · {{ activeConversation.order.statusLabel }}
@@ -137,13 +185,16 @@ onMounted(() => {
                 <span class="chat-order-card__amount">{{ Number(activeConversation.order.amount).toLocaleString() }}원</span>
             </button>
 
-            <MessageBubble
-                v-for="msg in store.messages"
-                :key="msg.id"
-                :msg="msg"
-                :is-mine="msg.user_id === auth.user?.id"
-                :counterpart-name="activeConversation?.counterpart?.name"
-            />
+            <template v-for="row in messageRows" :key="row.msg.id">
+                <div v-if="row.showSep" class="chat-day-sep">{{ row.dayLabel }}</div>
+                <MessageBubble
+                    :msg="row.msg"
+                    :is-mine="row.msg.user_id === auth.user?.id"
+                    :is-first="row.isFirst"
+                    :is-last="row.isLast"
+                    :counterpart-name="activeConversation?.counterpart?.name"
+                />
+            </template>
         </div>
 
         <!-- 새 메시지 도착 배지 — 과거 메시지를 보고 있으면 안내 -->
@@ -191,7 +242,11 @@ onMounted(() => {
 .chat-thread{position:fixed;inset:0;z-index:9;display:flex;flex-direction:column;padding-top:54px;background:var(--bg)}
 .chat-thread__messages{flex:1;overflow-y:auto;padding:12px 14px 16px;display:flex;flex-direction:column;gap:6px;-webkit-overflow-scrolling:touch}
 
-/* 연결된 오더 카드 — 대화방 상단 */
+/* 날짜 구분선 — 양쪽 라인 + 가운데 날짜 */
+.chat-day-sep{display:flex;align-items:center;gap:10px;margin:14px 0 8px;color:var(--text-muted);font-size:12px;font-weight:600;flex-shrink:0}
+.chat-day-sep::before,.chat-day-sep::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* 연결된 운행 카드 — 대화방 상단 */
 .chat-order-card{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;width:100%;text-align:left;margin-bottom:8px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface);cursor:pointer;box-shadow:0 1px 6px rgba(0,0,0,.05)}
 .chat-order-card:hover{border-color:#36adff}
 .chat-order-card__tag{flex-shrink:0;padding:2px 8px;border-radius:999px;background:rgba(54,173,255,.14);color:#36adff;font-size:11px;font-weight:700}

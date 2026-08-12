@@ -44,7 +44,7 @@ const submit = async () => {
             <div class="login-head">
                 <span class="login-mark">N</span>
                 <h1 class="login-title">NoWhere</h1>
-                <p class="login-desc">오더 마켓에 로그인하세요</p>
+                <p class="login-desc">운행 마켓에 로그인하세요</p>
             </div>
 
             <n-alert v-if="error" type="error" :show-icon="true" class="login-alert">

@@ -29,7 +29,8 @@ const routes = [
 ];
 
 const router = createRouter({
-    history: createWebHistory(),
+    // 서버 배포 시 VITE_BASE(/spa/)에 맞춰 모든 라우트가 /spa 하위에서 동작한다
+    history: createWebHistory(import.meta.env.VITE_BASE || '/'),
     routes,
 });
 

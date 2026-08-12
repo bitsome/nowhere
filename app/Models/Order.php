@@ -42,6 +42,7 @@ use InvalidArgumentException;
     'expected_revenue',
     'status',
     'cancel_reason',
+    'is_priority',
     'claimed_at',
     'user_id',
     'original_owner_id',
@@ -67,7 +68,7 @@ class Order extends Model
     public const STATUS_ACCEPTANCE_PENDING = 'acceptance_pending';
 
     /**
-     * 오더 라이프사이클 전이 규칙.
+     * 운행 라이프사이클 전이 규칙.
      *
      * Create → Edit → Single/Set → Publish → Trade → Accepted → Driving → Completed → Settlement
      * Trade는 Order의 상태 변화 중 하나이며, Set은 그룹 기능만 담당한다.
@@ -136,7 +137,7 @@ class Order extends Model
     public function transitionTo(string $status): void
     {
         if (! $this->canTransitionTo($status)) {
-            throw new InvalidArgumentException('오더 상태를 전환할 수 없는 단계입니다.');
+            throw new InvalidArgumentException('운행 상태를 전환할 수 없는 단계입니다.');
         }
 
         $this->update(['status' => $status]);
@@ -174,9 +175,9 @@ class Order extends Model
     public static function orderTypeOptions(): array
     {
         return [
-            self::TYPE_GENERAL => '일반 오더',
-            self::TYPE_AIRPORT => '공항 오더',
-            self::TYPE_BUSINESS => '비즈니스 오더',
+            self::TYPE_GENERAL => '일반 운행',
+            self::TYPE_AIRPORT => '공항 운행',
+            self::TYPE_BUSINESS => '비즈니스 운행',
         ];
     }
 
@@ -241,6 +242,7 @@ class Order extends Model
             'scheduled_at' => 'datetime',
             'claimed_at' => 'datetime',
             'estimated_duration_minutes' => 'integer',
+            'is_priority' => 'boolean',
         ];
     }
 }

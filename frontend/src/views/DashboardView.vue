@@ -76,7 +76,7 @@ const settleAll = async () => {
         const ids = rows.filter((row) => row.status === 'completed').map((row) => row.id);
 
         if (!ids.length) {
-            settleMessage.value = '정산 대기 오더가 없습니다.';
+            settleMessage.value = '정산 대기 운행이 없습니다.';
             return;
         }
 
@@ -186,7 +186,7 @@ onBeforeUnmount(() => clearInterval(timer));
                 <!-- 요약 카드 -->
                 <div class="dash-grid">
                     <div class="dash-card">
-                        <span class="dash-card__label">총 오더</span>
+                        <span class="dash-card__label">총 운행</span>
                         <strong class="dash-card__value">{{ summary.total }}</strong>
                         <span class="dash-card__hint">기간 내 등록 건수</span>
                     </div>
@@ -240,7 +240,7 @@ onBeforeUnmount(() => clearInterval(timer));
                     <p v-if="settleMessage" class="settle-message">{{ settleMessage }}</p>
                 </div>
 
-                <!-- 7일 매출 + 오더 건수 차트 -->
+                <!-- 7일 매출 + 운행 건수 차트 -->
                 <div class="dash-card dash-block">
                     <div class="dash-card__head">
                         <strong>일별 현황</strong>
@@ -319,7 +319,7 @@ onBeforeUnmount(() => clearInterval(timer));
                             </div>
                             <n-empty
                                 v-if="stats.statusDistribution.length === 0"
-                                description="기간 내 오더가 없습니다."
+                                description="기간 내 운행이 없습니다."
                                 :image-size="60"
                             />
                         </div>
@@ -347,7 +347,7 @@ onBeforeUnmount(() => clearInterval(timer));
                                     }"
                                 />
                             </div>
-                            <p class="settle-hint">완료된 오더는 상세에서 "정산" 상태로 전환하면 정산 완료에 반영됩니다.</p>
+                            <p class="settle-hint">완료된 운행은 상세에서 "정산" 상태로 전환하면 정산 완료에 반영됩니다.</p>
                         </div>
                     </div>
                 </div>

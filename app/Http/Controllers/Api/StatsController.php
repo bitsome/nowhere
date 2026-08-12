@@ -13,7 +13,7 @@ use Illuminate\Support\Collection;
 class StatsController extends Controller
 {
     /**
-     * 오더 운영 통계 — 기간별 건수·매출·상태 분포·정산 현황.
+     * 운행 운영 통계 — 기간별 건수·매출·상태 분포·정산 현황.
      *
      * @return JsonResponse{data: array<string, mixed>}
      */
@@ -24,7 +24,7 @@ class StatsController extends Controller
         $from = Carbon::today()->subDays($days - 1);
         $to = Carbon::today()->endOfDay();
 
-        // mine=true → 로그인 사용자 본인의 오더만 집계 (드라이버 대시보드)
+        // mine=true → 로그인 사용자 본인의 운행만 집계 (드라이버 대시보드)
         $mine = $request->boolean('mine');
         $userId = $mine ? $request->user()->id : null;
 
@@ -168,7 +168,7 @@ class StatsController extends Controller
     }
 
     /**
-     * 오늘/내일 운행 오더 미니리스트 — 시간순 정렬, 최대 8건.
+     * 오늘/내일 운행 운행 미니리스트 — 시간순 정렬, 최대 8건.
      *
      * @param  Collection<int, Order>  $orders
      * @return array<int, array<string, mixed>>

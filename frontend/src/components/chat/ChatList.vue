@@ -41,7 +41,7 @@ const auth = useAuthStore();
                         </template>
                         <template v-else>대화를 시작해보세요</template>
                     </span>
-                    <span v-if="conv.order" class="chat-list__order-chip">오더</span>
+                    <span v-if="conv.order" class="chat-list__order-chip">운행</span>
                     <n-badge v-if="conv.unread_count > 0" :value="conv.unread_count" :max="99" />
                 </div>
             </div>

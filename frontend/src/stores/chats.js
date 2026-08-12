@@ -55,7 +55,7 @@ export const useChatsStore = defineStore('chats', {
             await this.loadConversations();
         },
 
-        // 상대(userId)와 (오더 연동) 대화를 시작/열고, 대화방까지 로드한다
+        // 상대(userId)와 (운행 연동) 대화를 시작/열고, 대화방까지 로드한다
         async openWith(userId, orderId) {
             const { data } = await apiCreateChat({ user_id: userId, order_id: orderId ?? null });
             await this.open(data.data.id);
