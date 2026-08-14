@@ -36,13 +36,14 @@
 5. `DATABASE.md`
 6. `API.md`
 7. `UI.md`
-8. `DASHBOARD.md`
-9. `DISPATCH.md`
-10. `SECURITY.md`
-11. `TEST.md`
-12. `GIT.md`
-13. `DEPLOY.md`
-14. `CHANGELOG.md`
+8. `COLORS.md`
+9. `DASHBOARD.md`
+10. `DISPATCH.md`
+11. `SECURITY.md`
+12. `TEST.md`
+13. `GIT.md`
+14. `DEPLOY.md`
+15. `CHANGELOG.md`
 
 ## 문서 설명
 - `PROJECT.md`: 프로젝트 소개와 현재 상태
@@ -52,6 +53,7 @@
 - `DATABASE.md`: DB 구조와 설계 메모
 - `API.md`: API 정책과 명세 초안
 - `UI.md`: 화면 구조와 UI/UX 규칙
+- `COLORS.md`: 색상 토큰 체계와 팔레트
 - `DASHBOARD.md`: 대시보드 허브와 기능 테스트 모듈 분리 규칙
 - `DISPATCH.md`: 배차 알고리즘 설계 문서
 - `GIT.md`: 브랜치, 커밋, PR 규칙

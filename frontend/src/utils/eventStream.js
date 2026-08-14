@@ -24,6 +24,11 @@ export function connectEventStream(onRefresh) {
     source.addEventListener('message', () => onRefresh());
     source.addEventListener('open', () => onRefresh());
 
+    // 기사 상태 변경 이벤트 — 운영자/관리자 화면 갱신용
+    source.addEventListener('driver', () => {
+        window.dispatchEvent(new CustomEvent('app:drivers-refresh'));
+    });
+
     source.onerror = () => {
         source.close();
         setTimeout(() => {

@@ -6,6 +6,7 @@ import { getApiErrorMessage } from '../api/client';
 import { useAuthStore } from '../stores/auth';
 import { useChatsStore } from '../stores/chats';
 import { useMessage as useNaiveMessage } from 'naive-ui';
+import { statusColorVar } from '../utils/colors';
 
 const route = useRoute();
 const router = useRouter();
@@ -36,6 +37,84 @@ const currentStep = computed(() => {
 });
 
 const isCancelled = computed(() => order.value?.status === 'cancelled');
+
+const isPriority = computed(() => Boolean(order.value?.is_priority));
+
+// 서비스 시각 (KST) — 임박/오늘/내일/카운트다운 판정
+const serviceTime = computed(() => {
+    const date = order.value?.service_date;
+    const time = order.value?.service_time;
+
+    if (!date || !time) {
+        return null;
+    }
+
+    const [h, m] = time.split(':').map(Number);
+    const local = new Date(`${date}T00:00:00`);
+
+    if (isNaN(local.getTime())) {
+        return null;
+    }
+
+    local.setHours(h, m, 0, 0);
+
+    return local;
+});
+
+const minutesToService = computed(() => {
+    const st = serviceTime.value;
+
+    return st ? Math.round((st.getTime() - Date.now()) / 60000) : null;
+});
+
+const isUrgent = computed(() => {
+    const mins = minutesToService.value;
+
+    return mins !== null && mins > 0 && mins <= 120;
+});
+
+const isToday = computed(() => {
+    const st = serviceTime.value;
+
+    return st ? st.toDateString() === new Date().toDateString() : false;
+});
+
+const isTomorrow = computed(() => {
+    const st = serviceTime.value;
+
+    if (!st) {
+        return false;
+    }
+
+    const t = new Date();
+    t.setDate(t.getDate() + 1);
+
+    return st.toDateString() === t.toDateString();
+});
+
+const serviceCountdownLabel = computed(() => {
+    const mins = minutesToService.value;
+
+    if (mins === null) {
+        return '-';
+    }
+    if (mins < 0) {
+        return '서비스 종료';
+    }
+    if (mins <= 120) {
+        return `약 ${mins}분 후 시작`;
+    }
+
+    const st = serviceTime.value;
+
+    return `${st.getHours()}:${String(st.getMinutes()).padStart(2, '0')}`;
+});
+
+const amountLabel = computed(() => {
+    const v = order.value?.expected_revenue ?? order.value?.amount_value;
+
+    return v ? `${Number(v).toLocaleString()}원` : '-';
+});
 
 // 서비스 일시 표시: "YYYY-MM-DD (요일) HH:MM" 형태
 const serviceDatetimeLabel = computed(() => {
@@ -131,6 +210,44 @@ const openChat = async () => {
     }
 };
 
+// 등록자 공개 프로필로 이동
+const goUserPage = (id) => {
+    if (id) {
+        router.push({ name: 'user-page', params: { id } });
+    }
+};
+
+// 경로 지도 — 출발지/도착지 전환 + 외부 지도 링크 (키 불필요)
+const mapTarget = ref('pickup');
+const mapOpen = ref(false);
+const mapQueryLabel = computed(() => (mapTarget.value === 'pickup' ? '출발지' : '도착지'));
+const mapQuery = computed(() =>
+    (mapTarget.value === 'pickup' ? order.value?.pickup_location : order.value?.dropoff_location) || '',
+);
+const mapEmbedUrl = computed(() =>
+    mapQuery.value ? `https://maps.google.com/maps?q=${encodeURIComponent(mapQuery.value)}&z=15&output=embed&hl=ko` : '',
+);
+const mapGoogleUrl = computed(() => (mapQuery.value ? `https://maps.google.com/maps?q=${encodeURIComponent(mapQuery.value)}` : '#'));
+const mapNaverUrl = computed(() => (mapQuery.value ? `https://map.naver.com/v5/search/${encodeURIComponent(mapQuery.value)}` : '#'));
+const mapKakaoUrl = computed(() => (mapQuery.value ? `https://map.kakao.com/link/search/${encodeURIComponent(mapQuery.value)}` : '#'));
+
+// 하단 액션 바의 주 동작 — 가져오기 > 다음 상태 전이 > 리뷰
+const primaryAction = computed(() => {
+    if (isClaimable.value) {
+        return { label: '내 운행으로 가져오기', handler: claim };
+    }
+    if (nextTransitions.value.length) {
+        const next = nextTransitions.value[0];
+
+        return { label: `→ ${statusOptions.value[next] ?? next}`, handler: () => requestTransition(next) };
+    }
+    if (canReview.value) {
+        return { label: '리뷰 남기기', handler: openReview };
+    }
+
+    return null;
+});
+
 // 그룹 일정 행으로 변환 (셋트 운행일 때 그룹 내 모든 운행)
 const groupOrderRows = computed(() =>
     (group.value?.orders ?? [])
@@ -155,20 +272,10 @@ const groupTotalAmount = computed(() =>
     groupOrderRows.value.reduce((sum, row) => sum + (Number(row.displayAmount) || 0), 0),
 );
 
-// 상태별 색상 (운행 카드와 동일 팔레트)
-const STATUS_COLORS = {
-    draft: '#909399',
-    published: '#36adff',
-    trading: '#ffa940',
-    accepted: '#2f54eb',
-    driving: '#13c2c2',
-    completed: '#18a058',
-    settled: '#722ed1',
-};
-
+// 상태별 색상 — 중앙 팔레트에서 참조 (테마 자동 적용)
 // 진행 단계별 스타일: 지난 단계=해당 색, 현재=채움, 진행 전=회색
 const stepStyle = (status, index) => {
-    const color = STATUS_COLORS[status] ?? '#909399';
+    const color = statusColorVar[status] ?? 'var(--status-draft)';
 
     if (index === currentStep.value) {
         return { background: color, borderColor: color, color: '#ffffff' };
@@ -272,16 +379,32 @@ onMounted(refresh);
 </script>
 
 <template>
-    <div>
-        <div class="page-head">
-            <div>
-                <p class="page-head__eyebrow">{{ order?.order_number || 'Order Detail' }}</p>
-                <h1 class="page-head__title">{{ order?.pickup_location || '-' }} → {{ order?.dropoff_location || '-' }}</h1>
-                <p class="page-head__desc">{{ serviceDatetimeLabel }}</p>
+    <div
+        class="detail-page"
+        :class="{ 'detail-page--bar': order && (canChat || canEdit || primaryAction) }"
+    >
+        <div class="detail-hero">
+            <div class="detail-hero__body">
+                <p class="detail-hero__eyebrow">{{ order?.order_number || '운행 상세' }}</p>
+                <div class="detail-hero__route">
+                    <span class="detail-hero__loc">{{ order?.pickup_location || '-' }}</span>
+                    <span class="detail-hero__arrow">→</span>
+                    <span class="detail-hero__loc">{{ order?.dropoff_location || '-' }}</span>
+                </div>
+                <div class="detail-hero__badges">
+                    <span v-if="isPriority" class="hero-badge hero-badge--priority">긴급</span>
+                    <span v-if="isUrgent" class="hero-badge hero-badge--urgent">임박</span>
+                    <span v-else-if="isToday" class="hero-badge hero-badge--today">오늘</span>
+                    <span v-else-if="isTomorrow" class="hero-badge hero-badge--tomorrow">내일</span>
+                </div>
+                <p class="detail-hero__meta">{{ serviceDatetimeLabel }}</p>
             </div>
-            <n-tag size="large" round :type="statusTagType">
-                {{ statusOptions[order?.status] ?? order?.status ?? '-' }}
-            </n-tag>
+            <div class="detail-hero__side">
+                <div class="detail-hero__amount">{{ amountLabel }}</div>
+                <n-tag size="large" round :type="statusTagType">
+                    {{ statusOptions[order?.status] ?? order?.status ?? '-' }}
+                </n-tag>
+            </div>
         </div>
 
         <n-alert v-if="error" type="error" :show-icon="true" class="detail-block">
@@ -349,13 +472,65 @@ onMounted(refresh);
                             <strong>{{ (order.expected_revenue ?? order.amount_value)?.toLocaleString() ?? '-' }}원</strong>
                         </div>
                         <div class="detail-row">
+                            <span>고객명</span>
+                            <strong>{{ order.customer_name || '-' }}</strong>
+                        </div>
+                        <div class="detail-row">
                             <span>예약처</span>
                             <strong>{{ order.reservation_company || '-' }} · {{ order.reservation_channel || '-' }}</strong>
                         </div>
                         <div class="detail-row">
-                            <span>등록자</span>
-                            <strong>{{ order.user?.name || '-' }}</strong>
+                            <span>긴급</span>
+                            <strong>{{ isPriority ? '긴급 운행' : '일반' }}</strong>
                         </div>
+                        <div class="detail-row">
+                            <span>서비스까지</span>
+                            <strong :class="{ 'detail-text--urgent': isUrgent }">{{ serviceCountdownLabel }}</strong>
+                        </div>
+                        <div class="detail-row">
+                            <span>등록자</span>
+                            <strong
+                                v-if="order.user?.id"
+                                class="detail-link"
+                                @click="goUserPage(order.user.id)"
+                            >
+                                {{ order.user?.name || '-' }}
+                            </strong>
+                            <strong v-else>{{ order.user?.name || '-' }}</strong>
+                        </div>
+                    </div>
+                </n-card>
+
+                <n-card v-if="order.pickup_location || order.dropoff_location" :bordered="true" class="detail-block">
+                    <template #header>
+                        <n-space align="center" :size="10">
+                            <span>경로 지도</span>
+                            <n-radio-group v-model:value="mapTarget" size="small">
+                                <n-radio-button value="pickup">출발지</n-radio-button>
+                                <n-radio-button value="dropoff">도착지</n-radio-button>
+                            </n-radio-group>
+                        </n-space>
+                    </template>
+                    <div class="detail-map">
+                        <iframe
+                            v-if="mapOpen && mapEmbedUrl"
+                            :src="mapEmbedUrl"
+                            class="detail-map__frame"
+                            title="지도"
+                            loading="lazy"
+                        />
+                        <div v-else class="detail-map__placeholder">
+                            <span class="detail-map__label">{{ mapQueryLabel }} · {{ mapQuery || '-' }}</span>
+                            <n-button size="small" secondary @click="mapOpen = true">
+                                지도 보기
+                            </n-button>
+                        </div>
+                    </div>
+                    <div class="detail-map__links">
+                        <span class="detail-map__hint">앱으로 열기</span>
+                        <a :href="mapGoogleUrl" target="_blank" rel="noopener">Google</a>
+                        <a :href="mapNaverUrl" target="_blank" rel="noopener">네이버 지도</a>
+                        <a :href="mapKakaoUrl" target="_blank" rel="noopener">카카오 지도</a>
                     </div>
                 </n-card>
 
@@ -452,18 +627,6 @@ onMounted(refresh);
                 <n-card :bordered="true" class="detail-block">
                     <template #header>상태 관리</template>
 
-                    <n-space wrap class="detail-message">
-                        <n-button v-if="canChat" size="large" secondary @click="openChat">
-                            채팅하기
-                        </n-button>
-                        <n-button v-if="canEdit" size="large" secondary @click="goEdit">
-                            운행 수정
-                        </n-button>
-                        <n-button size="large" secondary :loading="acting" @click="duplicate">
-                            운행 복사
-                        </n-button>
-                    </n-space>
-
                     <n-alert
                         v-if="message"
                         :type="messageType"
@@ -473,15 +636,10 @@ onMounted(refresh);
                         {{ message }}
                     </n-alert>
 
-                    <n-space v-if="isClaimable">
-                        <n-button type="primary" size="large" :loading="acting" @click="claim">
-                            내 운행으로 가져오기
-                        </n-button>
-                    </n-space>
-
-                    <n-space v-else-if="nextTransitions.length" wrap>
+                    <!-- 주 동작(가져오기/첫 전이)은 하단 바에서, 여기선 나머지 전이/사유/리뷰 -->
+                    <n-space v-if="nextTransitions.slice(1).length" wrap>
                         <n-button
-                            v-for="next in nextTransitions"
+                            v-for="next in nextTransitions.slice(1)"
                             :key="next"
                             size="large"
                             :loading="acting"
@@ -501,13 +659,13 @@ onMounted(refresh);
                     </n-alert>
 
                     <n-empty
-                        v-else
+                        v-if="!nextTransitions.length && !isClaimable && order?.status !== 'cancelled'"
                         description="진행할 수 있는 상태 전이가 없습니다."
                         :show-description="true"
                     />
 
                     <n-button
-                        v-if="canReview"
+                        v-if="canReview && !(primaryAction && primaryAction.label === '리뷰 남기기')"
                         type="warning"
                         size="large"
                         class="detail-review-btn"
@@ -570,6 +728,32 @@ onMounted(refresh);
                 </n-modal>
             </template>
         </n-spin>
+
+        <!-- 하단 액션 바 — 주 동작을 항상 손이 닿는 곳에 -->
+        <div
+            v-if="order && (canChat || canEdit || primaryAction)"
+            class="detail-actionbar"
+        >
+            <n-button v-if="canChat" size="large" secondary @click="openChat">
+                채팅
+            </n-button>
+            <n-button v-if="canEdit" size="large" secondary @click="goEdit">
+                수정
+            </n-button>
+            <n-button size="large" secondary :loading="acting" @click="duplicate">
+                복사
+            </n-button>
+            <n-button
+                v-if="primaryAction"
+                type="primary"
+                size="large"
+                :loading="acting"
+                class="detail-actionbar__primary"
+                @click="primaryAction.handler"
+            >
+                {{ primaryAction.label }}
+            </n-button>
+        </div>
     </div>
 </template>
 
@@ -730,8 +914,8 @@ onMounted(refresh);
 }
 
 .group-schedule-item--current {
-    border-color: rgba(54, 173, 255, 0.5);
-    background: rgba(54, 173, 255, 0.05);
+    border-color: color-mix(in srgb, var(--brand) 50%, transparent);
+    background: color-mix(in srgb, var(--brand) 5%, transparent);
 }
 
 /* 셋트 일정 금액 */
@@ -766,5 +950,196 @@ onMounted(refresh);
     margin-top: 4px;
     color: var(--text-muted);
     font-size: 12px;
+}
+
+/* ── 히어로 헤더 ── */
+.detail-page {
+    position: relative;
+}
+
+.detail-page--bar {
+    padding-bottom: 92px;
+}
+
+.detail-hero {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 18px 18px 16px;
+    margin-bottom: 16px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, var(--brand), color-mix(in srgb, var(--brand) 35%, transparent) 60%, color-mix(in srgb, var(--status-settled) 18%, transparent));
+    color: #ffffff;
+}
+
+.detail-hero__eyebrow {
+    margin: 0 0 8px;
+    font-size: 12px;
+    letter-spacing: 0.3px;
+    opacity: 0.85;
+}
+
+.detail-hero__route {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 19px;
+    font-weight: 800;
+    line-height: 1.3;
+}
+
+.detail-hero__loc {
+    max-width: 42vw;
+    word-break: keep-all;
+}
+
+.detail-hero__arrow {
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 20px;
+}
+
+.detail-hero__badges {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+.hero-badge {
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.hero-badge--priority {
+    background: #722ed1;
+}
+
+.hero-badge--urgent {
+    background: #e5484d;
+    animation: hero-pulse 1.6s ease-in-out infinite;
+}
+
+.hero-badge--today {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.hero-badge--tomorrow {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+@keyframes hero-pulse {
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(229, 72, 77, 0.55);
+    }
+    50% {
+        box-shadow: 0 0 0 6px rgba(229, 72, 77, 0);
+    }
+}
+
+.detail-hero__meta {
+    margin: 8px 0 0;
+    font-size: 13px;
+    opacity: 0.9;
+}
+
+.detail-hero__side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.detail-hero__amount {
+    font-size: 22px;
+    font-weight: 900;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* 운행 정보 — 등록자 링크 / 긴급 카운트다운 */
+.detail-link {
+    color: var(--accent);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+.detail-text--urgent {
+    color: var(--danger);
+}
+
+/* ── 경로 지도 ── */
+.detail-map {
+    margin: 4px 0 10px;
+}
+
+.detail-map__frame {
+    display: block;
+    width: 100%;
+    height: 220px;
+    border: 0;
+    border-radius: 12px;
+}
+
+.detail-map__placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 18px 16px;
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.detail-map__label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.detail-map__links {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+}
+
+.detail-map__links a {
+    color: var(--accent);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.detail-map__hint {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+/* ── 하단 액션 바 ── */
+.detail-actionbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border);
+}
+
+.detail-actionbar__primary {
+    flex: 1;
+    min-width: 0;
 }
 </style>

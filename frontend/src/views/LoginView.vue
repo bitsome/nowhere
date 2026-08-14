@@ -11,9 +11,26 @@ const email = ref('');
 const password = ref('');
 const loading = ref(false);
 const error = ref('');
+const remember = ref(true);
+
+// 저장된 아이디·비밀번호 불러오기
+const loadSaved = () => {
+    try {
+        const saved = JSON.parse(localStorage.getItem('nowhere_login_saved') || 'null');
+
+        if (saved?.email) {
+            email.value = saved.email;
+            password.value = saved.password || '';
+            remember.value = saved.remember !== false;
+        }
+    } catch {
+        /* 저장값이 깨졌으면 무시 */
+    }
+};
 
 // 로그인 화면은 뷰포트 1장이므로 window/body 스크롤을 잠근다
 onMounted(() => {
+    loadSaved();
     document.documentElement.style.overflow = 'hidden';
     document.body.style.overflow = 'hidden';
 });
@@ -29,6 +46,17 @@ const submit = async () => {
 
     try {
         await auth.login(email.value, password.value);
+
+        // 아이디·비밀번호 저장 (체크 시 localStorage에 보관)
+        if (remember.value) {
+            localStorage.setItem(
+                'nowhere_login_saved',
+                JSON.stringify({ email: email.value, password: password.value, remember: true }),
+            );
+        } else {
+            localStorage.removeItem('nowhere_login_saved');
+        }
+
         router.push({ name: 'market' });
     } catch (e) {
         error.value = getApiErrorMessage(e, '로그인에 실패했습니다.');
@@ -72,6 +100,10 @@ const submit = async () => {
                     />
                 </n-form-item>
 
+                <n-checkbox v-model:checked="remember" class="login-remember">
+                    아이디·비밀번호 저장
+                </n-checkbox>
+
                 <n-button type="primary" attr-type="submit" block :loading="loading" class="login-submit">
                     로그인
                 </n-button>
@@ -90,8 +122,8 @@ const submit = async () => {
     padding: 24px;
     overflow: hidden;
     background:
-        radial-gradient(ellipse at top left, rgba(54, 173, 255, 0.12), transparent 50%),
-        radial-gradient(ellipse at bottom right, rgba(47, 84, 235, 0.12), transparent 50%),
+        radial-gradient(ellipse at top left, color-mix(in srgb, var(--brand) 12%, transparent), transparent 50%),
+        radial-gradient(ellipse at bottom right, color-mix(in srgb, var(--status-accepted) 12%, transparent), transparent 50%),
         var(--bg);
 }
 
@@ -117,11 +149,11 @@ const submit = async () => {
     width: 56px;
     height: 56px;
     border-radius: 16px;
-    background: linear-gradient(135deg, #36adff, #2f54eb);
+    background: var(--brand-gradient);
     color: #ffffff;
     font-size: 24px;
     font-weight: 700;
-    box-shadow: 0 6px 18px rgba(54, 173, 255, 0.35);
+    box-shadow: 0 6px 18px color-mix(in srgb, var(--brand) 35%, transparent);
 }
 
 .login-title {
@@ -138,6 +170,10 @@ const submit = async () => {
 
 .login-alert {
     margin-bottom: 16px;
+}
+
+.login-remember {
+    margin: 2px 0 14px;
 }
 
 .login-submit {

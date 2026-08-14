@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
+import { statusColorVar } from '../../utils/colors';
 
 const props = defineProps({
     order: {
@@ -38,19 +39,8 @@ const handleClick = () => {
     open();
 };
 
-// 상태별 배지 색상 (식별하기 쉽도록)
-const STATUS_COLORS = {
-    draft: '#909399',
-    published: '#36adff',
-    trading: '#ffa940',
-    accepted: '#2f54eb',
-    driving: '#13c2c2',
-    completed: '#18a058',
-    settled: '#722ed1',
-    cancelled: '#e5484d',
-};
-
-const statusColor = computed(() => STATUS_COLORS[props.order.status] ?? '#909399');
+// 상태별 배지 색상 — 중앙 팔레트(utils/colors.js)에서 참조 (테마 자동 적용)
+const statusColor = computed(() => statusColorVar[props.order.status] ?? 'var(--status-draft)');
 </script>
 
 <template>
@@ -127,8 +117,8 @@ const statusColor = computed(() => STATUS_COLORS[props.order.status] ?? '#909399
 
 .order-card:hover,
 .order-card:focus-visible {
-    border-color: #36adff;
-    box-shadow: 0 4px 16px rgba(54, 173, 255, 0.12);
+    border-color: var(--brand);
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--brand) 12%, transparent);
     transform: translateY(-1px);
     outline: none;
 }
@@ -138,14 +128,14 @@ const statusColor = computed(() => STATUS_COLORS[props.order.status] ?? '#909399
 }
 
 .order-card--selected {
-    border-color: #36adff;
-    background: rgba(54, 173, 255, 0.04);
+    border-color: var(--brand);
+    background: color-mix(in srgb, var(--brand) 4%, transparent);
 }
 
-/* 신규 운행 하이라이트 — 슬라이드 인 + 파랑 배경 깜빡임 */
+/* 신규 운행 하이라이트 — 슬라이드 인 + 브랜드 배경 깜빡임 */
 .order-card--highlight {
     animation: card-highlight-in 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2), card-highlight-pulse 2.4s ease 0.4s infinite;
-    border-color: rgba(54, 173, 255, 0.55);
+    border-color: color-mix(in srgb, var(--brand) 55%, transparent);
 }
 
 @keyframes card-highlight-in {
@@ -165,7 +155,7 @@ const statusColor = computed(() => STATUS_COLORS[props.order.status] ?? '#909399
         background: var(--surface);
     }
     50% {
-        background: rgba(54, 173, 255, 0.12);
+        background: color-mix(in srgb, var(--brand) 12%, transparent);
     }
 }
 
@@ -303,7 +293,7 @@ const statusColor = computed(() => STATUS_COLORS[props.order.status] ?? '#909399
 }
 
 .order-card__today {
-    background: #18a058;
+    background: var(--status-completed);
     color: #ffffff;
 }
 
@@ -314,19 +304,19 @@ const statusColor = computed(() => STATUS_COLORS[props.order.status] ?? '#909399
     font-size: 12px;
     font-weight: 700;
     letter-spacing: -0.2px;
-    background: #e5484d;
+    background: var(--danger);
     color: #ffffff;
-    box-shadow: 0 1px 4px rgba(229, 72, 77, 0.4);
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--danger) 40%, transparent);
     animation: urgent-pulse 1.6s ease-in-out infinite;
 }
 
 @keyframes urgent-pulse {
     0%,
     100% {
-        box-shadow: 0 1px 4px rgba(229, 72, 77, 0.4);
+        box-shadow: 0 1px 4px color-mix(in srgb, var(--danger) 40%, transparent);
     }
     50% {
-        box-shadow: 0 1px 8px rgba(229, 72, 77, 0.8);
+        box-shadow: 0 1px 8px color-mix(in srgb, var(--danger) 80%, transparent);
     }
 }
 
@@ -343,9 +333,9 @@ const statusColor = computed(() => STATUS_COLORS[props.order.status] ?? '#909399
     font-size: 12px;
     font-weight: 700;
     letter-spacing: -0.2px;
-    background: #722ed1;
+    background: var(--status-settled);
     color: #ffffff;
-    box-shadow: 0 1px 4px rgba(114, 46, 209, 0.4);
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--status-settled) 40%, transparent);
 }
 
 .order-card__amount {

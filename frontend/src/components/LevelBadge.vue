@@ -208,8 +208,8 @@ const levels = computed(() =>
 }
 
 .level-row--current {
-    border-color: #36adff;
-    background: rgba(54, 173, 255, 0.08);
+    border-color: var(--brand);
+    background: var(--brand-soft);
 }
 
 .level-row__icon {

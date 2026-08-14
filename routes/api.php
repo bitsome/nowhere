@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\CommunityController;
+use App\Http\Controllers\Api\DriverController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\OrderTemplateController;
@@ -40,6 +41,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/verification/request', [VerificationController::class, 'request']);
     Route::patch('/admin/users/{user}/verification', [VerificationController::class, 'update']);
     Route::get('/admin/users', [AdminController::class, 'users']);
+    Route::get('/admin/drivers', [AdminController::class, 'drivers']);
+    Route::patch('/admin/drivers/{user}/status', [AdminController::class, 'updateDriverStatus']);
+
+    // 기사 운영 — 상태/오늘 통계/차량
+    Route::get('/me/driver', [DriverController::class, 'show']);
+    Route::patch('/me/driver/status', [DriverController::class, 'status']);
+    Route::get('/me/driver/stats', [DriverController::class, 'stats']);
+    Route::get('/me/vehicles', [DriverController::class, 'vehicles']);
+    Route::post('/me/vehicles', [DriverController::class, 'storeVehicle']);
+    Route::patch('/me/vehicles/{vehicle}', [DriverController::class, 'updateVehicle']);
+    Route::delete('/me/vehicles/{vehicle}', [DriverController::class, 'destroyVehicle']);
     Route::get('/chats', [ChatController::class, 'index']);
     Route::post('/chats', [ChatController::class, 'store']);
     Route::get('/chats/{conversation}', [ChatController::class, 'show']);

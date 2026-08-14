@@ -3,15 +3,19 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { apiBatchSettle, apiOrders } from '../api/orders';
 import { apiOrderStats } from '../api/stats';
+import { apiDriverStats } from '../api/driver';
 import { getApiErrorMessage } from '../api/client';
+import { useAuthStore } from '../stores/auth';
 import { useUiStore } from '../stores/ui';
 
 const ui = useUiStore();
+const auth = useAuthStore();
 const router = useRouter();
 const loading = ref(true);
 const error = ref('');
 const days = ref(7);
 const stats = ref(null);
+const driverToday = ref(null);
 let timer = null;
 
 const load = async () => {
@@ -40,6 +44,25 @@ const goOrder = (id) => {
 };
 
 const formatWon = (value) => (value ?? 0).toLocaleString();
+
+// ── 기사 오늘 요약 (드라이버 전용) ──
+const isDriver = computed(() => auth.user?.role === 'Driver');
+
+const loadDriverToday = async () => {
+    try {
+        const { data } = await apiDriverStats();
+        driverToday.value = data.data;
+    } catch {
+        driverToday.value = null;
+    }
+};
+
+const formatDuration = (seconds) => {
+    const hours = Math.floor((seconds ?? 0) / 3600);
+    const minutes = Math.floor(((seconds ?? 0) % 3600) / 60);
+
+    return hours > 0 ? `${hours}시간 ${minutes}분` : `${minutes}분`;
+};
 
 const summary = computed(() => stats.value?.summary ?? {});
 
@@ -92,8 +115,16 @@ const settleAll = async () => {
 
 onMounted(() => {
     load();
+    if (isDriver.value) {
+        loadDriverToday();
+    }
     // 30초마다 통계 자동 갱신
-    timer = setInterval(load, 30000);
+    timer = setInterval(() => {
+        load();
+        if (isDriver.value) {
+            loadDriverToday();
+        }
+    }, 30000);
 });
 
 // 헤더 '···' 메뉴의 새로고침 수신
@@ -117,6 +148,31 @@ onBeforeUnmount(() => clearInterval(timer));
                 <n-radio-button :value="30">30일</n-radio-button>
             </n-radio-group>
         </div>
+
+        <!-- 기사 오늘 요약 — 온라인 시간 / 완료 운행 / 수입 -->
+        <n-card v-if="isDriver" :bordered="true" class="dash-block dash-driver">
+            <div class="dash-driver__head">
+                <strong>오늘의 운행</strong>
+                <span class="dash-driver__status">
+                    <span class="dash-driver__dot" :class="{ 'dash-driver__dot--active': driverToday?.status === 'online' || driverToday?.status === 'on_trip' }" />
+                    {{ driverToday?.status_label ?? '-' }}
+                </span>
+            </div>
+            <div class="dash-driver__grid">
+                <div class="dash-driver__cell">
+                    <span class="dash-driver__label">온라인 시간</span>
+                    <strong>{{ driverToday ? formatDuration(driverToday.online_seconds) : '-' }}</strong>
+                </div>
+                <div class="dash-driver__cell">
+                    <span class="dash-driver__label">완료 운행</span>
+                    <strong>{{ driverToday?.today_completed ?? '-' }}<small>건</small></strong>
+                </div>
+                <div class="dash-driver__cell">
+                    <span class="dash-driver__label">오늘 수입</span>
+                    <strong>{{ driverToday ? formatWon(driverToday.today_income) : '-' }}<small>원</small></strong>
+                </div>
+            </div>
+        </n-card>
 
         <n-alert v-if="error" type="error" :show-icon="true" class="dash-block">
             {{ error }}
@@ -462,7 +518,7 @@ onBeforeUnmount(() => clearInterval(timer));
 }
 
 .mini-list__row:hover {
-    background: rgba(54, 173, 255, 0.08);
+    background: color-mix(in srgb, var(--brand) 8%, transparent);
 }
 
 .mini-list__time {
@@ -516,8 +572,8 @@ html.dark .mini-list__empty {
 }
 
 .dash-card--accent {
-    border-color: rgba(54, 173, 255, 0.4);
-    background: linear-gradient(135deg, rgba(54, 173, 255, 0.06), rgba(47, 84, 235, 0.06));
+    border-color: color-mix(in srgb, var(--brand) 40%, transparent);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 6%, transparent), color-mix(in srgb, var(--status-accepted) 6%, transparent));
 }
 
 .dash-card__head {
@@ -624,7 +680,7 @@ html.dark .mini-list__empty {
 
 .bar-chart__bar--count {
     width: 10px;
-    background: #36adff;
+    background: var(--brand);
     color: #ffffff;
     font-size: 10px;
     text-align: center;
@@ -683,7 +739,7 @@ html.dark .status-list__bar {
     display: block;
     height: 100%;
     border-radius: 4px;
-    background: #36adff;
+    background: var(--brand);
 }
 
 .status-list__count {
@@ -745,5 +801,65 @@ html.dark .settle-bar {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     gap: 16px;
+}
+
+/* ── 기사 오늘 요약 ── */
+.dash-driver__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.dash-driver__status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+.dash-driver__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+}
+
+.dash-driver__dot--active {
+    background: var(--status-completed);
+}
+
+.dash-driver__grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.dash-driver__cell {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--bg);
+}
+
+.dash-driver__label {
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+.dash-driver__cell strong {
+    font-size: 17px;
+}
+
+.dash-driver__cell small {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
 }
 </style>

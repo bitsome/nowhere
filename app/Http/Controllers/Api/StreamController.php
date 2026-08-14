@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Driver;
 use App\Models\Message;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -38,6 +39,11 @@ class StreamController extends Controller
             $knownMessages = $this->messageUnread($user);
 
             $this->emit('state', $knownNotifications, $knownMessages);
+
+            // 기사 상태 변경 이벤트 — 운영자/관리자에게 (최근 10분 내 변경분)
+            if (in_array($user->role, [User::ROLE_ADMIN, User::ROLE_SUPER_ADMIN], true)) {
+                $this->emitDrivers();
+            }
 
             if ($request->boolean('once')) {
                 return;
@@ -122,6 +128,32 @@ class StreamController extends Controller
             'unread_notifications' => $notifications,
             'unread_messages' => $messages,
         ], JSON_UNESCAPED_UNICODE)."\n\n";
+        flush();
+    }
+
+    /**
+     * 최근 변경된 기사 상태를 운영자/관리자에게 푸시한다.
+     */
+    private function emitDrivers(): void
+    {
+        $drivers = Driver::query()
+            ->where('status_updated_at', '>=', now()->subMinutes(10))
+            ->with('user:id,name')
+            ->get()
+            ->map(fn (Driver $driver) => [
+                'id' => $driver->user_id,
+                'name' => $driver->user?->name,
+                'status' => $driver->status,
+                'status_updated_at' => $driver->status_updated_at?->toIso8601String(),
+            ])
+            ->values();
+
+        if ($drivers->isEmpty()) {
+            return;
+        }
+
+        echo "event: driver\n";
+        echo 'data: '.json_encode(['drivers' => $drivers], JSON_UNESCAPED_UNICODE)."\n\n";
         flush();
     }
 }

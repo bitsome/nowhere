@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
+import { statusColorVar } from '../../utils/colors';
 
 const props = defineProps({
     set: {
@@ -22,20 +23,8 @@ const open = () => {
     }
 };
 
-// 상태별 배지 색상 (운행 카드와 동일 팔레트)
-const STATUS_COLORS = {
-    draft: '#909399',
-    published: '#36adff',
-    trading: '#ffa940',
-    accepted: '#2f54eb',
-    driving: '#13c2c2',
-    completed: '#18a058',
-    settled: '#722ed1',
-    cancelled: '#e5484d',
-    mixed: '#909399',
-};
-
-const statusColor = computed(() => STATUS_COLORS[props.set.status] ?? '#909399');
+// 상태별 배지 색상 — 중앙 팔레트에서 참조 (mixed=회색)
+const statusColor = computed(() => statusColorVar[props.set.status] ?? 'var(--status-draft)');
 
 // 셋트명에서 "KLOOK 8월 셋트" 앞 글자
 const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
@@ -103,16 +92,16 @@ const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
 
 .set-card:hover,
 .set-card:focus-visible {
-    border-color: #36adff;
-    box-shadow: 0 4px 16px rgba(54, 173, 255, 0.12);
+    border-color: var(--brand);
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--brand) 12%, transparent);
     transform: translateY(-1px);
     outline: none;
 }
 
-/* 신규 셋트 하이라이트 — 슬라이드 인 + 파랑 배경 깜빡임 */
+/* 신규 셋트 하이라이트 — 슬라이드 인 + 브랜드 배경 깜빡임 */
 .set-card--highlight {
     animation: set-highlight-in 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2), set-highlight-pulse 2.4s ease 0.4s infinite;
-    border-color: rgba(54, 173, 255, 0.55);
+    border-color: color-mix(in srgb, var(--brand) 55%, transparent);
 }
 
 @keyframes set-highlight-in {
@@ -132,7 +121,7 @@ const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
         background: var(--surface);
     }
     50% {
-        background: rgba(54, 173, 255, 0.12);
+        background: color-mix(in srgb, var(--brand) 12%, transparent);
     }
 }
 
@@ -157,7 +146,7 @@ const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
     width: 36px;
     height: 36px;
     border-radius: 10px;
-    background: linear-gradient(135deg, #36adff, #2f54eb);
+    background: var(--brand-gradient);
     color: #ffffff;
     font-size: 15px;
     font-weight: 700;
@@ -199,13 +188,13 @@ const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    background: #e5484d;
+    background: var(--danger);
     color: #ffffff;
     font-size: 11px;
     font-weight: 700;
     line-height: 1;
     flex-shrink: 0;
-    box-shadow: 0 2px 6px rgba(229, 72, 77, 0.3);
+    box-shadow: 0 2px 6px color-mix(in srgb, var(--danger) 30%, transparent);
 }
 
 /* 임박 배지 */
@@ -213,7 +202,7 @@ const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
     flex-shrink: 0;
     padding: 3px 10px;
     border-radius: 999px;
-    background: #e5484d;
+    background: var(--danger);
     color: #ffffff;
     font-size: 12px;
     font-weight: 700;
@@ -329,13 +318,13 @@ html.dark .set-card__route-dot {
 }
 
 .set-card__today {
-    background: rgba(24, 160, 88, 0.12);
-    color: #18a058;
+    background: color-mix(in srgb, var(--status-completed) 12%, transparent);
+    color: var(--status-completed);
 }
 
 .set-card__tomorrow {
-    background: rgba(255, 169, 64, 0.14);
-    color: #ffa940;
+    background: color-mix(in srgb, var(--warn) 14%, transparent);
+    color: var(--warn);
 }
 
 .set-card__amount {

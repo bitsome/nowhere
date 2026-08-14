@@ -295,7 +295,7 @@ onMounted(load);
     width: 72px;
     height: 72px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #36adff, #2f54eb);
+    background: var(--brand-gradient);
     color: #ffffff;
     font-size: 28px;
     font-weight: 700;
@@ -461,9 +461,9 @@ onMounted(load);
 }
 
 .badge--license {
-    background: #f0f5ff;
-    color: #2f54eb;
-    border: 1px solid #c6d3f7;
+    background: color-mix(in srgb, var(--status-accepted) 10%, transparent);
+    color: var(--status-accepted);
+    border: 1px solid color-mix(in srgb, var(--status-accepted) 25%, transparent);
 }
 
 .badge--car {
@@ -554,8 +554,8 @@ html.dark .user-tabs {
 }
 
 .order-row:hover {
-    border-color: #36adff;
-    box-shadow: 0 4px 14px rgba(54, 173, 255, 0.12);
+    border-color: var(--brand);
+    box-shadow: 0 4px 14px color-mix(in srgb, var(--brand) 12%, transparent);
     transform: translateY(-1px);
 }
 
@@ -588,8 +588,8 @@ html.dark .user-tabs {
 .order-row__status {
     padding: 4px 12px;
     border-radius: 999px;
-    background: rgba(54, 173, 255, 0.1);
-    color: #36adff;
+    background: var(--brand-soft);
+    color: var(--brand);
     font-size: 12px;
     font-weight: 600;
     white-space: nowrap;
@@ -604,7 +604,7 @@ html.dark .user-tabs {
 }
 
 .post-row:hover {
-    border-color: rgba(54, 173, 255, 0.3);
+    border-color: color-mix(in srgb, var(--brand) 30%, transparent);
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
 }
 
@@ -669,9 +669,9 @@ html.dark .post-row__image {
     margin-top: 10px;
     padding: 6px 12px;
     border-radius: 8px;
-    background: rgba(54, 173, 255, 0.08);
-    border: 1px solid rgba(54, 173, 255, 0.3);
-    color: var(--accent);
+    background: color-mix(in srgb, var(--brand) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent);
+    color: var(--brand);
     font-size: 13px;
     font-weight: 600;
     text-decoration: none;

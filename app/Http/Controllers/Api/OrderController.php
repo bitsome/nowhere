@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Driver;
 use App\Models\Order;
 use App\Models\OrderGroup;
 use App\Models\Review;
@@ -289,6 +290,12 @@ class OrderController extends Controller
 
         // 레벨링: 마켓 운행 가져오기 +20 XP
         $actor->addXp(20, 'order_claimed', '운행 가져오기 (수락)');
+
+        // 기사 상태 자동 연동 — 가져온 순간부터 '운행 중'
+        $actor->driver()->updateOrCreate(
+            ['user_id' => $actor->id],
+            ['status' => Driver::STATUS_ON_TRIP, 'status_updated_at' => now()],
+        );
 
         // 가져온 드라이버에게 알림
         $actor->notify(new OrderNotification(

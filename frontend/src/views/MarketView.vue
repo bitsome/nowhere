@@ -557,13 +557,13 @@ watch(
 }
 
 .market-sort__btn:hover {
-    border-color: #36adff;
+    border-color: var(--brand);
 }
 
 .market-sort__btn--active {
-    border-color: #36adff;
-    background: rgba(54, 173, 255, 0.08);
-    color: #36adff;
+    border-color: var(--brand);
+    background: var(--brand-soft);
+    color: var(--brand);
 }
 
 .filter-body {

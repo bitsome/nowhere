@@ -1,4 +1,23 @@
 :root {
+    /* 브랜드 — 라이트=파랑, 다크=틸 (utils/colors.js와 동일 값) */
+    --brand: #36adff;
+    --brand-hover: #5cbfff;
+    --brand-pressed: #2b8ee0;
+    --brand-soft: rgba(54, 173, 255, 0.1);
+    --brand-gradient: linear-gradient(135deg, #36adff, #2f54eb);
+    --notify: #2563eb;
+    /* 상태 색상 */
+    --status-draft: #909399;
+    --status-published: #36adff;
+    --status-trading: #ffa940;
+    --status-accepted: #2f54eb;
+    --status-driving: #13c2c2;
+    --status-completed: #18a058;
+    --status-settled: #722ed1;
+    --status-cancelled: #e5484d;
+    /* 시맨틱 */
+    --warn: #ffa940;
+    --badge-red: #e24c4c;
     --bg: #f4f4f4;
     --surface: #ffffff;
     --border: #dddddd;
@@ -9,13 +28,31 @@
 }
 
 html.dark {
+    /* 틸 계조 — #63e2b7 기준 아래(어두운) 단계만 사용 (utils/colors.js tealScale와 동일) */
+    --brand: #63e2b7;
+    --brand-hover: #54cf9f;
+    --brand-pressed: #48b98c;
+    --brand-soft: rgba(99, 226, 183, 0.1);
+    --brand-gradient: linear-gradient(135deg, #63e2b7, #3ca97e);
+    --notify: #3ca97e;
+    /* 배지·상태 톤 다운 — 다크 배경에서 과하게 밝지 않게 */
+    --status-published: #63e2b7;
+    --status-draft: #7d8189;
+    --status-trading: #c98f3e;
+    --status-accepted: #5b6fc9;
+    --status-driving: #1c9f9f;
+    --status-completed: #27946a;
+    --status-settled: #7a5bc0;
+    --status-cancelled: #d2555a;
+    --warn: #c98f3e;
+    --badge-red: #cf5656;
+    --danger: #d86262;
     --bg: #121216;
     --surface: #1c1c22;
-    --border: #33333b;
+    --border: #32323a;
     --text: #e5e5ea;
-    --text-muted: #9a9aa3;
-    --accent: #e5e5ea;
-    --danger: #f56c6c;
+    --text-muted: #9aa0ac;
+    --accent: #63e2b7;
 }
 
 * {
@@ -112,12 +149,12 @@ img {
     width: 0;
     height: 3px;
     border-radius: 0 0 3px 3px;
-    background: #36adff;
+    background: var(--brand);
     transition: width 0.15s ease;
 }
 
 .bottom-nav__item--active {
-    color: #36adff;
+    color: var(--brand);
 }
 
 .bottom-nav__item--active::before {
@@ -164,16 +201,12 @@ html.dark .bell-button:hover {
     width: 100%;
     padding: 11px 20px;
     border: none;
-    background: #2563eb;
+    background: var(--notify);
     color: #ffffff;
     font-size: 14px;
     font-weight: 600;
     text-align: center;
     cursor: pointer;
-}
-
-html.dark .notify-banner {
-    background: #1d4ed8;
 }
 
 /* ?뚮┝ ?⑤꼸 / 紐⑸줉 */
@@ -239,14 +272,14 @@ html.dark .notify-full__item:hover {
 }
 
 .notify-full__item--unread {
-    background: rgba(37, 99, 235, 0.05);
+    background: var(--brand-soft);
 }
 
 .notify-item__dot {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #2563eb;
+    background: var(--notify);
     margin-top: 6px;
     flex-shrink: 0;
 }

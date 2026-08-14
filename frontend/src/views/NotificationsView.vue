@@ -90,6 +90,14 @@ const openNotification = async (notification) => {
                         {{ store.unreadCount }}
                     </span>
                 </button>
+                <button
+                    v-if="store.unreadCount > 0"
+                    type="button"
+                    class="notify-tabs__read-all"
+                    @click="store.markAllRead()"
+                >
+                    모두 읽음
+                </button>
             </div>
 
             <n-empty
@@ -169,9 +177,26 @@ const openNotification = async (notification) => {
     background: rgba(255, 255, 255, 0.25);
 }
 
+.notify-tabs__read-all {
+    margin-left: auto;
+    padding: 6px 14px;
+    border: 1px solid color-mix(in srgb, var(--brand) 35%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--brand) 6%, transparent);
+    color: var(--brand);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.notify-tabs__read-all:hover {
+    background: color-mix(in srgb, var(--brand) 14%, transparent);
+}
+
 .notify-tabs__count--hot {
-    background: rgba(226, 76, 76, 0.14);
-    color: #e24c4c;
+    background: color-mix(in srgb, var(--badge-red) 14%, transparent);
+    color: var(--badge-red);
 }
 
 .notify-card-list {
@@ -196,12 +221,12 @@ const openNotification = async (notification) => {
 
 .notify-card:hover {
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.06);
-    border-color: rgba(54, 173, 255, 0.3);
+    border-color: color-mix(in srgb, var(--brand) 30%, transparent);
 }
 
 .notify-card--unread {
-    border-color: rgba(54, 173, 255, 0.4);
-    background: rgba(54, 173, 255, 0.04);
+    border-color: color-mix(in srgb, var(--brand) 40%, transparent);
+    background: color-mix(in srgb, var(--brand) 4%, transparent);
 }
 
 .notify-card__icon {
@@ -222,8 +247,8 @@ const openNotification = async (notification) => {
 }
 
 .notify-card__icon--order {
-    background: rgba(54, 173, 255, 0.14);
-    color: #36adff;
+    background: color-mix(in srgb, var(--brand) 14%, transparent);
+    color: var(--brand);
 }
 
 .notify-card__body {
@@ -250,8 +275,8 @@ const openNotification = async (notification) => {
     flex-shrink: 0;
     padding: 1px 8px;
     border-radius: 999px;
-    background: rgba(226, 76, 76, 0.12);
-    color: #e24c4c;
+    background: color-mix(in srgb, var(--badge-red) 12%, transparent);
+    color: var(--badge-red);
     font-size: 11px;
     font-weight: 700;
 }
@@ -262,6 +287,7 @@ const openNotification = async (notification) => {
     font-size: 13px;
     word-break: break-word;
     line-height: 1.5;
+    white-space: pre-wrap;
 }
 
 .notify-card__time {
@@ -276,8 +302,8 @@ const openNotification = async (notification) => {
 .notify-card__order-chip {
     padding: 1px 6px;
     border-radius: 6px;
-    background: rgba(54, 173, 255, 0.12);
-    color: #36adff;
+    background: color-mix(in srgb, var(--brand) 12%, transparent);
+    color: var(--brand);
     font-size: 11px;
     font-weight: 700;
 }

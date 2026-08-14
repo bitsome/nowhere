@@ -4,9 +4,11 @@ import { useRoute, useRouter } from 'vue-router';
 import { darkTheme } from 'naive-ui';
 import { useAuthStore } from './stores/auth';
 import { useChatsStore } from './stores/chats';
+import { useDriverStore } from './stores/driver';
 import { useNotificationsStore } from './stores/notifications';
 import { useThemeStore } from './stores/theme';
 import { useUiStore } from './stores/ui';
+import { naiveThemeOverrides } from './utils/colors';
 import ChatListener from './components/ChatListener.vue';
 import HeaderBar from './components/HeaderBar.vue';
 import NotificationListener from './components/NotificationListener.vue';
@@ -18,6 +20,7 @@ const router = useRouter();
 const theme = useThemeStore();
 const notifications = useNotificationsStore();
 const chats = useChatsStore();
+const driver = useDriverStore();
 const ui = useUiStore();
 const drawerOpen = ref(false);
 const initReady = ref(false);
@@ -55,6 +58,9 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
     window.removeEventListener('popstate', onPopState);
+    if (driverTimer) {
+        clearInterval(driverTimer);
+    }
 });
 
 // ── 하단 네비 탭 ──
@@ -165,11 +171,28 @@ onMounted(async () => {
         window.addEventListener('visibilitychange', onVisibilitySse);
         attachSse(); // 최초 상태 반영
     }
+
+    // 기사 상태 로드 + 실시간/주기 동기화 (하단 '운행 중' 필로트 반영)
+    if (auth.user && auth.user.role === 'Driver') {
+        driver.load();
+        window.addEventListener('app:sse-refresh', driverSync);
+        driverTimer = setInterval(driverSync, 60000);
+    }
 });
+
+// 기사 상태를 최신으로 유지 (운행 수락/완료 시 자동 전환 반영)
+const driverSync = () => {
+    driver.load();
+};
+
+let driverTimer = null;
 </script>
 
 <template>
-    <n-config-provider :theme="theme.isDark ? darkTheme : null">
+    <n-config-provider
+        :theme="theme.isDark ? darkTheme : null"
+        :theme-overrides="naiveThemeOverrides(theme.isDark)"
+    >
         <n-message-provider>
             <n-notification-provider>
                 <div class="app-shell" :class="{ 'app-shell--ready': initReady || !auth.token }">
@@ -239,6 +262,12 @@ onMounted(async () => {
                     <router-view />
                 </main>
 
+                <!-- 운행 중 필로트 — 탭바 위에 표시 -->
+                <button v-if="driver.isOnTrip" type="button" class="on-trip-pill" @click="router.push({ name: 'order-create' })">
+                    <span class="on-trip-pill__dot" />
+                    운행 중
+                </button>
+
                 <nav v-if="auth.isAuthenticated && !chats.activeId && !isFocusedScreen" class="bottom-nav">
                     <router-link
                         v-for="item in navItems"
@@ -298,6 +327,59 @@ onMounted(async () => {
 </template>
 
 <style>
+/* ── 운행 중 필로트 — 탭바 위 ── */
+.on-trip-pill {
+    position: fixed;
+    bottom: calc(68px + env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 40;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 18px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--brand);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 6px 18px color-mix(in srgb, var(--brand) 35%, transparent);
+    animation: on-trip-in 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+.on-trip-pill__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ffffff;
+    animation: on-trip-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes on-trip-in {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+@keyframes on-trip-pulse {
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.5;
+        transform: scale(0.7);
+    }
+}
+
 /* ── 대화방 전체 화면 — 상·하단 패딩 제거, window 스크롤 제거 ── */
 .app-content--full {
     padding: 0;
@@ -342,8 +424,8 @@ onMounted(async () => {
 }
 
 .drawer-nav-row--active {
-    background: rgba(54, 173, 255, 0.1);
-    color: #36adff;
+    background: var(--brand-soft);
+    color: var(--brand);
     font-weight: 700;
 }
 

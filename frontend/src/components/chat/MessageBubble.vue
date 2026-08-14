@@ -74,7 +74,7 @@ const openImage = () => {
 .cb-row--mine .cb-col{align-items:flex-end}
 .cb-name{font-size:11px;color:var(--text-muted);margin:0 6px 3px;font-weight:600}
 .cb-bubble{padding:10px 14px;border-radius:16px;background:var(--surface);border:1px solid var(--border)}
-.cb-bubble--mine{background:#36adff;color:#fff;border-color:#36adff}
+.cb-bubble--mine{background:var(--brand);color:#fff;border-color:var(--brand)}
 
 /* 그룹 연결 — 1개: 전부 라운드 / 첫: 하단만 각짐 / 마지막: 상단만 각짐 / 중간: 상하 각짐 */
 .cb-row:not(.cb-row--mine) .cb-bubble--tail-top{border-bottom-left-radius:0}
@@ -83,7 +83,7 @@ const openImage = () => {
 .cb-row--mine .cb-bubble--tail-top{border-bottom-right-radius:0}
 .cb-row--mine .cb-bubble--tail-bottom{border-top-right-radius:0}
 .cb-row--mine .cb-bubble--mid{border-top-right-radius:0;border-bottom-right-radius:0}
-.cb-bubble__body{font-size:14px;word-break:break-word;line-height:1.5}
+.cb-bubble__body{font-size:14px;word-break:break-word;line-height:1.5;white-space:pre-wrap}
 .cb-bubble__image{display:block;max-width:min(260px,100%);max-height:300px;border-radius:10px;object-fit:cover;cursor:zoom-in;margin-bottom:4px}
 .cb-meta{display:flex;align-items:center;gap:6px;margin-top:2px;padding:0 4px}
 .cb-meta--mine{justify-content:flex-end}

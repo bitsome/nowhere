@@ -549,13 +549,13 @@ onMounted(() => load(true));
 }
 
 .community-sort__btn:hover {
-    border-color: #36adff;
+    border-color: var(--brand);
 }
 
 .community-sort__btn--active {
-    border-color: #36adff;
-    background: rgba(54, 173, 255, 0.08);
-    color: #36adff;
+    border-color: var(--brand);
+    background: var(--brand-soft);
+    color: var(--brand);
 }
 
 .community-body { display: block; min-height: 200px; }
@@ -591,7 +591,7 @@ onMounted(() => load(true));
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #36adff, #2f54eb);
+    background: var(--brand-gradient);
     color: #ffffff;
     font-size: 15px;
     font-weight: 700;
@@ -768,8 +768,8 @@ html.dark .feed-card__image {
     margin-bottom: 4px;
     padding: 8px 14px;
     border-radius: 10px;
-    border: 1px solid rgba(54, 173, 255, 0.35);
-    background: rgba(54, 173, 255, 0.06);
+    border: 1px solid color-mix(in srgb, var(--brand) 35%, transparent);
+    background: color-mix(in srgb, var(--brand) 6%, transparent);
     color: var(--accent);
     font-size: 13px;
     font-weight: 600;
@@ -844,7 +844,7 @@ html.dark .feed-card__comments {
 .comments-more {
     border: 0;
     background: none;
-    color: #36adff;
+    color: var(--brand);
     font-size: 13px;
     cursor: pointer;
     padding: 2px 0;
@@ -889,7 +889,7 @@ html.dark .feed-card__composer input:focus {
 .feed-card__composer button {
     border: 0;
     background: none;
-    color: #36adff;
+    color: var(--brand);
     font-weight: 700;
     font-size: 14px;
     cursor: pointer;

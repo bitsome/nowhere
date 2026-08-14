@@ -3,8 +3,10 @@ import { computed, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useMessage } from 'naive-ui';
 import { useAuthStore } from '../stores/auth';
+import { useDriverStore } from '../stores/driver';
 import { apiUpdateProfile } from '../api/auth';
 import { apiCommunityUser } from '../api/community';
+import { apiCreateVehicle, apiDeleteVehicle, apiDriverStats, apiMyVehicles, apiUpdateVehicle } from '../api/driver';
 import { apiClient, getApiErrorMessage } from '../api/client';
 import {
     isBrowserNotifyEnabled,
@@ -42,6 +44,148 @@ const toggleNotify = async (enabled) => {
     message.success(enabled ? '브라우저 알림이 켜졌습니다.' : '브라우저 알림이 꺼졌습니다.');
 };
 const myStats = ref(null);
+
+// ── 기사 운영 — 가용 상태 / 오늘 통계 / 차량 관리 ──
+const driver = useDriverStore();
+const todayStats = ref(null);
+const vehicles = ref([]);
+const vehicleLoading = ref(true);
+const vehicleFormOpen = ref(false);
+const editingVehicleId = ref(null);
+const savingVehicle = ref(false);
+
+const vehicleForm = reactive({
+    name: '',
+    type: '',
+    license_plate: '',
+    color: '',
+    capacity: 0,
+    luggage_capacity: 0,
+    insurance_expires_at: null,
+    is_default: false,
+});
+
+const isDriver = computed(() => auth.user?.role === 'Driver');
+
+// 온라인/오프라인 토글 (운행 중이면 끌 수 없다)
+const toggleDriverStatus = async () => {
+    if (driver.status === 'on_trip') {
+        message.warning('운행 중에는 상태를 변경할 수 없습니다.');
+
+        return;
+    }
+
+    try {
+        await driver.setStatus(driver.isOnline ? 'offline' : 'online');
+        message.success(driver.status === 'online' ? '온라인으로 전환되었습니다.' : '오프라인으로 전환되었습니다.');
+        loadTodayStats();
+    } catch (e) {
+        message.error(getApiErrorMessage(e, '상태 변경에 실패했습니다.'));
+    }
+};
+
+const loadTodayStats = async () => {
+    try {
+        const { data } = await apiDriverStats();
+        todayStats.value = data.data;
+    } catch {
+        todayStats.value = null;
+    }
+};
+
+const loadVehicles = async () => {
+    vehicleLoading.value = true;
+
+    try {
+        const { data } = await apiMyVehicles();
+        vehicles.value = data.data;
+    } catch {
+        vehicles.value = [];
+    } finally {
+        vehicleLoading.value = false;
+    }
+};
+
+const openVehicleForm = (vehicle = null) => {
+    editingVehicleId.value = vehicle?.id ?? null;
+    vehicleForm.name = vehicle?.name ?? '';
+    vehicleForm.type = vehicle?.type ?? '';
+    vehicleForm.license_plate = vehicle?.license_plate ?? '';
+    vehicleForm.color = vehicle?.color ?? '';
+    vehicleForm.capacity = vehicle?.capacity ?? 0;
+    vehicleForm.luggage_capacity = vehicle?.luggage_capacity ?? 0;
+    vehicleForm.insurance_expires_at = vehicle?.insurance_expires_at ? new Date(vehicle.insurance_expires_at).getTime() : null;
+    vehicleForm.is_default = vehicle?.is_default ?? false;
+    vehicleFormOpen.value = true;
+};
+
+const toDateString = (ms) => {
+    const date = new Date(ms);
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${date.getFullYear()}-${month}-${day}`;
+};
+
+const closeVehicleForm = () => {
+    vehicleFormOpen.value = false;
+    editingVehicleId.value = null;
+};
+
+const saveVehicle = async () => {
+    if (!vehicleForm.name.trim()) {
+        message.warning('차량 이름을 입력해주세요.');
+
+        return;
+    }
+
+    savingVehicle.value = true;
+
+    try {
+        const payload = {
+            name: vehicleForm.name.trim(),
+            type: vehicleForm.type.trim(),
+            license_plate: vehicleForm.license_plate.trim(),
+            color: vehicleForm.color.trim(),
+            capacity: vehicleForm.capacity || 0,
+            luggage_capacity: vehicleForm.luggage_capacity || 0,
+            insurance_expires_at: vehicleForm.insurance_expires_at ? toDateString(vehicleForm.insurance_expires_at) : null,
+            is_default: vehicleForm.is_default,
+        };
+
+        if (editingVehicleId.value) {
+            await apiUpdateVehicle(editingVehicleId.value, payload);
+            message.success('차량이 수정되었습니다.');
+        } else {
+            await apiCreateVehicle(payload);
+            message.success('차량이 등록되었습니다.');
+        }
+
+        closeVehicleForm();
+        await loadVehicles();
+    } catch (e) {
+        message.error(getApiErrorMessage(e, '차량 저장에 실패했습니다.'));
+    } finally {
+        savingVehicle.value = false;
+    }
+};
+
+const removeVehicle = async (vehicle) => {
+    try {
+        await apiDeleteVehicle(vehicle.id);
+        message.success('차량이 삭제되었습니다.');
+        await loadVehicles();
+    } catch (e) {
+        message.error(getApiErrorMessage(e, '차량 삭제에 실패했습니다.'));
+    }
+};
+
+const formatDuration = (seconds) => {
+    const hours = Math.floor((seconds ?? 0) / 3600);
+    const minutes = Math.floor(((seconds ?? 0) % 3600) / 60);
+
+    return hours > 0 ? `${hours}시간 ${minutes}분` : `${minutes}분`;
+};
 
 const form = reactive({
     name: '',
@@ -89,6 +233,14 @@ onMounted(() => {
             myStats.value = data.data;
         })
         .catch(() => {});
+
+    // 기사 운영 — 상태/오늘 통계/차량 (드라이버 전용)
+    if (auth.user?.role === 'Driver') {
+        driver.load().then(() => {
+            loadTodayStats();
+        });
+        loadVehicles();
+    }
 });
 
 const save = async () => {
@@ -154,6 +306,66 @@ const logout = async () => {
                 </div>
             </div>
         </n-card>
+
+        <!-- 기사 운영 — 가용 상태 / 오늘 통계 / 차량 -->
+        <template v-if="isDriver">
+            <n-card :bordered="true" class="profile-block">
+                <div class="verify-head">
+                    <strong>근무 상태</strong>
+                    <span class="verify-hint">온라인이면 마켓에서 새 운행을 빠르게 확인할 수 있습니다</span>
+                </div>
+
+                <div class="driver-status">
+                    <div class="driver-status__info">
+                        <span class="driver-status__label" :class="`driver-status__label--${driver.status}`">
+                            <span class="driver-status__dot" />
+                            {{ driver.statusLabel }}
+                        </span>
+                        <span class="driver-status__meta">
+                            오늘 {{ todayStats ? formatDuration(todayStats.online_seconds) : '-' }} 온라인
+                            · {{ todayStats?.today_completed ?? '-' }}건 완료
+                            · {{ todayStats ? formatWon(todayStats.today_income) : '-' }}원
+                        </span>
+                    </div>
+                    <n-switch
+                        :value="driver.isOnline"
+                        :disabled="driver.status === 'on_trip'"
+                        :loading="!driver.loaded"
+                        @update:value="toggleDriverStatus"
+                    />
+                </div>
+            </n-card>
+
+            <n-card :bordered="true" class="profile-block">
+                <div class="verify-head">
+                    <strong>내 차량</strong>
+                    <span class="verify-hint">운행 등록 시 내 차량 정보를 빠르게 채웁니다</span>
+                    <n-button size="small" type="primary" ghost @click="openVehicleForm()">+ 차량 등록</n-button>
+                </div>
+
+                <div v-if="vehicles.length" class="vehicle-list">
+                    <div v-for="vehicle in vehicles" :key="vehicle.id" class="vehicle-item">
+                        <div class="vehicle-item__main">
+                            <strong>{{ vehicle.name }}</strong>
+                            <span class="vehicle-item__meta">
+                                {{ vehicle.type || '차종 미지정' }}<template v-if="vehicle.license_plate"> · {{ vehicle.license_plate }}</template>
+                                <template v-if="vehicle.capacity"> · {{ vehicle.capacity }}인승</template>
+                                <template v-if="vehicle.luggage_capacity"> · 짐 {{ vehicle.luggage_capacity }}개</template>
+                            </span>
+                            <div class="vehicle-item__tags">
+                                <n-tag v-if="vehicle.is_default" size="small" round type="info">기본</n-tag>
+                                <n-tag v-if="vehicle.is_verified" size="small" round type="success">검증</n-tag>
+                            </div>
+                        </div>
+                        <div class="vehicle-item__actions">
+                            <n-button size="small" quaternary @click="openVehicleForm(vehicle)">수정</n-button>
+                            <n-button size="small" quaternary type="error" @click="removeVehicle(vehicle)">삭제</n-button>
+                        </div>
+                    </div>
+                </div>
+                <n-empty v-else-if="!vehicleLoading" description="등록된 차량이 없습니다." :image-size="60" />
+            </n-card>
+        </template>
 
         <!-- 내 실적 -->
         <div v-if="myStats" class="profile-stats">
@@ -357,6 +569,52 @@ const logout = async () => {
         >
             로그아웃
         </n-button>
+
+        <!-- 차량 등록/수정 모달 -->
+        <n-modal
+            v-model:show="vehicleFormOpen"
+            preset="card"
+            :title="editingVehicleId ? '차량 수정' : '차량 등록'"
+            :style="{ maxWidth: '440px' }"
+            @after-leave="closeVehicleForm"
+        >
+            <n-form label-placement="top" label-width="auto">
+                <n-form-item label="차량 이름" required>
+                    <n-input v-model:value="vehicleForm.name" placeholder="예) 내 카니발" />
+                </n-form-item>
+                <n-form-item label="차종">
+                    <n-input v-model:value="vehicleForm.type" placeholder="예) 카니발" />
+                </n-form-item>
+                <div class="vehicle-form__row">
+                    <n-form-item label="번호판" style="flex: 1">
+                        <n-input v-model:value="vehicleForm.license_plate" placeholder="예) 12가3456" />
+                    </n-form-item>
+                    <n-form-item label="색상" style="flex: 1">
+                        <n-input v-model:value="vehicleForm.color" placeholder="예) 화이트" />
+                    </n-form-item>
+                </div>
+                <div class="vehicle-form__row">
+                    <n-form-item label="승차정원" style="flex: 1">
+                        <n-input-number v-model:value="vehicleForm.capacity" :min="0" :max="99" style="width: 100%" />
+                    </n-form-item>
+                    <n-form-item label="짐 개수" style="flex: 1">
+                        <n-input-number v-model:value="vehicleForm.luggage_capacity" :min="0" :max="99" style="width: 100%" />
+                    </n-form-item>
+                </div>
+                <n-form-item label="보험 만료일">
+                    <n-date-picker v-model:value="vehicleForm.insurance_expires_at" type="date" style="width: 100%" />
+                </n-form-item>
+                <n-form-item label="기본 차량">
+                    <n-switch v-model:value="vehicleForm.is_default" />
+                </n-form-item>
+            </n-form>
+            <template #footer>
+                <div class="vehicle-form__footer">
+                    <n-button @click="closeVehicleForm">취소</n-button>
+                    <n-button type="primary" :loading="savingVehicle" @click="saveVehicle">저장</n-button>
+                </div>
+            </template>
+        </n-modal>
     </div>
 </template>
 
@@ -484,12 +742,12 @@ const logout = async () => {
     width: 64px;
     height: 64px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #36adff, #2f54eb);
+    background: var(--brand-gradient);
     color: #ffffff;
     font-size: 24px;
     font-weight: 700;
     flex-shrink: 0;
-    box-shadow: 0 4px 12px rgba(54, 173, 255, 0.3);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--brand) 30%, transparent);
 }
 
 .profile-hero__name-row {
@@ -525,8 +783,8 @@ const logout = async () => {
     gap: 4px;
     padding: 3px 10px;
     border-radius: 999px;
-    background: rgba(54, 173, 255, 0.1);
-    color: #36adff;
+    background: var(--brand-soft);
+    color: var(--brand);
     font-size: 12px;
     font-weight: 600;
 }
@@ -565,7 +823,7 @@ const logout = async () => {
     display: block;
     height: 100%;
     border-radius: 5px;
-    background: linear-gradient(90deg, #36adff, #2f54eb);
+    background: var(--brand-gradient);
     transition: width 0.4s ease;
 }
 
@@ -605,7 +863,7 @@ html.dark .xp-events {
 }
 
 .xp-event strong {
-    color: #2f54eb;
+    color: var(--status-accepted);
     font-size: 14px;
 }
 
@@ -626,7 +884,7 @@ html.dark .xp-events {
 }
 
 .community-entry:hover {
-    background: rgba(54, 173, 255, 0.05);
+    background: color-mix(in srgb, var(--brand) 5%, transparent);
 }
 
 .community-entry + .community-entry {
@@ -643,7 +901,7 @@ html.dark .xp-events {
     width: 44px;
     height: 44px;
     border-radius: 12px;
-    background: linear-gradient(135deg, #36adff, #2f54eb);
+    background: var(--brand-gradient);
     color: #ffffff;
     flex-shrink: 0;
 }
@@ -674,5 +932,109 @@ html.dark .xp-events {
     color: var(--text-muted);
     font-size: 24px;
     font-weight: 300;
+}
+
+/* ── 기사 운영 — 근무 상태 ── */
+.driver-status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 0;
+}
+
+.driver-status__info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.driver-status__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.driver-status__dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--text-muted);
+}
+
+.driver-status__label--online .driver-status__dot,
+.driver-status__label--on_trip .driver-status__dot {
+    background: var(--status-completed);
+}
+
+.driver-status__label--online,
+.driver-status__label--on_trip {
+    color: var(--status-completed);
+}
+
+.driver-status__label--rest .driver-status__dot {
+    background: var(--warn);
+}
+
+.driver-status__label--rest {
+    color: var(--warn);
+}
+
+.driver-status__meta {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+/* ── 기사 운영 — 내 차량 ── */
+.vehicle-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.vehicle-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+.vehicle-item__main {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.vehicle-item__meta {
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.vehicle-item__tags {
+    display: flex;
+    gap: 4px;
+}
+
+.vehicle-item__actions {
+    display: flex;
+    flex-shrink: 0;
+}
+
+.vehicle-form__row {
+    display: flex;
+    gap: 12px;
+}
+
+.vehicle-form__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
 }
 </style>

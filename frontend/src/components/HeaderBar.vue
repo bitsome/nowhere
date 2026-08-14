@@ -193,12 +193,12 @@ html.dark .hb__center{color:#e2e2e2}
 .hb-btn svg{width:19px;height:19px}
 
 /* 알림 미확인 배지 */
-.hb-badge{position:absolute;top:0;right:0;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:#e24c4c;color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center;box-shadow:0 0 0 2px var(--surface)}
+.hb-badge{position:absolute;top:0;right:0;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--badge-red);color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center;box-shadow:0 0 0 2px var(--surface)}
 .hb-btn--dots{width:32px;height:32px}
 .hb-btn--dots svg{width:16px;height:16px}
 
 /* 필터 활성 점 */
-.hb-filter-dot{position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:50%;background:#36adff;box-shadow:0 0 0 2px var(--surface)}
+.hb-filter-dot{position:absolute;top:6px;right:6px;width:8px;height:8px;border-radius:50%;background:var(--brand);box-shadow:0 0 0 2px var(--surface)}
 .hb-avatar{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border:0;border-radius:50%;background:var(--accent);color:#fff;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0}
 
 /* 대화방 헤더 — 메시지가 뒤로 비치지 않도록 불투명 (마지막에 정의해 glass 규칙을 덮음) */

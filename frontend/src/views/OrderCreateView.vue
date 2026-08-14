@@ -1230,13 +1230,13 @@ const saveSet = async () => {
 }
 
 .create-sort__btn:hover {
-    border-color: #36adff;
+    border-color: var(--brand);
 }
 
 .create-sort__btn--active {
-    border-color: #36adff;
-    background: rgba(54, 173, 255, 0.08);
-    color: #36adff;
+    border-color: var(--brand);
+    background: var(--brand-soft);
+    color: var(--brand);
 }
 /* 운행 등록 템플릿 */
 .template-head {
@@ -1288,7 +1288,7 @@ const saveSet = async () => {
 }
 
 .template-chip__del:hover {
-    color: #e5484d;
+    color: var(--danger);
 }
 
 .template-empty {
@@ -1334,7 +1334,7 @@ const saveSet = async () => {
 /* 한 번에 입력 (셋트) */
 .bulk-error {
     margin: 8px 0 0;
-    color: #e24c4c;
+    color: var(--badge-red);
     font-size: 13px;
     font-weight: 600;
 }
