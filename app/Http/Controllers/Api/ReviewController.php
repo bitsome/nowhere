@@ -14,17 +14,21 @@ use Illuminate\Validation\ValidationException;
 class ReviewController extends Controller
 {
     /**
-     * 사용자 리뷰 목록 (reviewee 기준) + 평점 요약.
+     * 사용자 리뷰 목록 + 평점 요약.
+     * - reviewee_id: 받은 리뷰 (user_id)
+     * - reviewer_id: 내가 쓴 리뷰
      *
      * @return JsonResponse{data: array<int, array<string, mixed>>, summary: array<string, int|float>|null}
      */
     public function index(Request $request): JsonResponse
     {
         $userId = max(0, (int) $request->integer('user_id'));
+        $reviewerId = max(0, (int) $request->integer('reviewer_id'));
 
         $reviews = Review::query()
-            ->with(['reviewer:id,name', 'order:id,order_number'])
+            ->with(['reviewer:id,name', 'reviewee:id,name', 'order:id,order_number'])
             ->when($userId > 0, fn ($q) => $q->where('reviewee_id', $userId))
+            ->when($reviewerId > 0, fn ($q) => $q->where('reviewer_id', $reviewerId))
             ->orderByDesc('created_at')
             ->limit(50)
             ->get();
@@ -55,6 +59,10 @@ class ReviewController extends Controller
                 'reviewer' => [
                     'id' => $review->reviewer?->id,
                     'name' => $review->reviewer?->name,
+                ],
+                'reviewee' => [
+                    'id' => $review->reviewee?->id,
+                    'name' => $review->reviewee?->name,
                 ],
                 'order' => [
                     'id' => $review->order?->id,
@@ -122,7 +130,7 @@ class ReviewController extends Controller
         if ($reviewee !== null && $reviewee->id !== $actor->id) {
             $reviewee->notify(new OrderNotification(
                 '새 리뷰 도착',
-                "{$actor->name}님이 운행({$order->order_number})에 리뷰(★{$data['rating']})를 남겼습니다.",
+                "{$actor->name}님이 {$order->rideSummary()} 운행에 리뷰(★{$data['rating']})를 남겼습니다.",
                 $order->id,
             ));
         }

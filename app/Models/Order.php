@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Database\Factories\OrderFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -43,7 +44,9 @@ use InvalidArgumentException;
     'status',
     'cancel_reason',
     'is_priority',
+    'auto_registered',
     'claimed_at',
+    'claimant_user_id',
     'user_id',
     'original_owner_id',
 ])]
@@ -77,7 +80,9 @@ class Order extends Model
      */
     public const STATUS_FLOW = [
         self::STATUS_DRAFT => [self::STATUS_PUBLISHED, self::STATUS_CANCELLED],
-        self::STATUS_PUBLISHED => [self::STATUS_TRADING, self::STATUS_CANCELLED],
+        // 공개 ↔ 초안 왕복 — 등록자가 공개 후 다시 비공개(초안)로 되돌릴 수 있다.
+        // 거래중(trading)은 과거 데이터 대응용으로 흐름에서 제외했다 (claim → 승인 흐름 사용).
+        self::STATUS_PUBLISHED => [self::STATUS_DRAFT, self::STATUS_CANCELLED],
         self::STATUS_TRADING => [self::STATUS_ACCEPTED, self::STATUS_CANCELLED],
         self::STATUS_ACCEPTED => [self::STATUS_DRIVING, self::STATUS_CANCELLED],
         self::STATUS_DRIVING => [self::STATUS_COMPLETED],
@@ -195,9 +200,37 @@ class Order extends Model
         return $prefix.str_pad((string) $nextSequence, 4, '0', STR_PAD_LEFT);
     }
 
+    /**
+     * 운행 알림 메시지용 운행 요약 — "출발지 → 도착지 (M/D(요일) HH:MM)".
+     * 운행 번호 대신 출발·도착지와 날짜·시간을 보여준다.
+     */
+    public function rideSummary(): string
+    {
+        $route = trim(($this->pickup_location ?: '').' → '.($this->dropoff_location ?: ''));
+
+        $when = '';
+
+        if ($this->service_date) {
+            $date = Carbon::parse($this->service_date, 'Asia/Seoul');
+            $weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+            $when = $date->format('n/j').'('.$weekdays[$date->dayOfWeek].')';
+        }
+
+        if ($this->service_time) {
+            $when = trim($when.' '.$this->service_time);
+        }
+
+        return $when !== '' ? $route.' ('.$when.')' : $route;
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function claimant(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'claimant_user_id');
     }
 
     public function group(): BelongsTo

@@ -1,13 +1,15 @@
 <?php
 
-use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ChatController;
 use App\Http\Controllers\Api\CommunityController;
 use App\Http\Controllers\Api\DriverController;
+use App\Http\Controllers\Api\MatchController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\OrderTemplateController;
+use App\Http\Controllers\Api\PushSubscriptionController;
 use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\StatsController;
 use App\Http\Controllers\Api\StreamController;
@@ -38,24 +40,40 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/options/orders', [OrderController::class, 'options']);
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::post('/notifications/read', [NotificationController::class, 'markRead']);
+    Route::post('/push-subscriptions', [PushSubscriptionController::class, 'store']);
+    Route::delete('/push-subscriptions', [PushSubscriptionController::class, 'destroy']);
     Route::post('/verification/request', [VerificationController::class, 'request']);
     Route::patch('/admin/users/{user}/verification', [VerificationController::class, 'update']);
     Route::get('/admin/users', [AdminController::class, 'users']);
     Route::get('/admin/drivers', [AdminController::class, 'drivers']);
     Route::patch('/admin/drivers/{user}/status', [AdminController::class, 'updateDriverStatus']);
+    Route::get('/admin/auto-order-settings', [AdminController::class, 'autoOrderSettings']);
+    Route::patch('/admin/auto-order-settings', [AdminController::class, 'updateAutoOrderSettings']);
+    Route::get('/admin/auto-orders', [AdminController::class, 'autoOrderHistory']);
+    Route::post('/admin/auto-orders/delete', [AdminController::class, 'deleteAutoOrders']);
 
     // 기사 운영 — 상태/오늘 통계/차량
     Route::get('/me/driver', [DriverController::class, 'show']);
     Route::patch('/me/driver/status', [DriverController::class, 'status']);
+    Route::patch('/me/driver/match', [DriverController::class, 'matchEnabled']);
     Route::get('/me/driver/stats', [DriverController::class, 'stats']);
+    Route::get('/me/settlements', [DriverController::class, 'settlements']);
     Route::get('/me/vehicles', [DriverController::class, 'vehicles']);
     Route::post('/me/vehicles', [DriverController::class, 'storeVehicle']);
     Route::patch('/me/vehicles/{vehicle}', [DriverController::class, 'updateVehicle']);
     Route::delete('/me/vehicles/{vehicle}', [DriverController::class, 'destroyVehicle']);
+
+    // 자동 매칭 설정
+    Route::get('/me/match-preferences', [MatchController::class, 'index']);
+    Route::post('/me/match-preferences', [MatchController::class, 'store']);
+    Route::patch('/me/match-preferences/{preference}', [MatchController::class, 'update']);
+    Route::delete('/me/match-preferences/{preference}', [MatchController::class, 'destroy']);
+
     Route::get('/chats', [ChatController::class, 'index']);
     Route::post('/chats', [ChatController::class, 'store']);
     Route::get('/chats/{conversation}', [ChatController::class, 'show']);
     Route::post('/chats/{conversation}/messages', [ChatController::class, 'send']);
+    Route::post('/chats/{conversation}/requests', [ChatController::class, 'request']);
     Route::get('/orders', [OrderController::class, 'index']);
     Route::post('/orders', [OrderController::class, 'store'])->middleware('can:create,App\Models\Order');
     Route::post('/orders/batch', [OrderController::class, 'batchStore'])->middleware('can:create,App\Models\Order');
@@ -63,7 +81,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders/structure', [OrderController::class, 'structure'])->middleware('can:create,App\Models\Order');
     Route::get('/orders/{order}', [OrderController::class, 'show']);
     Route::patch('/orders/{order}', [OrderController::class, 'update'])->middleware('can:update,order');
-    Route::post('/orders/{order}/claim', [OrderController::class, 'claim'])->middleware('can:create,App\Models\Order');
+    Route::post('/orders/{order}/claim', [OrderController::class, 'claim']);
+    Route::post('/orders/{order}/claim/approve', [OrderController::class, 'approveClaim']);
+    Route::post('/orders/{order}/claim/reject', [OrderController::class, 'rejectClaim']);
     Route::post('/orders/{order}/status', [OrderController::class, 'transition'])->middleware('can:transition,order');
     Route::post('/orders/{order}/duplicate', [OrderController::class, 'duplicate'])->middleware('can:create,App\Models\Order');
     Route::post('/orders/{order}/detach', [OrderController::class, 'detachFromGroup'])->middleware('can:update,order');
@@ -81,6 +101,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/community/posts/{post}/like', [CommunityController::class, 'toggleLike']);
     Route::post('/community/posts/{post}/comments', [CommunityController::class, 'comment']);
     Route::delete('/community/posts/{post}', [CommunityController::class, 'destroy']);
+    Route::put('/community/posts/{post}', [CommunityController::class, 'update']);
+    Route::delete('/community/posts/{post}/comments/{comment}', [CommunityController::class, 'destroyComment']);
 });
 
 // 커뮤니티·채팅 이미지 — <img> 태그는 Authorization 헤더를 못 보내므로 인증 밖(공개)에서 서빙

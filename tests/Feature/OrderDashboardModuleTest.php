@@ -17,7 +17,7 @@ test('nowhere dashboard module page links to order skeleton page', function () {
     $this->actingAs($user)
         ->get(route('dashboard.business.nowhere'))
         ->assertSuccessful()
-        ->assertSee('오더 관리')
+        ->assertSee('운행 관리')
         ->assertSee('골격 보기')
         ->assertSee(route('dashboard.business.order'), false);
 });
@@ -122,6 +122,7 @@ test('order dashboard workspace mixes set and single rows by schedule order', fu
         'reservation_company' => '직접예약',
         'service_date' => '2026-08-03',
         'service_time' => '08:00',
+        'status' => Order::STATUS_PUBLISHED,
         'user_id' => $user->id,
     ]);
 
@@ -133,6 +134,7 @@ test('order dashboard workspace mixes set and single rows by schedule order', fu
         'service_type' => 'pickup',
         'service_date' => '2026-08-03',
         'service_time' => '10:00',
+        'status' => Order::STATUS_PUBLISHED,
         'user_id' => $user->id,
     ]);
 
@@ -141,6 +143,7 @@ test('order dashboard workspace mixes set and single rows by schedule order', fu
         'reservation_company' => 'KKDAY',
         'service_date' => '2026-08-03',
         'service_time' => '12:00',
+        'status' => Order::STATUS_PUBLISHED,
         'user_id' => $user->id,
     ]);
 

@@ -33,7 +33,7 @@ test('api login rejects invalid credentials', function () {
         'password' => 'wrong-password',
     ])
         ->assertStatus(422)
-        ->assertJsonValidationErrors(['email']);
+        ->assertJsonValidationErrors(['login']);
 });
 
 test('api me returns the authenticated user', function () {

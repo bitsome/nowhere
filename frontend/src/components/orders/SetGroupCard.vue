@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { statusColorVar } from '../../utils/colors';
+import BaseIcon from '../common/BaseIcon.vue';
 
 const props = defineProps({
     set: {
@@ -43,16 +44,16 @@ const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
             <div class="set-card__flags">
                 <span v-if="set.isNew" class="set-card__new" title="새로 등록된 셋트">N</span>
                 <span v-if="set.isUrgent" class="set-card__urgent" title="곧 운행 시작">임박</span>
-                <span class="status-badge" :style="{ background: statusColor, borderColor: statusColor }">
+                <span class="status-badge" :class="`status-badge--${set.status}`" :style="{ background: statusColor, borderColor: statusColor }">
                     {{ set.statusLabel }}
                 </span>
                 <span v-if="set.routes[0]?.vehicle || set.routes[0]?.passengerCount" class="set-card__side-line">
                     <span v-if="set.routes[0]?.vehicle" class="side-chip">
-                        <svg class="side-chip__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M6 17a1 1 0 0 0 2 0M16 17a1 1 0 0 0 2 0M4 17V11l2.5-4h11L20 11v6h-1M4.5 11h15" /></svg>
+                        <BaseIcon class="side-chip__icon" name="car" :size="12" />
                         {{ set.routes[0].vehicle }}
                     </span>
                     <span v-if="set.routes[0]?.passengerCount" class="side-chip">
-                        <svg class="side-chip__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.4 3.4-5 6.5-5s5.7 1.6 6.5 5" /><circle cx="17" cy="9" r="2.5" /><path d="M15 15.5c2.3.2 4 1.3 4.8 3.7" /></svg>
+                        <BaseIcon class="side-chip__icon" name="people" :size="12" />
                         {{ set.routes[0].passengerCount }}명
                     </span>
                 </span>
@@ -232,6 +233,12 @@ const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
     font-weight: 600;
     white-space: nowrap;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 다크모드 — 밝은 틸(#63e2b7) 배지 위엔 검은 글자 */
+html.dark .status-badge--published,
+html.dark .status-badge--driving {
+    color: #101418;
 }
 
 .set-card__routes {

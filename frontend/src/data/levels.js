@@ -38,17 +38,5 @@ export const XP_RULES = [
 export const tierForLevel = (level) =>
     LEVEL_TIERS.find((t) => level >= t.min && level <= t.max) ?? LEVEL_TIERS[0];
 
-export const iconSvg = (icon) => {
-    switch (icon) {
-        case 'shield':
-            return '<path d="M12 2.8l6.5 2.9v4.8c0 4.3-2.8 7.8-6.5 9.7-3.7-1.9-6.5-5.4-6.5-9.7V5.7L12 2.8z"/><path d="M12 6.6l3.8 1.7v2.8c0 2.5-1.6 4.6-3.8 5.7-2.2-1.1-3.8-3.2-3.8-5.7V8.3L12 6.6z"/>';
-        case 'star':
-            return '<path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.9L12 16.5 6.8 19.2l1-5.9L3.5 9.2l5.9-.9L12 3z"/>';
-        case 'zap':
-            return '<path d="M13 2L4.5 13.5H11L9.5 22 19 10h-6.5L13 2z"/>';
-        case 'crown':
-            return '<path d="M3 7l5 4 4-7 4 7 5-4-2 11H5L3 7z"/>';
-        default:
-            return '<path d="M6 3h12l4 6-10 12L2 9l4-6z"/><path d="M2 9h20M9 3l-3 6 6 12M15 3l3 6-6 12"/>';
-    }
-};
+// 레벨 티어 아이콘 이름 — utils/icons.js 매핑의 키를 반환한다 (폰트아이콘 방식)
+export const iconSvg = (icon) => icon;

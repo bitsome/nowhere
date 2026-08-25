@@ -180,7 +180,7 @@ class OrderWorkspaceListBuilder
     {
         $sorted = collect($rows);
 
-        return match ($sort) {
+        $result = match ($sort) {
             'date' => $sorted
                 ->sortBy(fn (array $row) => ($row['sortDate'] ?? '').' '.($row['sortTime'] ?? '').' '.($row['key'] ?? ''))
                 ->values()
@@ -199,5 +199,19 @@ class OrderWorkspaceListBuilder
                 ->values()
                 ->all(),
         };
+
+        // 가져오기 승인 대기 운행은 항상 맨 위에 노출 (등록자가 승인해야 하므로)
+        $pending = [];
+        $rest = [];
+
+        foreach ($result as $row) {
+            if (($row['status'] ?? null) === Order::STATUS_ACCEPTANCE_PENDING) {
+                $pending[] = $row;
+            } else {
+                $rest[] = $row;
+            }
+        }
+
+        return [...$pending, ...$rest];
     }
 }

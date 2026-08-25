@@ -1,285 +1,101 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { useMessage } from 'naive-ui';
 import { useRouter } from 'vue-router';
-import {
-    apiCommentCommunity,
-    apiCommunityPost,
-    apiCommunityPosts,
-    apiCreateCommunityPost,
-    apiDeleteCommunityPost,
-    apiToggleCommunityLike,
-} from '../api/community';
-import { getApiErrorMessage } from '../api/client';
 import { useAuthStore } from '../stores/auth';
 import { useUiStore } from '../stores/ui';
+import { useCommunityFeed } from '../composables/useCommunityFeed';
+import { usePostComposer } from '../composables/usePostComposer';
+import { COMMUNITY_CATEGORIES, categoryOf } from '../utils/communityCategories';
 import LevelBadge from '../components/LevelBadge.vue';
+import BaseIcon from '../components/common/BaseIcon.vue';
+import EmptyState from '../components/common/EmptyState.vue';
+import CommunityPostEditor from '../components/community/CommunityPostEditor.vue';
+
+defineOptions({ name: 'CommunityView' });
 
 const message = useMessage();
 const router = useRouter();
 const auth = useAuthStore();
 const ui = useUiStore();
 
-const posts = ref([]);
-const pagination = ref(null);
-const page = ref(1);
-const loading = ref(true);
-const error = ref('');
+// ── 모듈: 커뮤니티 피드 / 글 작성 ──
+const feed = useCommunityFeed({ message, auth, ui });
+const composer = usePostComposer({ message, posts: feed.posts });
 
-// 작성 모달
-const showComposer = ref(false);
-const composing = ref(false);
-const draftContent = ref('');
-const draftImage = ref(null);
-const draftPreviewUrl = ref('');
-const draftVideoUrl = ref('');
+const {
+    posts, popularPosts, pagination, page, loading, error, category, search,
+    load, loadMore, loadPopular, setCategory, applySearch, clearSearch,
+    toggleLike, commentText, submitComment, deleteComment,
+    expandComments, removePost, timeAgo, avatarText, myId, playingVideo, parseVideo, toggleVideo, visiblePosts,
+    scrollToPost, author, period, clearAllFilters,
+} = feed;
 
-const load = async (reset = false) => {
-    if (reset) {
-        page.value = 1;
-    }
+const {
+    showComposer, composing, draftContent, draftCategory, draftImage, draftPreviewUrl, draftVideoUrl,
+    openComposer, pickImage, submitPost,
+} = composer;
 
-    loading.value = true;
-    error.value = '';
-
-    try {
-        const { data } = await apiCommunityPosts(page.value);
-        posts.value = reset ? data.data : [...posts.value, ...data.data];
-        pagination.value = data.meta.pagination;
-    } catch (e) {
-        error.value = getApiErrorMessage(e, '커뮤니티 글을 불러오지 못했습니다.');
-    } finally {
-        loading.value = false;
-    }
-};
-
-const loadMore = () => {
-    if (pagination.value && page.value < pagination.value.last_page) {
-        page.value += 1;
-        load();
-    }
-};
-
-const openComposer = () => {
-    draftContent.value = '';
-    draftImage.value = null;
-    draftPreviewUrl.value = '';
-    draftVideoUrl.value = '';
-    showComposer.value = true;
-};
-
-const pickImage = async (event) => {
-    const file = event.target.files?.[0];
-
-    if (!file) {
-        return;
-    }
-
-    // 업로드 전 최대 1080px로 리사이즈 (대용량 원본 그대로 업로드 방지 → 업로드/로딩 최적화)
-    const resized = await resizeImage(file, 1080);
-
-    draftImage.value = resized ?? file;
-    draftPreviewUrl.value = URL.createObjectURL(draftImage.value);
-};
-
-/**
- * 이미지를 canvas로 리사이즈해 JPEG Blob으로 변환한다.
- * 실패(비이미지 등)하면 null — 원본 그대로 사용.
- */
-const resizeImage = (file, maxSize) =>
-    new Promise((resolve) => {
-        const url = URL.createObjectURL(file);
-        const img = new Image();
-
-        img.onload = () => {
-            const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
-            const width = Math.max(1, Math.round(img.width * scale));
-            const height = Math.max(1, Math.round(img.height * scale));
-            const canvas = document.createElement('canvas');
-
-            canvas.width = width;
-            canvas.height = height;
-            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-            URL.revokeObjectURL(url);
-
-            canvas.toBlob(
-                (blob) => {
-                    if (!blob) {
-                        resolve(null);
-
-                        return;
-                    }
-
-                    resolve(new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' }));
-                },
-                'image/jpeg',
-                0.82,
-            );
-        };
-
-        img.onerror = () => {
-            URL.revokeObjectURL(url);
-            resolve(null);
-        };
-
-        img.src = url;
-    });
-
-const submitPost = async () => {
-    const content = draftContent.value.trim();
-
-    if (content === '' && !draftImage.value) {
-        message.warning('글 내용을 입력해주세요.');
-
-        return;
-    }
-
-    composing.value = true;
-
-    try {
-        const { data } = await apiCreateCommunityPost({
-            content,
-            image: draftImage.value,
-            video_url: draftVideoUrl.value.trim(),
-        });
-        posts.value.unshift(data.data);
-        showComposer.value = false;
-        message.success('글이 게시되었습니다.');
-    } catch (e) {
-        message.error(getApiErrorMessage(e, '글 작성에 실패했습니다.'));
-    } finally {
-        composing.value = false;
-    }
-};
-
-const toggleLike = async (post) => {
-    try {
-        const { data } = await apiToggleCommunityLike(post.id);
-        post.is_liked = data.data.liked;
-        post.likes_count = data.data.likes_count;
-    } catch (e) {
-        message.error(getApiErrorMessage(e, '좋아요 처리에 실패했습니다.'));
-    }
-};
-
-const commentText = ref({});
-
-const submitComment = async (post) => {
-    const content = (commentText.value[post.id] ?? '').trim();
-
-    if (content === '') {
-        return;
-    }
-
-    try {
-        const { data } = await apiCommentCommunity(post.id, content);
-        post.comments.push(data.data);
-        post.comments_count = data.data.comments_count;
-        commentText.value[post.id] = '';
-    } catch (e) {
-        message.error(getApiErrorMessage(e, '댓글 작성에 실패했습니다.'));
-    }
-};
-
-// 댓글 '모두 보기' — 피드에는 최근 3개만 내려오므로 나머지를 지연 로드한다
-const expandComments = async (post) => {
-    try {
-        const { data } = await apiCommunityPost(post.id);
-        post.comments = data.data.comments;
-        post.comments_count = data.data.comments_count;
-    } catch (e) {
-        message.error(getApiErrorMessage(e, '댓글을 불러오지 못했습니다.'));
-    }
-};
-
-const removePost = async (post) => {
-    try {
-        await apiDeleteCommunityPost(post.id);
-        posts.value = posts.value.filter((p) => p.id !== post.id);
-        message.success('글이 삭제되었습니다.');
-    } catch (e) {
-        message.error(getApiErrorMessage(e, '글 삭제에 실패했습니다.'));
-    }
-};
-
-// 상대 시간 (NaN 방어 포함)
-const timeAgo = (iso) => {
-    if (!iso) return '';
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return String(iso).slice(0, 10);
-
-    const diff = (Date.now() - d.getTime()) / 1000;
-
-    if (diff < 60) return '방금 전';
-    if (diff < 3600) return `${Math.floor(diff / 60)}분 전`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
-    if (diff < 86400 * 7) return `${Math.floor(diff / 86400)}일 전`;
-
-    return d.toLocaleDateString('ko-KR');
-};
-
-const avatarText = (name) => (name ?? '?').charAt(0).toUpperCase();
-
-const myId = computed(() => auth.user?.id);
-
-// 재생 중인 영상 (post.id → true) — 클릭 시 iframe 임베드로 전환
-const playingVideo = ref({});
-
-// 영상 URL 해석 — 유튜브(영상/숏츠)는 썸네일+임베드, 그 외는 링크
-const parseVideo = (url) => {
-    if (!url) {
-        return null;
-    }
-
-    const match = String(url).match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{6,})/);
-
-    if (match) {
-        return {
-            kind: 'youtube',
-            id: match[1],
-            thumb: `https://i.ytimg.com/vi/${match[1]}/hqdefault.jpg`,
-            embed: `https://www.youtube.com/embed/${match[1]}`,
-        };
-    }
-
-    return { kind: 'link', url };
-};
-
-const toggleVideo = (post) => {
-    const info = parseVideo(post.video_url);
-    if (info?.kind === 'youtube') {
-        playingVideo.value = { ...playingVideo.value, [post.id]: !playingVideo.value[post.id] };
-    }
-};
+// 인기 글은 '전체 탭 + 검색 없음 + 내 글만 보기 아님'일 때만 상단 노출
+const showPopular = () =>
+    category.value === 'all' && search.value === '' && !ui.communityMyPostsOnly && ui.communitySort !== 'popular';
 
 // 헤더 액션 버스 수신 — 글쓰기/필터/정렬/새로고침
 watch(
     () => ui.actionSeq,
     () => {
         if (ui.actionName === 'community:write') {
-            openComposer();
+            // 현재 탭의 카테고리를 작성 카테고리 기본값으로 사용 (전체 탭이면 자유)
+            openComposer(category.value !== 'all' ? category.value : 'free');
         } else if (ui.actionName === 'community:reload') {
             load(true);
         }
     },
 );
 
-// 표시할 글 — 헤더 메뉴의 '내 글만 보기' + 정렬(최신/인기) 반영
-const visiblePosts = computed(() => {
-    let list = ui.communityMyPostsOnly ? posts.value.filter((p) => p.user.id === myId.value) : posts.value;
+// 검색 모달 — 상단 검색 아이콘 클릭 시 열림
+const searchOpen = ref(false);
+const PERIOD_OPTIONS = [
+    { label: '오늘', value: 'today' },
+    { label: '이번 주', value: 'week' },
+    { label: '이번 달', value: 'month' },
+];
+const openSearch = () => {
+    searchOpen.value = true;
+};
+const submitSearch = () => {
+    applySearch();
+    searchOpen.value = false;
+};
 
-    if (ui.communitySort === 'popular') {
-        list = [...list].sort((a, b) => b.likes_count - a.likes_count || new Date(b.created_at) - new Date(a.created_at));
-    }
+// 게시글 상세 이동 — 카드 본문 클릭 시 (버튼/링크는 .stop으로 전파 차단)
+const openPost = (post) => {
+    router.push({ name: 'community-post', params: { id: post.id } });
+};
 
-    return list;
+// 글 수정 — 더보기 메뉴에서 열기, 저장되면 피드 목록의 글을 갱신
+const editOpen = ref(false);
+const editPost = ref(null);
+const openEdit = (post) => {
+    editPost.value = post;
+    editOpen.value = true;
+};
+const onSaved = (updated) => {
+    // 에디터가 이미 서버에 저장했으므로, 반환받은 최신 글을 피드 목록에 반영만 한다
+    posts.value = posts.value.map((p) => (p.id === updated.id ? updated : p));
+    popularPosts.value = popularPosts.value.map((p) => (p.id === updated.id ? updated : p));
+    editOpen.value = false;
+    message.success('글이 수정되었습니다.');
+};
+
+onMounted(() => {
+    load(true);
+    loadPopular();
 });
-
-onMounted(() => load(true));
 </script>
 
 <template>
-    <div>
+    <div class="community-page">
         <n-alert v-if="error" type="error" :show-icon="true" class="community-alert">
             {{ error }}
             <template #action>
@@ -287,31 +103,101 @@ onMounted(() => load(true));
             </template>
         </n-alert>
 
-        <!-- 빠른 정렬 — 드로어를 열지 않아도 바로 바꾼다 (클라이언트 정렬) -->
-        <div class="community-sort">
+        <!-- 카테고리 탭 -->
+        <div class="community-tabs">
             <button
                 type="button"
-                class="community-sort__btn"
-                :class="{ 'community-sort__btn--active': ui.communitySort === 'latest' }"
-                @click="ui.communitySort = 'latest'"
+                class="community-tabs__item"
+                :class="{ 'community-tabs__item--active': category === 'all' }"
+                @click="setCategory('all')"
             >
-                최신순
+                전체
             </button>
             <button
+                v-for="c in COMMUNITY_CATEGORIES"
+                :key="c.key"
                 type="button"
-                class="community-sort__btn"
-                :class="{ 'community-sort__btn--active': ui.communitySort === 'popular' }"
-                @click="ui.communitySort = 'popular'"
+                class="community-tabs__item"
+                :class="{ 'community-tabs__item--active': category === c.key }"
+                @click="setCategory(c.key)"
             >
-                인기순
+                {{ c.label }}
             </button>
         </div>
 
-        <n-spin :show="loading" class="community-body">
-            <n-empty
-                v-if="!loading && visiblePosts.length === 0"
-                description="게시글이 없습니다. 헤더의 '글쓰기'로 첫 글을 올려보세요!"
-                :image-size="80"
+        <!-- 정렬 + 검색 — 좌측 정렬, 우측 검색 -->
+        <div class="community-toolbar">
+            <div class="community-sort">
+                <button
+                    type="button"
+                    class="community-sort__btn"
+                    :class="{ 'community-sort__btn--active': ui.communitySort === 'latest' }"
+                    @click="ui.communitySort = 'latest'"
+                >
+                    최신순
+                </button>
+                <button
+                    type="button"
+                    class="community-sort__btn"
+                    :class="{ 'community-sort__btn--active': ui.communitySort === 'popular' }"
+                    @click="ui.communitySort = 'popular'"
+                >
+                    인기순
+                </button>
+            </div>
+            <button type="button" class="community-search-btn" aria-label="게시글 검색" @click="openSearch">
+                <BaseIcon name="search" :size="20" />
+            </button>
+        </div>
+
+        <!-- 🔥 인기 글 -->
+        <template v-if="showPopular() && popularPosts.length">
+            <div class="community-section">
+                <span class="community-section__title">🔥 인기 글</span>
+            </div>
+            <div class="community-popular">
+                <article
+                    v-for="post in popularPosts"
+                    :key="'pop-' + post.id"
+                    class="popular-card"
+                    @click="scrollToPost(post.id)"
+                >
+                    <span class="popular-card__badge">인기</span>
+                    <span class="popular-card__cat">{{ categoryOf(post.category).label }}</span>
+                    <p class="popular-card__title">{{ post.content }}</p>
+                    <span class="popular-card__meta">
+                        {{ post.user?.name }} · {{ timeAgo(post.created_at) }} · ♡ {{ post.likes_count }} · 댓글 {{ post.comments_count }}
+                    </span>
+                </article>
+            </div>
+        </template>
+
+        <!-- 로딩 스켈레톤 — 피드 카드 골격 (n-spin 대신 레이아웃 유지) -->
+        <div v-if="loading" class="community-body community-skeleton" aria-hidden="true">
+            <div v-for="n in 4" :key="`feed-skel-${n}`" class="sk-card feed-skeleton">
+                <div class="feed-skeleton__head">
+                    <div class="sk-circle" />
+                    <div class="feed-skeleton__head-lines">
+                        <div class="sk-line sk-line--md" style="width: 45%;" />
+                        <div class="sk-line sk-line--sm" style="width: 32%;" />
+                    </div>
+                </div>
+                <div class="sk-line sk-line--md" />
+                <div class="sk-line sk-line--sm" style="width: 85%;" />
+                <div class="sk-line sk-line--sm" style="width: 60%;" />
+                <div class="feed-skeleton__actions">
+                    <div class="sk-line sk-line--sm" style="width: 64px;" />
+                    <div class="sk-line sk-line--sm" style="width: 64px;" />
+                </div>
+            </div>
+        </div>
+
+        <div v-else class="community-body">
+            <EmptyState
+                v-if="visiblePosts.length === 0"
+                icon="chat"
+                title="게시글이 없습니다"
+                hint="첫 글을 올려 커뮤니티를 시작해 보세요"
             />
 
             <div v-else class="community-feed">
@@ -319,41 +205,45 @@ onMounted(() => load(true));
                     v-for="post in visiblePosts"
                     :key="post.id"
                     class="feed-card"
+                    :data-post-id="post.id"
+                    @click="openPost(post)"
                 >
                     <div class="feed-card__head">
                         <button
                             type="button"
                             class="feed-avatar feed-avatar--link"
-                            @click="router.push({ name: 'user-page', params: { id: post.user.id } })"
+                            @click.stop="router.push({ name: 'user-page', params: { id: post.user.id } })"
                         >
                             {{ avatarText(post.user.name) }}
                         </button>
                         <button
                             type="button"
                             class="feed-card__who"
-                            @click="router.push({ name: 'user-page', params: { id: post.user.id } })"
+                            @click.stop="router.push({ name: 'user-page', params: { id: post.user.id } })"
                         >
                             <span class="feed-card__name-row">
                                 <strong>{{ post.user.name }}</strong>
                                 <LevelBadge v-if="post.user.level" :level="post.user.level.level" size="sm" />
                                 <span v-if="post.user.is_vip" class="feed-badge feed-badge--vip">VIP</span>
-                                <span v-if="post.user.is_vehicle_verified" class="feed-badge" title="차량 인증">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11" /><path d="M4 11h16a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1z" /><circle cx="7" cy="16" r="1.6" /><circle cx="17" cy="16" r="1.6" /></svg>
-                                </span>
-                                <span v-if="post.user.is_license_verified" class="feed-badge" title="면허 인증">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><rect x="2.5" y="4.5" width="19" height="15" rx="2.5" /><path d="M2.5 9h19" /><circle cx="6.5" cy="13.5" r="1.6" /><path d="M15.5 13h4M15.5 16h4" /></svg>
-                                </span>
                                 <span class="feed-card__time">{{ timeAgo(post.created_at) }}</span>
+                            </span>
+                            <span class="feed-card__cat-row">
+                                <span class="feed-card__cat" :class="`feed-card__cat--${post.category}`">
+                                    {{ categoryOf(post.category).label }}
+                                </span>
                             </span>
                         </button>
                         <n-dropdown
                             v-if="post.is_mine"
                             trigger="click"
-                            :options="[{ label: '삭제', key: 'delete' }]"
-                            @select="removePost(post)"
+                            :options="[
+                                { label: '수정', key: 'edit' },
+                                { label: '삭제', key: 'delete' },
+                            ]"
+                            @select="(key) => (key === 'edit' ? openEdit(post) : removePost(post))"
                         >
-                            <button type="button" class="feed-card__more" aria-label="더보기">
-                                <svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><circle cx="5" cy="12" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="19" cy="12" r="1.7" /></svg>
+                            <button type="button" class="feed-card__more" aria-label="더보기" @click.stop>
+                                <BaseIcon name="more" :size="16" />
                             </button>
                         </n-dropdown>
                     </div>
@@ -375,15 +265,15 @@ onMounted(() => load(true));
                                 v-if="!playingVideo[post.id]"
                                 type="button"
                                 class="video-player video-player--thumb"
-                                @click="toggleVideo(post)"
+                                @click.stop="toggleVideo(post)"
                             >
                                 <img :src="parseVideo(post.video_url).thumb" alt="영상 썸네일" loading="lazy" />
                                 <span class="video-player__play">
-                                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                                    <BaseIcon name="play" :size="16" />
                                 </span>
                                 <span class="video-player__badge">숏츠/영상</span>
                             </button>
-                            <div v-else class="video-player">
+                            <div v-else class="video-player" @click.stop>
                                 <iframe
                                     :src="parseVideo(post.video_url).embed"
                                     title="YouTube 영상"
@@ -399,45 +289,48 @@ onMounted(() => load(true));
                             target="_blank"
                             rel="noopener noreferrer"
                             class="video-link"
+                            @click.stop
                         >
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                            </svg>
+                            <BaseIcon name="video" :size="14" />
                             영상 보기
                         </a>
                     </template>
 
-                    <div class="feed-card__actions">
+                    <div class="feed-card__actions" @click.stop>
                         <button
                             type="button"
                             class="feed-action"
                             :class="{ 'feed-action--liked': post.is_liked }"
                             @click="toggleLike(post)"
                         >
-                            <svg
+                            <BaseIcon
                                 class="feed-action__icon"
-                                viewBox="0 0 24 24"
-                                :fill="post.is_liked ? 'currentColor' : 'none'"
-                                stroke="currentColor"
-                                stroke-width="2"
-                            >
-                                <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z" />
-                            </svg>
+                                :name="post.is_liked ? 'heart-filled' : 'heart'"
+                                :size="18"
+                            />
                             <span>{{ post.likes_count > 0 ? post.likes_count : '좋아요' }}</span>
                         </button>
 
                         <span class="feed-action feed-action--static">
-                            <svg class="feed-action__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.3 8.6 8.6 0 0 1-3.9-.9L3 20l1.2-5.3a8.2 8.2 0 0 1-.7-3.2A8.4 8.4 0 0 1 12 3.2a8.4 8.4 0 0 1 9 8.3z" />
-                            </svg>
+                            <BaseIcon class="feed-action__icon" name="comment" :size="16" />
                             <span>{{ post.comments_count > 0 ? post.comments_count : '댓글' }}</span>
                         </span>
                     </div>
 
-                    <div v-if="post.comments.length" class="feed-card__comments">
+                    <div v-if="post.comments.length" class="feed-card__comments" @click.stop>
                         <div v-for="comment in post.comments" :key="comment.id" class="comment-row">
                             <strong>{{ comment.user?.name }}</strong>
                             <span>{{ comment.content }}</span>
+                            <span class="comment-row__time">{{ timeAgo(comment.created_at) }}</span>
+                            <button
+                                v-if="comment.is_mine"
+                                type="button"
+                                class="comment-row__delete"
+                                aria-label="댓글 삭제"
+                                @click="deleteComment(post, comment)"
+                            >
+                                <BaseIcon name="trash" :size="13" />
+                            </button>
                         </div>
                         <button
                             v-if="post.comments_count > post.comments.length"
@@ -449,7 +342,7 @@ onMounted(() => load(true));
                         </button>
                     </div>
 
-                    <div class="feed-card__composer">
+                    <div class="feed-card__composer" @click.stop>
                         <input
                             v-model="commentText[post.id]"
                             type="text"
@@ -472,7 +365,17 @@ onMounted(() => load(true));
                     </n-button>
                 </div>
             </div>
-        </n-spin>
+        </div>
+
+        <!-- 글쓰기 FAB -->
+        <button
+            type="button"
+            class="community-fab"
+            aria-label="글쓰기"
+            @click="openComposer(category.value !== 'all' ? category.value : 'free')"
+        >
+            ＋
+        </button>
 
         <!-- 글쓰기 모달 -->
         <n-modal
@@ -482,6 +385,20 @@ onMounted(() => load(true));
             :style="{ maxWidth: '520px' }"
         >
             <div class="composer">
+                <!-- 카테고리 선택 -->
+                <div class="composer__cats">
+                    <button
+                        v-for="c in COMMUNITY_CATEGORIES"
+                        :key="c.key"
+                        type="button"
+                        class="composer__cat"
+                        :class="{ 'composer__cat--active': draftCategory === c.key }"
+                        @click="draftCategory = c.key"
+                    >
+                        <span><BaseIcon :name="c.icon" :size="16" /></span>{{ c.label }}
+                    </button>
+                </div>
+
                 <n-input
                     v-model:value="draftContent"
                     type="textarea"
@@ -504,11 +421,7 @@ onMounted(() => load(true));
                 <div class="composer__footer">
                     <label class="composer__upload">
                         <input type="file" accept="image/*" hidden @change="pickImage" />
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="5" width="18" height="14" rx="2" />
-                            <circle cx="8.5" cy="10" r="1.5" />
-                            <path d="M21 15l-5-5L5 21" />
-                        </svg>
+                        <BaseIcon name="image" :size="16" />
                         사진 첨부
                     </label>
                     <n-button
@@ -522,18 +435,148 @@ onMounted(() => load(true));
                 </div>
             </div>
         </n-modal>
+        <!-- 검색 모달 -->
+        <n-modal
+            v-model:show="searchOpen"
+            preset="card"
+            title="게시글 검색"
+            :style="{ maxWidth: '480px' }"
+        >
+            <div class="search-modal">
+                <n-input
+                    v-model:value="search"
+                    type="text"
+                    placeholder="노선 · 키워드로 게시글 검색"
+                    clearable
+                    size="large"
+                    @keyup.enter="submitSearch"
+                    @clear="clearSearch"
+                />
+                <n-input
+                    v-model:value="author"
+                    type="text"
+                    placeholder="작성자 이름으로 검색"
+                    clearable
+                    size="large"
+                    @keyup.enter="submitSearch"
+                />
+                <n-select
+                    v-model:value="period"
+                    :options="PERIOD_OPTIONS"
+                    placeholder="기간 (전체)"
+                    clearable
+                    size="large"
+                />
+                <div class="search-modal__footer">
+                    <n-button quaternary @click="clearAllFilters">초기화</n-button>
+                    <n-button type="primary" @click="submitSearch">검색</n-button>
+                </div>
+            </div>
+        </n-modal>
+
+        <!-- 글 수정 모달 -->
+        <CommunityPostEditor v-model:show="editOpen" :post="editPost" @saved="onSaved" />
     </div>
 </template>
 
 <style scoped>
-.community-alert { margin-bottom: 16px; }
+/* 커뮤니티 — v7 디자인(검색/카테고리/인기글/FAB) 적용 */
+.community-page {
+    width: 100%;
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 4px 20px 90px;
+}
 
-/* 빠른 정렬 칩 — 피드와 동일 폭 정렬 */
+/* 모바일 풀 브레드 */
+@media (max-width: 480px) {
+    .community-page {
+        width: calc(100% + 40px);
+        margin: 0 -20px;
+        padding: 4px 14px 90px;
+        max-width: none;
+    }
+}
+
+.community-alert { margin-bottom: 12px; }
+
+/* ── 정렬 + 검색 — 한 줄(좌측 정렬, 우측 검색) ── */
+.community-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.community-search-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.community-search-btn:hover { border-color: var(--brand); color: var(--brand); }
+
+/* ── 검색 모달 ── */
+.search-modal {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.search-modal__footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* ── 카테고리 탭 ── */
+.community-tabs {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    margin-bottom: 10px;
+    scrollbar-width: none;
+}
+
+.community-tabs::-webkit-scrollbar { display: none; }
+
+.community-tabs__item {
+    flex-shrink: 0;
+    padding: 6px 13px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.community-tabs__item:hover { border-color: var(--brand); }
+
+.community-tabs__item--active {
+    border-color: var(--brand);
+    background: var(--brand-soft);
+    color: var(--brand);
+}
+
+/* ── 정렬 칩 ── */
 .community-sort {
     display: flex;
     gap: 6px;
-    max-width: 600px;
-    margin: 0 auto 12px;
+    margin-bottom: 0;
+    flex-shrink: 0;
 }
 
 .community-sort__btn {
@@ -548,14 +591,84 @@ onMounted(() => load(true));
     transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 
-.community-sort__btn:hover {
-    border-color: var(--brand);
-}
+.community-sort__btn:hover { border-color: var(--brand); }
 
 .community-sort__btn--active {
     border-color: var(--brand);
     background: var(--brand-soft);
     color: var(--brand);
+}
+
+/* ── 섹션 제목 ── */
+.community-section {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 2px 0 8px;
+}
+
+.community-section__title {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--text);
+}
+
+/* ── 인기 글 ── */
+.community-popular {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.popular-card {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    align-items: center;
+    gap: 6px;
+    padding: 11px 13px;
+    border: 1px solid var(--border);
+    border-radius: 13px;
+    background: var(--surface);
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+}
+
+.popular-card:hover { border-color: color-mix(in srgb, var(--brand) 40%, transparent); }
+
+.popular-card__badge {
+    padding: 1px 7px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--danger) 14%, transparent);
+    color: var(--danger);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.popular-card__cat {
+    padding: 1px 7px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--brand) 12%, transparent);
+    color: var(--brand);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.popular-card__title {
+    grid-column: 1 / -1;
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.popular-card__meta {
+    grid-column: 1 / -1;
+    font-size: 11px;
+    color: var(--text-muted);
 }
 
 .community-body { display: block; min-height: 200px; }
@@ -564,8 +677,6 @@ onMounted(() => load(true));
     display: flex;
     flex-direction: column;
     gap: 12px;
-    max-width: 600px;
-    margin: 0 auto;
 }
 
 /* ── 카드 ── */
@@ -574,7 +685,11 @@ onMounted(() => load(true));
     border: 1px solid var(--border);
     border-radius: 14px;
     padding: 14px;
+    cursor: pointer;
+    transition: border-color 0.15s ease;
 }
+
+.feed-card:hover { border-color: color-mix(in srgb, var(--brand) 35%, transparent); }
 
 /* ── 헤드(아바타+이름) ── */
 .feed-card__head {
@@ -606,6 +721,7 @@ onMounted(() => load(true));
     display: flex;
     flex-direction: column;
     justify-content: center;
+    gap: 2px;
     min-width: 0;
     padding: 0;
     border: 0;
@@ -642,6 +758,26 @@ onMounted(() => load(true));
     color: var(--text-muted);
 }
 
+.feed-card__cat-row { display: flex; }
+
+.feed-card__cat {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--brand) 12%, transparent);
+    color: var(--brand);
+    font-size: 10px;
+    font-weight: 700;
+}
+
+.feed-card__cat--airport { background: color-mix(in srgb, #4a9eff 14%, transparent); color: #4a9eff; }
+.feed-card__cat--route { background: color-mix(in srgb, var(--status-accepted) 14%, transparent); color: var(--status-accepted); }
+.feed-card__cat--region { background: color-mix(in srgb, #a78bfa 14%, transparent); color: #a78bfa; }
+.feed-card__cat--car { background: color-mix(in srgb, #f4be5f 16%, transparent); color: #e8a83c; }
+.feed-card__cat--money { background: color-mix(in srgb, #f2994a 16%, transparent); color: #e2873a; }
+.feed-card__cat--shop { background: color-mix(in srgb, #63e2b7 14%, transparent); color: var(--status-accepted); }
+
 .feed-badge {
     display: inline-flex;
     align-items: center;
@@ -675,9 +811,7 @@ onMounted(() => load(true));
     transition: background 0.12s ease;
 }
 
-.feed-card__more:hover {
-    background: rgba(0, 0, 0, 0.05);
-}
+.feed-card__more:hover { background: rgba(0, 0, 0, 0.05); }
 
 /* ── 본문 ── */
 .feed-card__content {
@@ -698,9 +832,7 @@ onMounted(() => load(true));
     margin-bottom: 2px;
 }
 
-html.dark .feed-card__image {
-    background: rgba(255, 255, 255, 0.08);
-}
+html.dark .feed-card__image { background: rgba(255, 255, 255, 0.08); }
 
 /* ── 영상/숏츠 ── */
 .video-player {
@@ -776,14 +908,9 @@ html.dark .feed-card__image {
     text-decoration: none;
 }
 
-.video-link svg {
-    width: 16px;
-    height: 16px;
-}
+.video-link svg { width: 16px; height: 16px; }
 
-.composer__video {
-    margin-top: 10px;
-}
+.composer__video { margin-top: 10px; }
 
 /* ── 액션 버튼 ── */
 .feed-card__actions {
@@ -827,9 +954,7 @@ html.dark .feed-card__image {
     background: rgba(0, 0, 0, 0.02);
 }
 
-html.dark .feed-card__comments {
-    background: rgba(255, 255, 255, 0.03);
-}
+html.dark .feed-card__comments { background: rgba(255, 255, 255, 0.03); }
 
 .comment-row {
     display: flex;
@@ -840,6 +965,29 @@ html.dark .feed-card__comments {
 
 .comment-row strong { flex-shrink: 0; color: var(--text); font-size: 13px; }
 .comment-row span { word-break: break-word; color: var(--text); }
+
+.comment-row__time {
+    color: var(--text-muted) !important;
+    font-size: 11px !important;
+    flex-shrink: 0;
+}
+
+.comment-row__delete {
+    margin-left: auto;
+    border: 0;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    opacity: 0.6;
+    transition: opacity 0.12s ease, color 0.12s ease;
+}
+
+.comment-row__delete:hover { opacity: 1; color: var(--danger); }
+
+.comment-row__delete svg { width: 13px; height: 13px; }
 
 .comments-more {
     border: 0;
@@ -874,17 +1022,10 @@ html.dark .feed-card__comments {
     transition: background 0.15s ease;
 }
 
-.feed-card__composer input:focus {
-    background: rgba(0, 0, 0, 0.07);
-}
+.feed-card__composer input:focus { background: rgba(0, 0, 0, 0.07); }
 
-html.dark .feed-card__composer input {
-    background: rgba(255, 255, 255, 0.05);
-}
-
-html.dark .feed-card__composer input:focus {
-    background: rgba(255, 255, 255, 0.08);
-}
+html.dark .feed-card__composer input { background: rgba(255, 255, 255, 0.05); }
+html.dark .feed-card__composer input:focus { background: rgba(255, 255, 255, 0.08); }
 
 .feed-card__composer button {
     border: 0;
@@ -906,8 +1047,57 @@ html.dark .feed-card__composer input:focus {
     padding: 12px 0 20px;
 }
 
+/* ── 글쓰기 FAB ── */
+.community-fab {
+    position: fixed;
+    right: max(18px, calc((100vw - 880px) / 2 + 18px));
+    bottom: calc(84px + env(safe-area-inset-bottom));
+    z-index: 60;
+    width: 54px;
+    height: 54px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--brand);
+    color: #fff;
+    font-size: 26px;
+    font-weight: 600;
+    line-height: 1;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+    cursor: pointer;
+    transition: transform 0.12s ease;
+}
+
+.community-fab:hover { transform: scale(1.06); }
+
 /* ── 글쓰기 모달 ── */
 .composer { display: flex; flex-direction: column; gap: 14px; }
+
+.composer__cats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.composer__cat {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 11px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg);
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.composer__cat--active {
+    border-color: var(--brand);
+    background: var(--brand-soft);
+    color: var(--brand);
+}
 
 .composer__preview {
     width: 100%;
@@ -929,6 +1119,39 @@ html.dark .feed-card__composer input:focus {
     color: var(--text-muted);
     font-size: 13px;
     cursor: pointer;
+}
+
+/* ── 커뮤니티 로딩 스켈레톤 ── */
+.community-skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.feed-skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.feed-skeleton__head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.feed-skeleton__head-lines {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.feed-skeleton__actions {
+    display: flex;
+    gap: 12px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
 }
 
 .composer__upload svg { width: 20px; height: 20px; }

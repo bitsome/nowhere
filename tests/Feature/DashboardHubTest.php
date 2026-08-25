@@ -20,7 +20,7 @@ test('dashboard hub shows minimal module focused layout', function () {
         ->assertSee('2개 모듈')
         ->assertSee('알림')
         ->assertSee('NoWhere 비즈니스 허브')
-        ->assertSee('오더 관리')
+        ->assertSee('운행 관리')
         ->assertSee('데이터 테이블')
         ->assertSee('에디터')
         ->assertSee('다이얼로그')

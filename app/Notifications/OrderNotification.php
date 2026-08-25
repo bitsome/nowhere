@@ -21,7 +21,21 @@ class OrderNotification extends Notification
      */
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', WebPushChannel::class];
+    }
+
+    /**
+     * 웹 푸시 payload — 알림을 받은 기기가 백그라운드라도 제목/내용을 보여준다.
+     *
+     * @return array<string, mixed>
+     */
+    public function toWebPush(object $notifiable): array
+    {
+        return [
+            'title' => $this->title,
+            'message' => $this->message,
+            'url' => $this->orderId !== null ? "/orders/{$this->orderId}" : '/notifications',
+        ];
     }
 
     /**

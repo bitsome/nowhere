@@ -3,8 +3,24 @@
     "short_name": "NoWhere",
     "description": "드라이버 오더 마켓 — 오더 등록/수주/채팅/커뮤니티",
     "start_url": "/",
+    "scope": "/",
+    "id": "/",
     "display": "standalone",
-    "background_color": "#ffffff",
+    "background_color": "#f4f4f4",
     "theme_color": "#36adff",
-    "lang": "ko"
+    "lang": "ko",
+    "icons": [
+        {
+            "src": "/icons/icon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any"
+        },
+        {
+            "src": "/icons/icon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "maskable"
+        }
+    ]
 }

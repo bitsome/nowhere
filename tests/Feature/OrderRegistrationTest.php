@@ -1075,7 +1075,7 @@ test('order summary ai endpoint normalizes shorthand glossary expressions', func
         ->assertJsonPath('structured.vehicle_type', '카니발부터 가능')
         ->assertJsonPath('structured.service_type', '혼합')
         ->assertJsonPath('structured.pickup_location', '마포')
-        ->assertJsonPath('structured.order_type', '공항 오더')
+        ->assertJsonPath('structured.order_type', '공항 운행')
         ->assertJsonPath('structured.amount_text', '13만')
         ->assertJsonPath('structured.amount_value', 130000)
         ->assertJsonPath('structured.line_items.0.service_type', '샌딩')
@@ -2109,7 +2109,7 @@ test('users can update an order', function () {
             ],
         ])
         ->assertRedirect(route('dashboard.business.order.show', $order))
-        ->assertSessionHas('status', '오더가 수정되었습니다.');
+        ->assertSessionHas('status', '운행이 수정되었습니다.');
 
     $order->refresh();
 
@@ -2199,7 +2199,7 @@ test('users can update order line items', function () {
             ],
         ])
         ->assertRedirect(route('dashboard.business.order.show', $order))
-        ->assertSessionHas('status', '오더가 수정되었습니다.');
+        ->assertSessionHas('status', '운행이 수정되었습니다.');
 
     $firstLineItem->refresh();
     expect($firstLineItem->scheduled_time)->toBe('02:30');

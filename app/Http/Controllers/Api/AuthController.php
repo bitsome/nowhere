@@ -11,7 +11,6 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-
     /**
      * 회원가입 — 새 사용자 등록 후 바로 토큰을 발급한다.
      */
@@ -40,21 +39,32 @@ class AuthController extends Controller
             ],
         ], 201);
     }
+
     /**
-     * 이메일·비밀번호로 로그인하고 Sanctum 토큰을 발급한다.
+     * 아이디(이메일)·전화번호 + 비밀번호로 로그인하고 Sanctum 토큰을 발급한다.
+     * `login` 필드에 이메일 또는 전화번호(하이픈 유무 무관)를 넣으면 된다.
      */
     public function login(Request $request): JsonResponse
     {
         $credentials = $request->validate([
-            'email' => ['required', 'email'],
+            'login' => ['required_without:email', 'string', 'max:255'],
+            'email' => ['required_without:login', 'string', 'max:255'],
             'password' => ['required', 'string'],
         ]);
 
-        $user = User::query()->where('email', $credentials['email'])->first();
+        $identifier = $credentials['login'] ?? $credentials['email'];
+
+        // 이메일 또는 전화번호로 사용자 검색 (전화번호는 하이픈 무시하고 비교)
+        // 같은 번호를 여러 계정이 쓰는 테스트 계정의 경우 관리자(Admin)를 우선 매칭한다
+        $user = User::query()
+            ->where('email', $identifier)
+            ->orWhereRaw("REPLACE(phone, '-', '') = ?", [str_replace('-', '', $identifier)])
+            ->orderByRaw("CASE WHEN role IN ('Admin', 'Super Admin') THEN 0 ELSE 1 END")
+            ->first();
 
         if (! $user || ! Hash::check($credentials['password'], $user->password)) {
             throw ValidationException::withMessages([
-                'email' => ['아이디 또는 비밀번호가 올바르지 않습니다.'],
+                'login' => ['아이디 또는 비밀번호가 올바르지 않습니다.'],
             ]);
         }
 

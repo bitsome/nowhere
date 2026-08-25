@@ -26,7 +26,7 @@ test('nowhere dashboard module page renders business hub cards', function () {
         ->get(route('dashboard.business.nowhere'))
         ->assertSuccessful()
         ->assertSee('핵심 비즈니스 모듈')
-        ->assertSee('오더 관리')
+        ->assertSee('운행 관리')
         ->assertSee('배차 관리')
         ->assertSee('정산 관리')
         ->assertSee('Business Foundation 우선')

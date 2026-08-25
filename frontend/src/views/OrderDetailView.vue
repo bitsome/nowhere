@@ -1,379 +1,41 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { apiClaimOrder, apiDetachOrder, apiDuplicateOrder, apiOrder, apiReviewOrder, apiTransitionOrder } from '../api/orders';
-import { getApiErrorMessage } from '../api/client';
 import { useAuthStore } from '../stores/auth';
 import { useChatsStore } from '../stores/chats';
 import { useMessage as useNaiveMessage } from 'naive-ui';
-import { statusColorVar } from '../utils/colors';
+import { useOrderDetail } from '../composables/useOrderDetail';
+import { useOrderMap } from '../composables/useOrderMap';
+import BaseIcon from '../components/common/BaseIcon.vue';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
+const chats = useChatsStore();
 const naiveMessage = useNaiveMessage();
 
-const order = ref(null);
-const group = ref(null);
-const statusOptions = ref({});
-const nextTransitions = ref([]);
-const loading = ref(true);
-const error = ref('');
-const acting = ref(false);
-const message = ref('');
-const messageType = ref('success');
-
-const CLAIMABLE_STATUSES = ['published', 'trading', 'acceptance_pending'];
-
-const SERVICE_LABELS = { pickup: '픽업', sending: '공항샌딩', landing: '공항랜딩' };
-
-// 상태 진행 순서 (취소는 흐름 밖)
-const STATUS_FLOW = ['draft', 'published', 'trading', 'accepted', 'driving', 'completed', 'settled'];
-
-const currentStep = computed(() => {
-    const index = STATUS_FLOW.indexOf(order.value?.status ?? '');
-
-    return index === -1 ? 0 : index;
-});
-
-const isCancelled = computed(() => order.value?.status === 'cancelled');
-
-const isPriority = computed(() => Boolean(order.value?.is_priority));
-
-// 서비스 시각 (KST) — 임박/오늘/내일/카운트다운 판정
-const serviceTime = computed(() => {
-    const date = order.value?.service_date;
-    const time = order.value?.service_time;
-
-    if (!date || !time) {
-        return null;
-    }
-
-    const [h, m] = time.split(':').map(Number);
-    const local = new Date(`${date}T00:00:00`);
-
-    if (isNaN(local.getTime())) {
-        return null;
-    }
-
-    local.setHours(h, m, 0, 0);
-
-    return local;
-});
-
-const minutesToService = computed(() => {
-    const st = serviceTime.value;
-
-    return st ? Math.round((st.getTime() - Date.now()) / 60000) : null;
-});
-
-const isUrgent = computed(() => {
-    const mins = minutesToService.value;
-
-    return mins !== null && mins > 0 && mins <= 120;
-});
-
-const isToday = computed(() => {
-    const st = serviceTime.value;
-
-    return st ? st.toDateString() === new Date().toDateString() : false;
-});
-
-const isTomorrow = computed(() => {
-    const st = serviceTime.value;
-
-    if (!st) {
-        return false;
-    }
-
-    const t = new Date();
-    t.setDate(t.getDate() + 1);
-
-    return st.toDateString() === t.toDateString();
-});
-
-const serviceCountdownLabel = computed(() => {
-    const mins = minutesToService.value;
-
-    if (mins === null) {
-        return '-';
-    }
-    if (mins < 0) {
-        return '서비스 종료';
-    }
-    if (mins <= 120) {
-        return `약 ${mins}분 후 시작`;
-    }
-
-    const st = serviceTime.value;
-
-    return `${st.getHours()}:${String(st.getMinutes()).padStart(2, '0')}`;
-});
-
-const amountLabel = computed(() => {
-    const v = order.value?.expected_revenue ?? order.value?.amount_value;
-
-    return v ? `${Number(v).toLocaleString()}원` : '-';
-});
-
-// 서비스 일시 표시: "YYYY-MM-DD (요일) HH:MM" 형태
-const serviceDatetimeLabel = computed(() => {
-    const orderData = order.value;
-    const date = orderData?.service_date ?? '';
-    const time = orderData?.service_time ?? '';
-
-    if (orderData?.service_datetime) {
-        return orderData.service_datetime;
-    }
-    if (!date) {
-        return '-';
-    }
-
-    const weekday = /^\d{4}-\d{2}-\d{2}$/.test(date)
-        ? ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'][new Date(`${date}T00:00:00`).getDay()]
-        : '';
-
-    return `${date}${weekday ? ` (${weekday})` : ''}${time ? ` ${time}` : ''}`;
-});
-
-const isClaimable = computed(() => Boolean(order.value && CLAIMABLE_STATUSES.includes(order.value.status)));
-
-// 리뷰 — 운행 완료/정산 후 작성 가능
-const canReview = computed(() => Boolean(order.value && ['completed', 'settled'].includes(order.value.status)));
-const reviewOpen = ref(false);
-const reviewRating = ref(5);
-const reviewContent = ref('');
-const reviewSubmitting = ref(false);
-
-const openReview = () => {
-    reviewRating.value = 5;
-    reviewContent.value = '';
-    reviewOpen.value = true;
-};
-
-const submitReview = async () => {
-    if (!reviewContent.value.trim()) {
-        naiveMessage.warning('리뷰 내용을 입력해주세요.');
-
-        return;
-    }
-
-    reviewSubmitting.value = true;
-
-    try {
-        await apiReviewOrder(order.value.id, {
-            rating: reviewRating.value,
-            content: reviewContent.value.trim(),
-        });
-        naiveMessage.success('리뷰를 남겼습니다.');
-        reviewOpen.value = false;
-    } catch (e) {
-        naiveMessage.error(getApiErrorMessage(e, '리뷰 작성에 실패했습니다.'));
-    } finally {
-        reviewSubmitting.value = false;
-    }
-};
-
-// 채팅: 등록자(타인)와 대화 가능할 때만
-const canChat = computed(() => Boolean(order.value?.user_id && order.value.user_id !== auth.user?.id));
-
-// 수정: 초안/공개 상태에서만
-const canEdit = computed(() => Boolean(order.value && ['draft', 'published'].includes(order.value.status)));
-
-const goEdit = () => router.push({ name: 'order-edit', params: { id: order.value.id } });
-
-// 운행 복제 — 동일 내용을 초안으로 새로 만들어 수정 화면으로 이동
-const duplicate = async () => {
-    acting.value = true;
-    message.value = '';
-
-    try {
-        const { data } = await apiDuplicateOrder(order.value.id);
-        message.value = '운행이 복제되었습니다. 내용을 확인하고 수정하세요.';
-        messageType.value = 'success';
-        router.push({ name: 'order-edit', params: { id: data.data.id } });
-    } catch (e) {
-        message.value = getApiErrorMessage(e, '운행 복제에 실패했습니다.');
-        messageType.value = 'error';
-    } finally {
-        acting.value = false;
-    }
-};
-
-const openChat = async () => {
-    try {
-        await useChatsStore().openWith(order.value.user_id, order.value.id);
-        router.push({ name: 'chat' });
-    } catch (e) {
-        message.value = getApiErrorMessage(e, '채팅을 시작하지 못했습니다.');
-        messageType.value = 'error';
-    }
-};
-
-// 등록자 공개 프로필로 이동
-const goUserPage = (id) => {
-    if (id) {
-        router.push({ name: 'user-page', params: { id } });
-    }
-};
-
-// 경로 지도 — 출발지/도착지 전환 + 외부 지도 링크 (키 불필요)
-const mapTarget = ref('pickup');
-const mapOpen = ref(false);
-const mapQueryLabel = computed(() => (mapTarget.value === 'pickup' ? '출발지' : '도착지'));
-const mapQuery = computed(() =>
-    (mapTarget.value === 'pickup' ? order.value?.pickup_location : order.value?.dropoff_location) || '',
-);
-const mapEmbedUrl = computed(() =>
-    mapQuery.value ? `https://maps.google.com/maps?q=${encodeURIComponent(mapQuery.value)}&z=15&output=embed&hl=ko` : '',
-);
-const mapGoogleUrl = computed(() => (mapQuery.value ? `https://maps.google.com/maps?q=${encodeURIComponent(mapQuery.value)}` : '#'));
-const mapNaverUrl = computed(() => (mapQuery.value ? `https://map.naver.com/v5/search/${encodeURIComponent(mapQuery.value)}` : '#'));
-const mapKakaoUrl = computed(() => (mapQuery.value ? `https://map.kakao.com/link/search/${encodeURIComponent(mapQuery.value)}` : '#'));
-
-// 하단 액션 바의 주 동작 — 가져오기 > 다음 상태 전이 > 리뷰
-const primaryAction = computed(() => {
-    if (isClaimable.value) {
-        return { label: '내 운행으로 가져오기', handler: claim };
-    }
-    if (nextTransitions.value.length) {
-        const next = nextTransitions.value[0];
-
-        return { label: `→ ${statusOptions.value[next] ?? next}`, handler: () => requestTransition(next) };
-    }
-    if (canReview.value) {
-        return { label: '리뷰 남기기', handler: openReview };
-    }
-
-    return null;
-});
-
-// 그룹 일정 행으로 변환 (셋트 운행일 때 그룹 내 모든 운행)
-const groupOrderRows = computed(() =>
-    (group.value?.orders ?? [])
-        .map((sibling) => {
-            const date = sibling.service_date ?? '-';
-            const weekday = /^\d{4}-\d{2}-\d{2}$/.test(date)
-                ? ['일요일', '월요일', '화요일', '수요일', '목요일', '금요일', '토요일'][new Date(`${date}T00:00:00`).getDay()]
-                : '';
-
-            return {
-                ...sibling,
-                displayDate: `${date} ${weekday}`,
-                isCurrent: sibling.id === order.value?.id,
-                displayAmount: sibling.expected_revenue ?? sibling.amount_value ?? null,
-            };
-        })
-        .sort((a, b) => (a.service_date + a.service_time).localeCompare(b.service_date + b.service_time)),
-);
-
-// 셋트 그룹 합계 (금액이 있는 일정만 합산)
-const groupTotalAmount = computed(() =>
-    groupOrderRows.value.reduce((sum, row) => sum + (Number(row.displayAmount) || 0), 0),
-);
-
-// 상태별 색상 — 중앙 팔레트에서 참조 (테마 자동 적용)
-// 진행 단계별 스타일: 지난 단계=해당 색, 현재=채움, 진행 전=회색
-const stepStyle = (status, index) => {
-    const color = statusColorVar[status] ?? 'var(--status-draft)';
-
-    if (index === currentStep.value) {
-        return { background: color, borderColor: color, color: '#ffffff' };
-    }
-    if (index < currentStep.value) {
-        return { borderColor: color, color };
-    }
-
-    return {};
-};
-
-const lineItems = computed(() =>
-    (order.value?.line_items ?? []).map((item) => ({
-        scheduled_time: item.scheduled_time || '-',
-        service_type: SERVICE_LABELS[item.service_type] ?? (item.service_type || '-'),
-        pickup_location: item.pickup_location || '-',
-        dropoff_location: item.dropoff_location || '-',
-        flight_number: item.flight_number || '-',
-        service_date: item.service_date || '',
-        service_weekday: item.service_weekday || '',
-    })),
-);
-
-const statusTagType = computed(() => {
-    if (isClaimable.value) {
-        return 'warning';
-    }
-
-    return order.value?.status === 'cancelled' ? 'default' : 'success';
-});
-
-const load = async () => {
-    const { data } = await apiOrder(route.params.id);
-
-    order.value = data.data.order;
-        group.value = data.data.group;
-        statusOptions.value = data.data.statusOptions;
-    nextTransitions.value = data.data.nextTransitions;
-};
-
-const refresh = async () => {
-    loading.value = true;
-    error.value = '';
-
-    try {
-        await load();
-    } catch (e) {
-        error.value = getApiErrorMessage(e, '운행을 불러오지 못했습니다.');
-    } finally {
-        loading.value = false;
-    }
-};
-
-const run = async (action, successText) => {
-    acting.value = true;
-    message.value = '';
-    messageType.value = 'success';
-
-    try {
-        await action();
-        await load();
-        message.value = successText;
-    } catch (e) {
-        messageType.value = 'error';
-        message.value = getApiErrorMessage(e, '요청에 실패했습니다.');
-    } finally {
-        acting.value = false;
-    }
-};
-
-const claim = () => run(() => apiClaimOrder(order.value.id), '운행을 내 운행으로 가져왔습니다.');
-const transition = (status) =>
-    run(() => apiTransitionOrder(order.value.id, status), `상태가 "${statusOptions.value[status] ?? status}"로 변경되었습니다.`);
-
-// ── 취소 사유 입력 ──
-const cancelOpen = ref(false);
-const cancelReason = ref('');
-
-const requestTransition = (status) => {
-    if (status === 'cancelled') {
-        cancelReason.value = '';
-        cancelOpen.value = true;
-    } else {
-        transition(status);
-    }
-};
-
-const confirmCancel = async () => {
-    cancelOpen.value = false;
-    await run(
-        () => apiTransitionOrder(order.value.id, 'cancelled', cancelReason.value),
-        '운행이 취소되었습니다.',
-    );
-};
-
-// 셋트 그룹에서 개별 운행 분리
-const detach = (siblingId) =>
-    run(() => apiDetachOrder(siblingId), '셋트 그룹에서 분리되었습니다.');
+// ── 모듈: 운행 상세(로드·파생·상태변경·리뷰·취소·분리) / 경로 지도 ──
+const detail = useOrderDetail({ route, router, auth, chats, naiveMessage });
+const map = useOrderMap({ order: detail.order });
+
+const {
+    order, group, statusOptions, nextTransitions, loading, error, acting, message, messageType,
+    currentStep, isCancelled, isPriority, serviceTime, minutesToService, isUrgent, isToday, isTomorrow,
+    serviceCountdownLabel, amountLabel, serviceDatetimeLabel, isClaimable, isMine, isRegistrant, isPerformer,
+    statusLabel, canReview,
+    reviewOpen, reviewRating, reviewContent, reviewSubmitting, openReview, submitReview,
+    canChat, hasRegistrantChat, canEdit, goEdit, isClaimPending, isRegistrantPending, isClaimantPending,
+    isWaitingClaims, confirmState, closeConfirm, doConfirm, approveClaim, rejectClaim, openChat, goUserPage,
+    primaryAction, primaryActionStatus, statusButtonColor, groupOrderRows, groupTotalAmount, stepStyle,
+    lineItems, statusTagType, refresh, claim, transition, cancelOpen, cancelReason, requestTransition,
+    confirmCancel, detach,
+    SERVICE_LABELS, STATUS_FLOW,
+} = detail;
+
+const {
+    mapTarget, mapOpen, mapQueryLabel, mapQuery, mapEmbedUrl, mapGoogleUrl, mapNaverUrl, mapKakaoUrl,
+} = map;
 
 onMounted(refresh);
 </script>
@@ -381,7 +43,7 @@ onMounted(refresh);
 <template>
     <div
         class="detail-page"
-        :class="{ 'detail-page--bar': order && (canChat || canEdit || primaryAction) }"
+        :class="{ 'detail-page--bar': order && (canChat || canEdit || primaryAction || isRegistrantPending) }"
     >
         <div class="detail-hero">
             <div class="detail-hero__body">
@@ -392,6 +54,8 @@ onMounted(refresh);
                     <span class="detail-hero__loc">{{ order?.dropoff_location || '-' }}</span>
                 </div>
                 <div class="detail-hero__badges">
+                    <span v-if="isMine" class="hero-badge hero-badge--mine">내 운행</span>
+                    <span v-if="isWaitingClaims" class="hero-badge hero-badge--waiting">요청 대기중</span>
                     <span v-if="isPriority" class="hero-badge hero-badge--priority">긴급</span>
                     <span v-if="isUrgent" class="hero-badge hero-badge--urgent">임박</span>
                     <span v-else-if="isToday" class="hero-badge hero-badge--today">오늘</span>
@@ -402,7 +66,7 @@ onMounted(refresh);
             <div class="detail-hero__side">
                 <div class="detail-hero__amount">{{ amountLabel }}</div>
                 <n-tag size="large" round :type="statusTagType">
-                    {{ statusOptions[order?.status] ?? order?.status ?? '-' }}
+                    {{ statusLabel }}
                 </n-tag>
             </div>
         </div>
@@ -411,42 +75,79 @@ onMounted(refresh);
             {{ error }}
         </n-alert>
 
-        <n-spin :show="loading" class="detail-body">
-            <template v-if="order">
+        <div v-if="loading" class="detail-skeleton">
+            <div class="sk-card detail-skeleton__hero" />
+            <div class="sk-card detail-skeleton__card">
+                <div class="sk-line sk-line--md" style="width: 30%" />
+                <div class="sk-line" style="margin-top: 12px" />
+                <div class="sk-line" style="margin-top: 8px; width: 75%" />
+                <div class="sk-line" style="margin-top: 8px; width: 55%" />
+            </div>
+            <div class="sk-card detail-skeleton__card">
+                <div class="sk-line sk-line--md" style="width: 25%" />
+                <div class="sk-line" style="margin-top: 12px" />
+                <div class="sk-line" style="margin-top: 8px; width: 65%" />
+            </div>
+        </div>
+
+        <template v-else>
+            <div v-if="order" class="detail-body">
                 <n-alert v-if="isCancelled" type="error" :show-icon="true" class="detail-block">
                     취소된 운행입니다.
                 </n-alert>
 
-                <n-card v-else :bordered="true" class="detail-block">
+                <n-alert v-if="isClaimantPending" type="warning" :show-icon="true" class="detail-block">
+                    가져오기 요청이 등록자에게 전달되었습니다. 등록자가 승인하면 운행을 진행할 수 있습니다.
+                </n-alert>
+
+                <n-alert v-if="isRegistrantPending" type="info" :show-icon="true" class="detail-block">
+                    드라이버가 이 운행을 가져오기 요청했습니다. 승인하면 운행이 넘어가고, 거절하면 마켓에 그대로 남습니다.
+                </n-alert>
+
+                <n-card v-else-if="!isCancelled" :bordered="true" class="detail-block">
                     <template #header>
                         <n-space align="center" :size="10">
                             <span>진행상태</span>
                             <n-tag size="small" round :type="statusTagType">
-                                {{ statusOptions[order?.status] ?? order?.status }}
+                                {{ statusLabel }}
                             </n-tag>
                         </n-space>
                     </template>
                     <div class="status-flow">
-                        <span
+                        <div
                             v-for="(status, index) in STATUS_FLOW"
                             :key="status"
-                            class="status-flow__step"
-                            :class="{ 'status-flow__step--active': index === currentStep }"
-                            :style="stepStyle(status, index)"
+                            class="status-flow__item"
+                            :class="{
+                                'status-flow__item--done': index < currentStep,
+                                'status-flow__item--active': index === currentStep,
+                            }"
                         >
-                            <template v-if="index < currentStep">✓ </template>
-                            {{ statusOptions[status] ?? status }}
-                        </span>
+                            <div class="status-flow__rail">
+                                <span class="status-flow__dot" :style="stepStyle(status, index)">
+                                    <span v-if="index < currentStep" class="status-flow__dot-icon"><BaseIcon name="check" :size="11" /></span>
+                                    <span v-else-if="index === currentStep" class="status-flow__dot-icon"><BaseIcon name="ellipse" :size="10" /></span>
+                                </span>
+                                <span
+                                    v-if="index < STATUS_FLOW.length - 1"
+                                    class="status-flow__line"
+                                    :class="{ 'status-flow__line--done': index < currentStep }"
+                                />
+                            </div>
+                            <div class="status-flow__label">
+                                <strong>{{ statusOptions[status] ?? status }}</strong>
+                                <small v-if="index === currentStep">현재 진행 중</small>
+                            </div>
+                        </div>
                     </div>
+                    <p class="status-flow__progress">진행 {{ currentStep + 1 }} / {{ STATUS_FLOW.length }} 단계</p>
                 </n-card>
 
                 <n-card :bordered="true" class="detail-block">
                     <template #header>운행 정보</template>
+
+                    <p class="detail-group-title">서비스</p>
                     <div class="detail-rows">
-                        <div class="detail-row">
-                            <span>운행번호</span>
-                            <strong>{{ order.order_number }}</strong>
-                        </div>
                         <div class="detail-row">
                             <span>노선</span>
                             <strong>{{ order.pickup_location || '-' }} → {{ order.dropoff_location || '-' }}</strong>
@@ -472,6 +173,18 @@ onMounted(refresh);
                             <strong>{{ (order.expected_revenue ?? order.amount_value)?.toLocaleString() ?? '-' }}원</strong>
                         </div>
                         <div class="detail-row">
+                            <span>서비스까지</span>
+                            <strong :class="{ 'detail-text--urgent': isUrgent }">{{ serviceCountdownLabel }}</strong>
+                        </div>
+                    </div>
+
+                    <p class="detail-group-title">예약</p>
+                    <div class="detail-rows">
+                        <div class="detail-row">
+                            <span>운행번호</span>
+                            <strong>{{ order.order_number }}</strong>
+                        </div>
+                        <div class="detail-row">
                             <span>고객명</span>
                             <strong>{{ order.customer_name || '-' }}</strong>
                         </div>
@@ -479,13 +192,13 @@ onMounted(refresh);
                             <span>예약처</span>
                             <strong>{{ order.reservation_company || '-' }} · {{ order.reservation_channel || '-' }}</strong>
                         </div>
+                    </div>
+
+                    <p class="detail-group-title">기타</p>
+                    <div class="detail-rows">
                         <div class="detail-row">
                             <span>긴급</span>
                             <strong>{{ isPriority ? '긴급 운행' : '일반' }}</strong>
-                        </div>
-                        <div class="detail-row">
-                            <span>서비스까지</span>
-                            <strong :class="{ 'detail-text--urgent': isUrgent }">{{ serviceCountdownLabel }}</strong>
                         </div>
                         <div class="detail-row">
                             <span>등록자</span>
@@ -637,17 +350,41 @@ onMounted(refresh);
                     </n-alert>
 
                     <!-- 주 동작(가져오기/첫 전이)은 하단 바에서, 여기선 나머지 전이/사유/리뷰 -->
-                    <n-space v-if="nextTransitions.slice(1).length" wrap>
+                    <p
+                        v-if="nextTransitions.length && !(order?.status === 'completed' && !isRegistrant)"
+                        class="detail-next-hint"
+                    >
+                        다음 단계:
+                        <strong>{{ statusOptions[nextTransitions[0]] ?? nextTransitions[0] }}</strong>
+                        <template v-if="nextTransitions.length > 1">
+                            외 {{ nextTransitions.length - 1 }}건
+                        </template>
+                    </p>
+                    <n-space
+                        v-if="nextTransitions.slice(1).length && !(order?.status === 'completed' && !isRegistrant)"
+                        wrap
+                    >
                         <n-button
                             v-for="next in nextTransitions.slice(1)"
                             :key="next"
                             size="large"
+                            :color="statusButtonColor(next)"
                             :loading="acting"
                             @click="requestTransition(next)"
                         >
                             → {{ statusOptions[next] ?? next }}
                         </n-button>
                     </n-space>
+
+                    <!-- 완료 후 정산 대기 — 진행자는 정산을 할 수 없고 등록자가 처리 -->
+                    <n-alert
+                        v-if="order?.status === 'completed' && !isRegistrant"
+                        type="info"
+                        :show-icon="true"
+                        class="detail-message"
+                    >
+                        운행이 완료되었습니다. 등록자가 정산을 처리하면 '정산 완료'로 전환됩니다.
+                    </n-alert>
 
                     <n-alert
                         v-if="order?.status === 'cancelled' && order.cancel_reason"
@@ -673,6 +410,13 @@ onMounted(refresh);
                     >
                         리뷰 남기기
                     </n-button>
+
+                    <div v-else-if="myReview" class="detail-review-done">
+                        <n-tag size="large" round color="#ffa940">
+                            <BaseIcon name="star" :size="14" />
+                            {{ myReview.rating }} 리뷰 완료
+                        </n-tag>
+                    </div>
                 </n-card>
 
                 <!-- 리뷰 작성 모달 -->
@@ -726,28 +470,55 @@ onMounted(refresh);
                         </div>
                     </template>
                 </n-modal>
-            </template>
-        </n-spin>
+
+                <!-- 공용 확인 다이얼로그 — 모든 상태 변경 전 확인 -->
+                <ConfirmDialog
+                    v-model:open="confirmState.open"
+                    :title="confirmState.title"
+                    :message="confirmState.message"
+                    :confirm-text="confirmState.confirmText"
+                    :type="confirmState.type"
+                    :loading="acting"
+                    @confirm="doConfirm"
+                    @cancel="closeConfirm"
+                />
+            </div>
+        </template>
 
         <!-- 하단 액션 바 — 주 동작을 항상 손이 닿는 곳에 -->
         <div
-            v-if="order && (canChat || canEdit || primaryAction)"
+            v-if="order && (canChat || canEdit || primaryAction || isRegistrantPending)"
             class="detail-actionbar"
         >
-            <n-button v-if="canChat" size="large" secondary @click="openChat">
-                채팅
-            </n-button>
+            <div v-if="canChat" class="detail-chat-wrap">
+                <n-button size="large" secondary @click="openChat">
+                    채팅
+                </n-button>
+                <span v-if="hasRegistrantChat" class="detail-chat-wrap__dot" />
+            </div>
             <n-button v-if="canEdit" size="large" secondary @click="goEdit">
                 수정
             </n-button>
-            <n-button size="large" secondary :loading="acting" @click="duplicate">
-                복사
-            </n-button>
+            <template v-if="isRegistrantPending">
+                <n-button size="large" secondary type="error" :loading="acting" @click="rejectClaim">
+                    거절
+                </n-button>
+                <n-button
+                    type="primary"
+                    size="large"
+                    :loading="acting"
+                    class="detail-actionbar__primary"
+                    @click="approveClaim"
+                >
+                    승인
+                </n-button>
+            </template>
             <n-button
-                v-if="primaryAction"
+                v-else-if="primaryAction"
                 type="primary"
                 size="large"
                 :loading="acting"
+                :color="primaryActionStatus ? statusButtonColor(primaryActionStatus) : undefined"
                 class="detail-actionbar__primary"
                 @click="primaryAction.handler"
             >
@@ -769,6 +540,23 @@ onMounted(refresh);
     min-height: 200px;
 }
 
+/* 로딩 스켈레톤 — 히어로 + 정보 카드 골격 */
+.detail-skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.detail-skeleton__hero {
+    height: 120px;
+}
+
+.detail-skeleton__card {
+    display: flex;
+    flex-direction: column;
+}
+
 .detail-block {
     margin-bottom: 16px;
     border-radius: 16px;
@@ -784,6 +572,12 @@ onMounted(refresh);
     width: 100%;
 }
 
+.detail-review-done {
+    margin-top: 16px;
+    display: flex;
+    justify-content: center;
+}
+
 .review-modal {
     display: flex;
     flex-direction: column;
@@ -796,32 +590,122 @@ onMounted(refresh);
     gap: 8px;
 }
 
-/* 진행상태 — 작은 알약들로 줄바꿈하며 표시 (화면 밖으로 안 나감) */
+/* 진행상태 — 세로 타임라인: 완료(✓)·현재(●)·대기(○)를 연결선으로 표현 */
 .status-flow {
     display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
+    flex-direction: column;
 }
 
-.status-flow__step {
-    display: inline-flex;
+.status-flow__item {
+    display: flex;
+    gap: 12px;
+    min-height: 46px;
+}
+
+.status-flow__rail {
+    display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 4px;
-    padding: 4px 10px;
-    border-radius: 999px;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--text-muted); /* 진행 전 단계는 회색 */
-    font-size: 12px;
-    white-space: nowrap;
+    width: 24px;
+    flex-shrink: 0;
 }
 
-.status-flow__step--active {
+.status-flow__dot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 800;
+    z-index: 1;
+}
+
+.status-flow__dot-icon {
+    line-height: 1;
+}
+
+.status-flow__line {
+    flex: 1;
+    width: 2px;
+    margin: 2px 0;
+    border-radius: 2px;
+    background: var(--border);
+    transition: background 0.3s;
+}
+
+.status-flow__line--done {
+    background: var(--brand);
+}
+
+.status-flow__label {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    padding: 3px 0 15px;
+}
+
+.status-flow__label strong {
+    font-size: 14px;
     font-weight: 600;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    color: var(--text-muted);
+}
+
+.status-flow__item--active .status-flow__label strong {
+    color: var(--text);
+    font-weight: 800;
+}
+
+.status-flow__label small {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--brand);
+}
+
+.status-flow__progress {
+    margin: 2px 0 0;
+    padding-top: 12px;
+    border-top: 1px dashed var(--border);
+    color: var(--text-muted);
+    font-size: 12px;
+    text-align: right;
+}
+
+/* 상태 관리 — 다음 단계 힌트 */
+.detail-next-hint {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--brand) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--brand) 25%, transparent);
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.detail-next-hint strong {
+    color: var(--brand);
+    font-weight: 800;
 }
 
 /* 운행 정보 — 라벨/값 행 (심플 카드) */
+/* 운행 정보 그룹 제목 — 서비스/예약/기타 구분 */
+.detail-group-title {
+    margin: 16px 0 4px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--text-muted);
+}
+
+.detail-group-title:first-child {
+    margin-top: 0;
+}
+
 .detail-rows {
     display: flex;
     flex-direction: column;
@@ -1015,6 +899,16 @@ onMounted(refresh);
     color: #ffffff;
 }
 
+.hero-badge--mine {
+    background: rgba(0, 0, 0, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.hero-badge--waiting {
+    background: var(--brand);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
 .hero-badge--priority {
     background: #722ed1;
 }
@@ -1133,7 +1027,7 @@ onMounted(refresh);
     align-items: center;
     gap: 8px;
     padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
-    background: rgba(255, 255, 255, 0.92);
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
     backdrop-filter: blur(12px);
     border-top: 1px solid var(--border);
 }
@@ -1141,5 +1035,22 @@ onMounted(refresh);
 .detail-actionbar__primary {
     flex: 1;
     min-width: 0;
+}
+
+/* 채팅 버튼 — 등록자에게 안 읽은 채팅이 오면 빨간점 표시 */
+.detail-chat-wrap {
+    position: relative;
+    display: inline-flex;
+}
+
+.detail-chat-wrap__dot {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #ff4d4f;
+    border: 2px solid var(--surface);
 }
 </style>

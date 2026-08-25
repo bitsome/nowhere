@@ -44,6 +44,7 @@ html.dark {
     --status-completed: #27946a;
     --status-settled: #7a5bc0;
     --status-cancelled: #d2555a;
+    --status-acceptance-pending: #c28a2e;
     --warn: #c98f3e;
     --badge-red: #cf5656;
     --danger: #d86262;
@@ -111,21 +112,24 @@ img {
     content: '';
 }
 
-/* ?섎떒 怨좎젙 ?ㅻ퉬寃뚯씠??*/
+/* bottom nav — safe-area(아이폰 홈바) + 데스크톱에서는 컨텐츠 폭과 정렬 */
 .bottom-nav {
     position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
     display: flex;
+    justify-content: center;
     align-items: stretch;
     background: var(--surface);
     border-top: 1px solid var(--border);
     z-index: 100;
+    padding-bottom: env(safe-area-inset-bottom);
 }
 
 .bottom-nav__item {
-    flex: 1;
+    flex: 1 1 176px;
+    max-width: 176px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -161,9 +165,14 @@ img {
     width: 36px;
 }
 
+.bottom-nav__item--active .bottom-nav__icon {
+    transform: translateY(-2px) scale(1.12);
+}
+
 .bottom-nav__icon {
     width: 22px;
     height: 22px;
+    transition: transform 0.18s ease;
 }
 
 .bell-button {
@@ -195,18 +204,53 @@ html.dark .bell-button:hover {
     height: 20px;
 }
 
-/* ???쎌쓬 ?뚮┝ 諛곕꼫 ???붾㈃ ?곷떒????긽 ?몄텧 */
+/* 알림 배너 — 상단 플로팅 토스트 (컨텐츠 밀지 않음) */
 .notify-banner {
-    display: block;
-    width: 100%;
-    padding: 11px 20px;
+    position: fixed;
+    top: calc(56px + env(safe-area-inset-top));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: calc(100vw - 40px);
+    padding: 10px 18px;
     border: none;
+    border-radius: 999px;
     background: var(--notify);
     color: #ffffff;
     font-size: 14px;
     font-weight: 600;
-    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
     cursor: pointer;
+}
+
+.notify-banner-fade-enter-active {
+    animation: notify-in 0.3s ease;
+}
+
+.notify-banner-fade-leave-active {
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.notify-banner-fade-leave-to {
+    opacity: 0;
+    transform: translate(-50%, -12px);
+}
+
+@keyframes notify-in {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -10px);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, 0);
+    }
 }
 
 /* ?뚮┝ ?⑤꼸 / 紐⑸줉 */
@@ -383,7 +427,7 @@ html.dark .chat-list__item:hover {
 .app-content {
     max-width: 880px;
     margin: 0 auto;
-    padding: 28px 20px 88px;
+    padding: 28px 20px calc(88px + env(safe-area-inset-bottom));
 }
 
 .card {
@@ -495,7 +539,7 @@ html.dark .badge {
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 12px 16px;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
 }
 
 .page-head__eyebrow {
@@ -517,6 +561,18 @@ html.dark .badge {
     margin: 8px 0 0;
     color: var(--text-muted);
     font-size: 14px;
+}
+
+.page-head__actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.create-pagination {
+    display: flex;
+    justify-content: center;
+    margin-top: 24px;
 }
 
 .field {
@@ -553,4 +609,151 @@ html.dark .badge {
 html.dark .alert--error {
     background: rgba(229, 72, 77, 0.12);
     border-color: rgba(229, 72, 77, 0.35);
+}
+
+/* ── 공용 스켈레톤 — 로딩 중 레이아웃 골격 (OrderCardSkeleton과 동일한 shimmer 패턴) ── */
+.sk-card {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+    padding: 16px;
+}
+
+.sk-line {
+    height: 14px;
+    border-radius: 7px;
+    background: linear-gradient(90deg, var(--border) 25%, rgba(128, 128, 128, 0.12) 50%, var(--border) 75%);
+    background-size: 200% 100%;
+    animation: sk-shimmer 1.4s infinite;
+}
+
+.sk-line--sm {
+    height: 11px;
+}
+
+.sk-line--md {
+    height: 16px;
+}
+
+.sk-line--lg {
+    height: 22px;
+}
+
+.sk-chip {
+    width: 56px;
+    height: 16px;
+    border-radius: 8px;
+    background: var(--border);
+    animation: sk-shimmer 1.4s infinite;
+}
+
+.sk-circle {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--border);
+    animation: sk-shimmer 1.4s infinite;
+    flex-shrink: 0;
+}
+
+@keyframes sk-shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sk-line,
+    .sk-chip,
+    .sk-circle {
+        animation: none;
+    }
+}
+
+/* ── 공용 인증/상태 행 — 회원정보·설정·인증 화면 공통 ── */
+.verify-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.verify-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--brand-soft);
+    color: var(--brand);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.verify-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.verify-row:last-child {
+    border-bottom: none;
+}
+
+.verify-row__label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.verify-row__done {
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: rgba(46, 160, 67, 0.12);
+    color: #2ea043;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.verify-row__pending {
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: rgba(128, 128, 128, 0.14);
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.verify-row__badge {
+    color: #2ea043;
+    font-weight: 800;
+}
+
+.verify-row__value {
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.verify-row__link {
+    border: 0;
+    background: none;
+    color: var(--brand);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 8px;
+}
+
+.verify-row__link:hover {
+    background: var(--brand-soft);
 }

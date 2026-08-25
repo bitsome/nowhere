@@ -5,6 +5,7 @@ import { useMessage } from 'naive-ui';
 import { apiCommunityUser } from '../api/community';
 import { getApiErrorMessage } from '../api/client';
 import LevelBadge from '../components/LevelBadge.vue';
+import BaseIcon from '../components/common/BaseIcon.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -237,7 +238,7 @@ onMounted(load);
                             >
                                 <img :src="youtubeThumb(post.video_url)" alt="영상 썸네일" loading="lazy" />
                                 <span class="post-row__video-badge">
-                                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                                    <BaseIcon name="play" :size="44" />
                                 </span>
                             </a>
                             <a
@@ -247,16 +248,16 @@ onMounted(load);
                                 rel="noopener noreferrer"
                                 class="post-row__video-link"
                             >
-                                ▶ 영상 보기
+                                <BaseIcon name="play" :size="12" /> 영상 보기
                             </a>
                             <div class="post-row__meta">
                                 <span>{{ timeAgo(post.created_at) }}</span>
                                 <span>
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;vertical-align:-2px;margin-right:2px"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21.2l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z" /></svg>
+                                    <BaseIcon name="heart" :size="13" style="margin-right:2px;vertical-align:-2px" />
                                     {{ post.likes_count }}
                                 </span>
                                 <span>
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;vertical-align:-2px;margin-right:2px"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.3 8.6 8.6 0 0 1-3.9-.9L3 20l1.2-5.3a8.2 8.2 0 0 1-.7-3.2A8.4 8.4 0 0 1 12 3.2a8.4 8.4 0 0 1 9 8.3z" /></svg>
+                                    <BaseIcon name="comment" :size="13" style="margin-right:2px;vertical-align:-2px" />
                                     {{ post.comments_count }}
                                 </span>
                             </div>

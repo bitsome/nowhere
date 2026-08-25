@@ -1,117 +1,41 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { onBeforeUnmount, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { apiBatchSettle, apiOrders } from '../api/orders';
-import { apiOrderStats } from '../api/stats';
-import { apiDriverStats } from '../api/driver';
-import { getApiErrorMessage } from '../api/client';
 import { useAuthStore } from '../stores/auth';
 import { useUiStore } from '../stores/ui';
+import { useDashboardStats } from '../composables/useDashboardStats';
+import { useBatchSettle } from '../composables/useBatchSettle';
+import BaseIcon from '../components/common/BaseIcon.vue';
 
 const ui = useUiStore();
 const auth = useAuthStore();
 const router = useRouter();
-const loading = ref(true);
-const error = ref('');
-const days = ref(7);
-const stats = ref(null);
-const driverToday = ref(null);
-let timer = null;
 
-const load = async () => {
-    try {
-        const { data } = await apiOrderStats(days.value);
-        stats.value = data.data;
-    } catch (e) {
-        error.value = getApiErrorMessage(e, '통계를 불러오지 못했습니다.');
-    } finally {
-        loading.value = false;
-    }
-};
+// ── 모듈: 대시보드 통계 / 일괄 정산 ──
+const dashboard = useDashboardStats({ auth });
+const settle = useBatchSettle({ load: dashboard.load });
 
-const changeDays = (value) => {
-    days.value = value;
-    loading.value = true;
-    load();
-};
+const {
+    loading, error, days, stats, driverToday, load, changeDays, isDriver, loadDriverToday,
+    formatDuration, summary, revenueSeries, maxRevenue, revenuePercent, maxCount, countPercent,
+    totalRevenue, monthlySeries, maxMonthRevenue, monthRevenuePercent, maxMonthCount, monthCountPercent, totalMonthRevenue,
+} = dashboard;
 
-const goMyOrders = () => {
-    router.push({ name: 'order-create' });
-};
+const { settling, settleMessage, settleAll } = settle;
 
-const goOrder = (id) => {
-    router.push({ name: 'order-detail', params: { id } });
-};
-
+const goMyOrders = () => router.push({ name: 'my-market', query: { tab: '진행중' } });
+const goOrder = (id) => router.push({ name: 'order-detail', params: { id } });
 const formatWon = (value) => (value ?? 0).toLocaleString();
 
-// ── 기사 오늘 요약 (드라이버 전용) ──
-const isDriver = computed(() => auth.user?.role === 'Driver');
+// 건당 평균 매출 — 총 매출 / 기간 내 운행 수
+const avgRevenue = () => {
+    const total = summary.total ?? 0;
+    const revenue = summary.revenue ?? 0;
 
-const loadDriverToday = async () => {
-    try {
-        const { data } = await apiDriverStats();
-        driverToday.value = data.data;
-    } catch {
-        driverToday.value = null;
-    }
+    return total > 0 ? Math.round(revenue / total) : 0;
 };
 
-const formatDuration = (seconds) => {
-    const hours = Math.floor((seconds ?? 0) / 3600);
-    const minutes = Math.floor(((seconds ?? 0) % 3600) / 60);
-
-    return hours > 0 ? `${hours}시간 ${minutes}분` : `${minutes}분`;
-};
-
-const summary = computed(() => stats.value?.summary ?? {});
-
-// 7일 매출 차트 — 최대값 기준 막대 높이 계산
-const revenueSeries = computed(() => stats.value?.daily ?? []);
-
-const maxRevenue = computed(() => Math.max(1, ...revenueSeries.value.map((d) => d.revenue)));
-
-const revenuePercent = (revenue) => `${Math.max(4, Math.round(((revenue ?? 0) / maxRevenue.value) * 100))}%`;
-
-const maxCount = computed(() => Math.max(1, ...revenueSeries.value.map((d) => d.count)));
-
-const countPercent = (count) => `${Math.max(4, Math.round(((count ?? 0) / maxCount.value) * 100))}%`;
-
-const totalRevenue = computed(() => revenueSeries.value.reduce((sum, d) => sum + (d.revenue ?? 0), 0));
-
-// 월별 매출 차트 (최근 6개월)
-const monthlySeries = computed(() => stats.value?.monthly ?? []);
-const maxMonthRevenue = computed(() => Math.max(1, ...monthlySeries.value.map((d) => d.revenue)));
-const monthRevenuePercent = (revenue) => `${Math.max(4, Math.round(((revenue ?? 0) / maxMonthRevenue.value) * 100))}%`;
-const totalMonthRevenue = computed(() => monthlySeries.value.reduce((sum, d) => sum + (d.revenue ?? 0), 0));
-
-// ── 정산 처리 ──
-const settling = ref(false);
-const settleMessage = ref('');
-
-const settleAll = async () => {
-    settling.value = true;
-    settleMessage.value = '';
-
-    try {
-        const { data } = await apiOrders({ scope: 'mine', tab: '완료', per_page: 100 });
-        const rows = Array.isArray(data.data) ? data.data : data.data?.data ?? [];
-        const ids = rows.filter((row) => row.status === 'completed').map((row) => row.id);
-
-        if (!ids.length) {
-            settleMessage.value = '정산 대기 운행이 없습니다.';
-            return;
-        }
-
-        const result = await apiBatchSettle(ids);
-        settleMessage.value = `${result.data.settled ?? ids.length}건이 정산 완료되었습니다.`;
-        await load();
-    } catch (e) {
-        settleMessage.value = getApiErrorMessage(e, '정산에 실패했습니다.');
-    } finally {
-        settling.value = false;
-    }
-};
+let timer = null;
 
 onMounted(() => {
     load();
@@ -181,7 +105,35 @@ onBeforeUnmount(() => clearInterval(timer));
             </template>
         </n-alert>
 
-        <n-spin :show="loading" class="dash-body">
+        <div class="dash-body">
+            <!-- 로딩 스켈레톤 — 대시보드 레이아웃과 동일한 골격 -->
+            <div v-if="loading" class="dash-skeleton">
+                <div class="dash-upcoming">
+                    <div class="sk-card dash-skeleton__up" />
+                    <div class="sk-card dash-skeleton__up" />
+                </div>
+                <div class="dash-schedule">
+                    <div class="sk-card">
+                        <div class="sk-line" style="width: 35%; height: 15px; margin-bottom: 12px;" />
+                        <div class="sk-line" style="width: 92%;" />
+                        <div class="sk-line" style="width: 70%;" />
+                    </div>
+                    <div class="sk-card">
+                        <div class="sk-line" style="width: 35%; height: 15px; margin-bottom: 12px;" />
+                        <div class="sk-line" style="width: 92%;" />
+                        <div class="sk-line" style="width: 70%;" />
+                    </div>
+                </div>
+                <div class="dash-grid">
+                    <div v-for="n in 4" :key="n" class="sk-card dash-skeleton__stat" />
+                </div>
+                <div class="sk-card">
+                    <div class="sk-line" style="width: 30%; height: 15px; margin-bottom: 12px;" />
+                    <div class="sk-line" style="width: 55%;" />
+                    <div class="sk-line" style="width: 45%;" />
+                </div>
+            </div>
+            <template v-else>
             <template v-if="stats">
                 <!-- 오늘/내일 운행 -->
                 <div class="dash-upcoming">
@@ -263,7 +215,10 @@ onBeforeUnmount(() => clearInterval(timer));
                     </div>
                     <div v-if="summary.rating != null" class="dash-card">
                         <span class="dash-card__label">평점</span>
-                        <strong class="dash-card__value">★ {{ summary.rating }}<small class="dash-card__unit">/ 5</small></strong>
+                        <strong class="dash-card__value">
+                            <BaseIcon name="star" :size="15" />
+                            {{ summary.rating }}<small class="dash-card__unit">/ 5</small>
+                        </strong>
                         <span class="dash-card__hint">리뷰 {{ summary.reviewCount }}개</span>
                     </div>
                 </div>
@@ -272,7 +227,9 @@ onBeforeUnmount(() => clearInterval(timer));
                 <div class="dash-card dash-block">
                     <div class="dash-card__head">
                         <strong>정산 현황</strong>
+                        <!-- 정산은 등록자(관리자)만 처리 — 드라이버(진행자)는 '정산 진행중'으로 대기 -->
                         <n-button
+                            v-if="!isDriver"
                             type="primary"
                             size="small"
                             round
@@ -285,7 +242,7 @@ onBeforeUnmount(() => clearInterval(timer));
                     </div>
                     <div class="settle-grid">
                         <div class="settle-item">
-                            <span class="settle-item__label">정산 대기</span>
+                            <span class="settle-item__label">정산 진행중</span>
                             <strong class="settle-item__value">{{ formatWon(summary.settlementPending) }}원</strong>
                         </div>
                         <div class="settle-item">
@@ -310,7 +267,7 @@ onBeforeUnmount(() => clearInterval(timer));
                                     :style="{ height: countPercent(item.count) }"
                                     :title="`${item.count}건`"
                                 >
-                                    {{ item.count > 0 ? item.count : '' }}
+                                    <span v-if="item.count > 0" class="bar-chart__count-label">{{ item.count }}</span>
                                 </div>
                                 <div
                                     class="bar-chart__bar bar-chart__bar--revenue"
@@ -335,10 +292,10 @@ onBeforeUnmount(() => clearInterval(timer));
                                 <div class="bar-chart__track">
                                     <div
                                         class="bar-chart__bar bar-chart__bar--count"
-                                        :style="{ height: countPercent(item.count) }"
+                                        :style="{ height: monthCountPercent(item.count) }"
                                         :title="`${item.count}건`"
                                     >
-                                        {{ item.count > 0 ? item.count : '' }}
+                                        <span v-if="item.count > 0" class="bar-chart__count-label">{{ item.count }}</span>
                                     </div>
                                     <div
                                         class="bar-chart__bar bar-chart__bar--revenue"
@@ -381,40 +338,42 @@ onBeforeUnmount(() => clearInterval(timer));
                         </div>
                     </div>
 
-                    <!-- 정산 현황 -->
+                    <!-- 건당 평균 매출 — 상단 정산 현황(처리 버튼 포함)과 중복되지 않도록 별도 지표로 교체 -->
                     <div class="dash-card">
                         <div class="dash-card__head">
-                            <strong>정산 현황</strong>
+                            <strong>건당 평균 매출</strong>
                         </div>
                         <div class="settle-list">
                             <div class="settle-item">
-                                <span class="settle-item__label">정산 완료</span>
-                                <strong class="settle-item__value">{{ formatWon(summary.settled) }}원</strong>
+                                <span class="settle-item__label">기간 내 운행</span>
+                                <strong class="settle-item__value">{{ summary.total }}건</strong>
                             </div>
                             <div class="settle-item">
-                                <span class="settle-item__label">정산 대기</span>
-                                <strong class="settle-item__value">{{ formatWon(summary.settlementPending) }}원</strong>
+                                <span class="settle-item__label">건당 평균</span>
+                                <strong class="settle-item__value">{{ formatWon(avgRevenue()) }}원</strong>
                             </div>
-                            <div class="settle-bar">
-                                <div
-                                    class="settle-bar__fill"
-                                    :style="{
-                                        width: `${summary.revenue > 0 ? (summary.settled / summary.revenue) * 100 : 0}%`,
-                                    }"
-                                />
-                            </div>
-                            <p class="settle-hint">완료된 운행은 상세에서 "정산" 상태로 전환하면 정산 완료에 반영됩니다.</p>
                         </div>
+                        <p class="settle-hint">기간 내 총 매출 {{ formatWon(summary.revenue) }}원 · 완료 {{ summary.completed }}건</p>
                     </div>
                 </div>
             </template>
 
-            <n-empty v-else-if="!loading" description="통계 데이터가 없습니다." :image-size="80" />
-        </n-spin>
+            <n-empty v-else description="통계 데이터가 없습니다." :image-size="80" />
+            </template>
+        </div>
     </div>
 </template>
 
 <style scoped>
+/* ── 로딩 스켈레톤 ── */
+.dash-skeleton__up {
+    height: 84px;
+}
+
+.dash-skeleton__stat {
+    height: 92px;
+}
+
 .page-head {
     display: flex;
     align-items: center;
@@ -646,13 +605,13 @@ html.dark .mini-list__empty {
     font-size: 12px;
 }
 
-/* 바 차트 */
+/* 바 차트 — 값 라벨(막대 위)이 차트 안에 들어오도록 상단 여유를 둔다 */
 .bar-chart {
     display: flex;
     align-items: flex-end;
     gap: 8px;
     height: 180px;
-    padding-top: 8px;
+    padding-top: 24px;
 }
 
 .bar-chart__col {
@@ -679,12 +638,23 @@ html.dark .mini-list__empty {
 }
 
 .bar-chart__bar--count {
+    position: relative;
     width: 10px;
     background: var(--brand);
-    color: #ffffff;
+    min-height: 4px;
+}
+
+/* 막대 위에 얹는 값 라벨 — 10px 막대 폭에 갇히지 않게 밖으로 표시 */
+.bar-chart__count-label {
+    position: absolute;
+    top: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    color: var(--text-muted);
     font-size: 10px;
-    text-align: center;
-    line-height: 1.2;
+    font-weight: 600;
+    line-height: 1;
 }
 
 .bar-chart__bar--revenue {

@@ -55,7 +55,7 @@ const openImage = () => {
                 <div v-if="msg.body" class="cb-bubble__body">{{ msg.body }}</div>
             </div>
             <div v-if="isLast" class="cb-meta" :class="{ 'cb-meta--mine': isMine }">
-                <span v-if="msg.read" class="cb-meta__read">읽음</span>
+                <span v-if="isMine && msg.read" class="cb-meta__read">읽음</span>
                 <span class="cb-meta__time">{{ formatClock(ts) }}</span>
             </div>
         </div>

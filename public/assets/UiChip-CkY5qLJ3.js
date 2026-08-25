@@ -1,0 +1,1 @@
+import{Bt as e,En as t,Lt as n,gt as r,t as i}from"./_plugin-vue_export-helper-CHFfEUVo.js";var a=i({__name:`UiChip`,props:{variant:{type:String,default:`default`}},setup(i){return(a,o)=>(n(),r(`span`,{class:t([`ui-chip`,`ui-chip--${i.variant}`])},[e(a.$slots,`default`,{},void 0,!0)],2))}},[[`__scopeId`,`data-v-a0a29b76`]]);export{a as t};

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { apiLogin, apiLogout, apiMe } from '../api/auth';
+import { apiLogin, apiLogout, apiMe, apiRegister } from '../api/auth';
 
 export const useAuthStore = defineStore('auth', {
     state: () => ({
@@ -11,8 +11,16 @@ export const useAuthStore = defineStore('auth', {
         isAdmin: (state) => ['Admin', 'Super Admin'].includes(state.user?.role),
     },
     actions: {
-        async login(email, password) {
-            const { data } = await apiLogin(email, password);
+        async login(login, password) {
+            const { data } = await apiLogin(login, password);
+
+            this.token = data.data.token;
+            this.user = data.data.user;
+            localStorage.setItem('auth_token', this.token);
+            localStorage.setItem('auth_user_role', this.user?.role ?? '');
+        },
+        async register(name, email, password) {
+            const { data } = await apiRegister(name, email, password);
 
             this.token = data.data.token;
             this.user = data.data.user;

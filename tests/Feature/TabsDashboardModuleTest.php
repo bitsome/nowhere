@@ -16,7 +16,7 @@ test('authenticated users can access shared tab menu dashboard module page', fun
         ->assertSee('TabMenu')
         ->assertSee('ViewToggle')
         ->assertSee('마켓')
-        ->assertSee('내가 받은 오더')
+        ->assertSee('내가 받은 운행')
         ->assertSee('data-order-tabs', false)
         ->assertSee('data-view-toggle-demo', false);
 });

@@ -63,6 +63,8 @@ class OrderListRowBuilder
             'amount' => $this->formatAmount($order),
             'status' => $order->status,
             'statusLabel' => $this->statusOptions[$order->status] ?? $order->status,
+            'claimantName' => $order->claimant_user_id !== null ? ($order->claimant?->name ?? '') : '',
+            'claimantUserId' => $order->claimant_user_id,
             'isToday' => $this->isToday($order),
             'isTomorrow' => $this->isTomorrow($order),
             'isNew' => $this->isNew($order),

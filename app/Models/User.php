@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Notifications\OrderNotification;
 use App\Support\Leveling\LevelTable;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -90,6 +91,11 @@ class User extends Authenticatable implements HasMedia
         return $this->hasMany(Vehicle::class);
     }
 
+    public function matchPreferences(): HasMany
+    {
+        return $this->hasMany(MatchPreference::class);
+    }
+
     public function communityPosts(): HasMany
     {
         return $this->hasMany(CommunityPost::class);
@@ -100,13 +106,18 @@ class User extends Authenticatable implements HasMedia
         return $this->hasMany(OrderTemplate::class);
     }
 
+    public function pushSubscriptions(): HasMany
+    {
+        return $this->hasMany(PushSubscription::class);
+    }
+
     public function levelEvents(): HasMany
     {
         return $this->hasMany(UserLevelEvent::class);
     }
 
     /**
-     * XP를 부여하고 이벤트 로그를 남긴다.
+     * XP를 부여하고 이벤트 로그를 남긴다. 레벨이 올랐으면 알림으로 알려준다.
      */
     public function addXp(int $xp, string $type, string $label): void
     {
@@ -114,13 +125,27 @@ class User extends Authenticatable implements HasMedia
             return;
         }
 
+        $before = LevelTable::resolve((int) $this->xp)['level'];
+
         $this->increment('xp', $xp);
+        $this->refresh();
 
         $this->levelEvents()->create([
             'type' => $type,
             'label' => $label,
             'xp' => $xp,
         ]);
+
+        $after = LevelTable::resolve((int) $this->xp)['level'];
+
+        if ($after > $before) {
+            $info = $this->levelInfo();
+            $this->notify(new OrderNotification(
+                '레벨 업!',
+                "축하합니다! {$info['title']} (Lv.{$info['level']})에 도달했습니다.",
+                null,
+            ));
+        }
     }
 
     /**

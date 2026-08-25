@@ -1,0 +1,313 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>기사앱 전체 UI</title><style>
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:#080A0D;color:#F2F5F4;font-family:-apple-system,BlinkMacSystemFont,"Pretendard","Noto Sans KR",sans-serif}
+.top{position:sticky;top:0;z-index:100;background:#111316f2;backdrop-filter:blur(16px);border-bottom:1px solid #2B3035;padding:14px 16px}
+.top b{font-size:14px}
+.nav{display:flex;flex-wrap:nowrap;gap:7px;overflow-x:auto;overflow-y:hidden;margin-top:10px}
+.nav a{flex:none;text-decoration:none;color:#AEB8B4;background:#1C1F23;border:1px solid #2B3035;padding:9px 11px;border-radius:10px;font-size:10px;white-space:nowrap}
+.nav a:hover{color:#63E2B7;border-color:#63E2B7}
+.screen{width:min(390px,calc(100vw - 24px));min-height:844px;margin:26px auto;background:#111316;border:1px solid #252A2F;border-radius:34px;overflow:hidden;box-shadow:0 25px 70px #0008;scroll-margin-top:100px}
+.status{height:42px;padding:14px 20px 0;display:flex;justify-content:space-between;font-size:12px;color:#AEB8B4}
+.content{padding:18px 18px 90px}
+h1{font-size:25px;margin:8px 0 5px;letter-spacing:-.8px}
+.sub{font-size:12px;color:#89938F}
+.section{font-size:13px;font-weight:800;margin:20px 0 10px}
+.card{background:#1C1F23;border:1px solid #2B3035;border-radius:16px;padding:15px;margin-bottom:10px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.badge{display:inline-flex;padding:5px 8px;border-radius:7px;background:#63E2B714;color:#63E2B7;font-size:9px;font-weight:700}
+.badge.yellow{background:#F2A93B14;color:#F4BE5F}.badge.red{background:#E95B5B14;color:#F47C7C}.badge.blue{background:#4D8FE814;color:#78A8FF}
+.title{font-size:14px;font-weight:800;line-height:1.4;margin-top:8px}
+.muted{font-size:10px;color:#707A76;line-height:1.55;margin-top:5px}
+.price{font-size:17px;font-weight:850;color:#63E2B7}
+.btn{height:52px;width:100%;border-radius:15px;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:12px;font-weight:800;margin-top:10px;border:0}
+.primary{background:#63E2B7;color:#07120E}.secondary{background:#202328;border:1px solid #2B3035;color:#D7DEDB}
+.hero{padding:17px;border-radius:17px;background:#161A1E;border:1px solid #2B3035}.hero .amount{font-size:29px;font-weight:900;color:#63E2B7;margin-top:7px}
+.amount{font-size:30px;font-weight:900;color:#63E2B7}
+.list{display:flex;align-items:center;gap:11px;background:#1C1F23;border:1px solid #2B3035;border-radius:15px;padding:13px;margin-bottom:9px}
+.thumb{width:52px;height:52px;border-radius:13px;background:#2A3035;display:flex;align-items:center;justify-content:center;color:#69736F;font-size:9px;flex:none}
+.listmain{min-width:0}.listtitle{font-size:12px;font-weight:800}.listmeta{font-size:9px;color:#707A76;margin-top:4px}.listprice{margin-left:auto;font-size:12px;font-weight:850;color:#63E2B7;white-space:nowrap}
+.timeline{display:flex;gap:12px}.rail{width:12px;display:flex;flex-direction:column;align-items:center}.dot{width:10px;height:10px;border-radius:50%;background:#63E2B7;flex:none}.dot.gray{background:#626C68}.line{width:1px;flex:1;min-height:42px;background:#394047}.timelinebody{flex:1}.time{font-size:10px;color:#63E2B7;font-weight:800}.place{font-size:13px;font-weight:800;margin-top:3px}.small{font-size:9px;color:#707A76;margin-top:3px}
+.actiongrid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.action{height:58px;background:#202328;border:1px solid #2B3035;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-decoration:none;color:#D8DEDC;font-size:10px}.action b{font-size:17px;color:#63E2B7}
+.map{height:185px;margin:0 -18px;background:linear-gradient(135deg,#1A1E22,#282E33);position:relative;overflow:hidden}.road{position:absolute;height:8px;background:#363D43;transform:rotate(-18deg);left:-30px;right:-30px;top:90px;box-shadow:0 36px #363D43,0 -42px #363D43}.pin{position:absolute;width:20px;height:20px;border-radius:50% 50% 50% 0;background:#63E2B7;transform:rotate(-45deg);left:55%;top:45%;box-shadow:0 0 0 6px #63E2B722}
+.info .r{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #292F34;font-size:11px}.info .r:last-child{border-bottom:0}.info .r span:first-child{color:#727C78}.info .r span:last-child{color:#CBD2CF}
+.flight{display:flex;align-items:center;justify-content:space-between;text-align:center}.flight .code{font-size:22px;font-weight:900}.flight .city{font-size:9px;color:#707A76}.flight .mid{color:#63E2B7}
+.profile{display:flex;align-items:center;gap:10px}.avatar{width:42px;height:42px;border-radius:14px;background:#293036;color:#63E2B7;display:flex;align-items:center;justify-content:center;font-weight:900}.name{font-size:12px;font-weight:800}
+.money{font-size:30px;font-weight:900;color:#63E2B7}.moneyrow{display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid #292F34;font-size:11px}.moneyrow:last-child{border:0}.moneyrow span{color:#727C78}
+.alert{display:flex;gap:10px;padding:13px 0;border-bottom:1px solid #292F34}.alert:last-child{border:0}.alerticon{width:35px;height:35px;border-radius:11px;background:#63E2B714;color:#63E2B7;display:flex;align-items:center;justify-content:center}.alert b{font-size:11px}.alert p{font-size:9px;color:#707A76;margin:4px 0 0}
+.category{display:grid;grid-template-columns:1fr 1fr;gap:9px}.category a{height:74px;background:#1C1F23;border:1px solid #2B3035;border-radius:14px;display:flex;flex-direction:column;justify-content:center;padding:0 13px;text-decoration:none;color:#DCE2E0}.category b{color:#63E2B7;font-size:16px}.category span{font-size:10px;margin-top:5px}
+.ride-tabs{display:flex;flex-wrap:nowrap;width:100%;gap:6px;margin-top:18px;padding:4px;background:#171A1E;border:1px solid #2B3035;border-radius:13px;overflow:hidden}
+.ride-tabs a{flex:1 1 0;min-width:0;height:38px;display:flex;align-items:center;justify-content:center;text-decoration:none;white-space:nowrap;color:#89938F;font-size:11px;font-weight:700;border-radius:9px}.ride-tabs a.active{background:#63E2B7;color:#07120E}
+.search{height:46px;background:#1C1F23;border:1px solid #2B3035;border-radius:14px;margin:18px 0 13px;padding:0 14px;display:flex;align-items:center;color:#69736F;font-size:12px}
+.tabs{display:flex;gap:7px;overflow:auto;margin-bottom:18px}.tab{flex:none;text-decoration:none;padding:9px 12px;border-radius:10px;background:#1C1F23;border:1px solid #2B3035;color:#89938F;font-size:10px;white-space:nowrap}.tab.active{background:#63E2B71A;color:#63E2B7;border-color:#63E2B755}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.product{background:#1C1F23;border:1px solid #2B3035;border-radius:16px;overflow:hidden;text-decoration:none;color:inherit}.photo{height:125px;background:linear-gradient(135deg,#20252A,#30363B);display:flex;align-items:center;justify-content:center;color:#69736F;font-size:11px}.pbody{padding:12px}.ptitle{font-size:12px;font-weight:750;line-height:1.4;margin:8px 0}.formlabel{display:block;font-size:11px;color:#B8C0BD;font-weight:700;margin:17px 0 8px}.input,.textarea{width:100%;border:1px solid #2B3035;background:#1C1F23;color:#E8EEEB;border-radius:14px;font:inherit;font-size:12px;outline:none}.input{height:52px;padding:0 14px}.textarea{height:145px;padding:14px;resize:none;line-height:1.6}.input:focus,.textarea:focus{border-color:#63E2B7;box-shadow:0 0 0 3px #63E2B714}.upload{height:100px;border:1px dashed #3A4247;background:#1C1F23;border-radius:14px;display:flex;align-items:center;justify-content:center;flex-direction:column;color:#89938F;gap:5px;font-size:11px}.plus{font-size:24px;color:#63E2B7}
+.comment-form{display:flex;gap:8px;width:100%;margin-top:12px}.comment-input{flex:1;min-width:0;height:46px;border:1px solid #2B3035;background:#1C1F23;color:#E8EEEB;border-radius:14px;padding:0 13px;font:inherit;font-size:11px;outline:none}.comment-submit{flex:none;width:64px;height:46px;border-radius:14px;background:#63E2B7;color:#07120E;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:10px;font-weight:800}
+.write{position:fixed;right:max(22px,calc((100vw - 390px)/2 + 18px));bottom:25px;width:55px;height:55px;border-radius:18px;background:#63E2B7;color:#07120E;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:25px;box-shadow:0 12px 30px #0009}
+.bottom{height:65px;background:#15181B;border-top:1px solid #292E32;display:flex;align-items:center;justify-content:space-around;color:#69736F;font-size:9px}.bottom .on{color:#63E2B7}
+@media(max-width:430px){body{padding:0}.screen{width:100%;min-height:100vh;margin:0;border:0;border-radius:0;box-shadow:none}.write{right:18px}}
+
+.workflow{margin-top:16px;background:#161A1E;border:1px solid #2B3035;border-radius:17px;padding:15px}
+.workflow-title{font-size:12px;font-weight:800;margin-bottom:14px}
+.wf-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}
+.wf-icon{width:28px;height:28px;flex:none;border-radius:9px;background:#20252A;color:#737D79;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800}
+.wf-icon.active{background:#63E2B71A;color:#63E2B7;border:1px solid #63E2B755}
+.wf-icon.done{background:#63E2B7;color:#07120E}
+.wf-text{min-width:0;flex:1}.wf-text b{font-size:11px}.wf-text span{display:block;color:#737D79;font-size:9px;margin-top:3px;line-height:1.4}
+.wf-status{margin-left:auto;white-space:nowrap;font-size:9px;color:#707A76;padding-top:3px}.wf-status.active{color:#63E2B7}
+.approval{margin-top:14px;background:#1B2024;border:1px solid #384148;border-radius:14px;padding:13px}
+.approval-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.approval-title{font-size:11px;font-weight:800}.approval-time{font-size:9px;color:#F4BE5F}
+.approval p{font-size:10px;color:#8A9490;line-height:1.5;margin:8px 0}
+.chatbox{margin-top:14px;background:#15191C;border:1px solid #2B3035;border-radius:15px;padding:12px}
+.chatline{display:flex;margin:8px 0}.chatline.me{justify-content:flex-end}.bubble{max-width:82%;padding:9px 11px;border-radius:12px;background:#22272C;color:#CDD4D1;font-size:10px;line-height:1.45}.me .bubble{background:#63E2B7;color:#07120E}.chat-time{font-size:8px;color:#65706C;margin-top:4px}
+.request-box{background:#63E2B70D;border:1px solid #63E2B733;border-radius:14px;padding:13px;margin-top:14px}
+.request-box b{font-size:11px}.request-box p{font-size:10px;color:#8A9490;line-height:1.5;margin:6px 0 0}
+.timer{font-size:20px;font-weight:900;color:#F4BE5F;letter-spacing:.5px}
+.state-pill{display:inline-flex;align-items:center;gap:5px;padding:6px 9px;border-radius:8px;background:#20252A;color:#8B9692;font-size:9px;font-weight:700}
+.state-pill.green{background:#63E2B714;color:#63E2B7}
+.state-pill.red{background:#E95B5B14;color:#F47C7C}
+.state-pill.yellow{background:#F2A93B14;color:#F4BE5F}
+
+/* v3 approval / dispatch workflow */
+.wf-card{background:#161A1E;border:1px solid #2B3035;border-radius:17px;padding:15px;margin-top:14px}
+.wf-title{font-size:12px;font-weight:800}
+.wf-sub{font-size:9px;color:#737D79;margin-top:4px}
+.wf-step{display:flex;gap:10px;margin-top:14px}
+.wf-step-icon{width:28px;height:28px;border-radius:9px;flex:none;background:#20252A;color:#707A76;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800}
+.wf-step-icon.done{background:#63E2B7;color:#07120E}.wf-step-icon.active{background:#63E2B71A;color:#63E2B7;border:1px solid #63E2B755}
+.wf-step-body{flex:1}.wf-step-body b{font-size:10px}.wf-step-body p{font-size:9px;color:#737D79;margin:4px 0 0;line-height:1.45}
+.wf-state{font-size:8px;color:#707A76;padding-top:4px}.wf-state.active{color:#63E2B7}.wf-state.red{color:#F47C7C}.wf-state.yellow{color:#F4BE5F}
+.countdown{font-size:23px;font-weight:900;color:#F4BE5F;letter-spacing:.5px}
+.approval-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.approval-buttons .btn{margin-top:0}
+.reason{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}.reason a{height:43px;background:#202328;border:1px solid #2B3035;border-radius:11px;display:flex;align-items:center;padding:0 10px;color:#AEB8B4;text-decoration:none;font-size:9px}.reason a.active{border-color:#63E2B7;color:#63E2B7;background:#63E2B70D}
+.history{margin-top:12px}.history-row{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid #292F34}.history-row:last-child{border-bottom:0}.history-time{width:39px;flex:none;color:#63E2B7;font-size:9px;font-weight:800}.history-text{font-size:10px;line-height:1.45}.history-text span{display:block;color:#707A76;font-size:8px;margin-top:2px}
+.creator{display:flex;align-items:center;gap:10px}.creator-avatar{width:40px;height:40px;border-radius:13px;background:#293036;color:#63E2B7;display:flex;align-items:center;justify-content:center;font-weight:900}
+.amount-lg{font-size:27px;font-weight:900;color:#63E2B7}.notice{padding:11px 12px;border-radius:12px;background:#F2A93B0D;border:1px solid #F2A93B33;color:#C3A36E;font-size:9px;line-height:1.5;margin-top:12px}
+.success-box{padding:25px 16px;text-align:center;background:#63E2B70A;border:1px solid #63E2B733;border-radius:17px;margin-top:18px}.success-icon{width:54px;height:54px;border-radius:18px;background:#63E2B7;color:#07120E;display:flex;align-items:center;justify-content:center;margin:0 auto 13px;font-size:25px;font-weight:900}
+.cancel-box{padding:16px;border-radius:15px;background:#E95B5B0A;border:1px solid #E95B5B33}.cancel-box b{font-size:11px;color:#F47C7C}.cancel-box p{font-size:9px;color:#8B7777;line-height:1.5;margin:6px 0 0}
+
+.chat-header{display:flex;align-items:center;gap:10px;padding:12px 0 14px;border-bottom:1px solid #292F34}
+.chat-header .avatar{width:40px;height:40px}
+.chat-actions{display:flex;gap:6px;margin-left:auto}
+.chat-actions a{width:34px;height:34px;border-radius:10px;background:#20252A;border:1px solid #2B3035;color:#63E2B7;display:flex;align-items:center;justify-content:center;text-decoration:none;font-size:14px}
+.chat-room{height:455px;overflow:auto;padding:12px 0}
+.chat-system{margin:10px auto;padding:7px 10px;width:max-content;max-width:90%;border-radius:9px;background:#20252A;color:#77817D;font-size:8px;text-align:center}
+.chat-event{margin:10px 0;padding:11px 12px;border-radius:13px;background:#63E2B70D;border:1px solid #63E2B733}
+.chat-event b{font-size:10px;color:#63E2B7}.chat-event p{font-size:9px;color:#8B9591;line-height:1.45;margin:5px 0}
+.quick-actions{display:flex;gap:7px;overflow-x:auto;padding:10px 0;border-top:1px solid #292F34;border-bottom:1px solid #292F34}
+.quick-actions a{flex:none;padding:8px 10px;border-radius:9px;background:#20252A;border:1px solid #2B3035;color:#AEB8B4;text-decoration:none;font-size:9px;white-space:nowrap}
+.quick-actions a.primary-q{color:#63E2B7;border-color:#63E2B755;background:#63E2B70D}
+.chat-compose{display:flex;align-items:center;gap:7px;margin-top:10px}
+.chat-compose .plus{width:34px;height:34px;border-radius:10px;background:#20252A;color:#63E2B7;display:flex;align-items:center;justify-content:center;font-size:18px}
+.chat-compose input{flex:1;min-width:0;height:42px;border:1px solid #2B3035;background:#1C1F23;color:#E8EEEB;border-radius:12px;padding:0 12px;font-size:10px;outline:none}
+.chat-compose button{width:52px;height:42px;border:0;border-radius:12px;background:#63E2B7;color:#07120E;font-size:10px;font-weight:800}
+.command-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.command{min-height:62px;background:#202328;border:1px solid #2B3035;border-radius:13px;padding:10px;text-decoration:none;color:#D8DEDC}
+.command b{display:block;color:#63E2B7;font-size:11px;margin-bottom:4px}.command span{font-size:8px;color:#707A76;line-height:1.35}
+.menu-sheet{margin-top:14px;padding:13px;background:#161A1E;border:1px solid #2B3035;border-radius:16px}
+.menu-sheet .menu-title{font-size:11px;font-weight:800;margin-bottom:9px}
+.menu-list{display:grid;grid-template-columns:1fr 1fr;gap:7px}.menu-list a{padding:10px;border-radius:10px;background:#202328;color:#BFC7C4;text-decoration:none;font-size:9px}
+.menu-list a.red{color:#F47C7C;background:#E95B5B0D}
+</style></head><body>
+<header class="top"><b>기사앱 전체 UI · HTML + CSS</b><nav class="nav">
+<a href="#login">로그인</a><a href="#verify">인증</a><a href="#basic">기본정보</a><a href="#vehicle">차량등록</a><a href="#signupdone">가입완료</a>
+<a href="#home">홈</a><a href="#myrides">내운행</a><a href="#detail">운행상세</a><a href="#approval-request">승인요청</a><a href="#timeline">운행기록</a><a href="#settlement-detail">정산상세</a><a href="#chat">승인채팅</a><a href="#chat-menu">채팅요청</a><a href="#change-request">시간변경</a><a href="#route-request">경로변경</a><a href="#payment-request">요금협의</a><a href="#approved">승인완료</a><a href="#running">운행진행</a><a href="#complete">운행완료</a><a href="#matching">매칭</a>
+<a href="#customer">고객</a><a href="#flight">항공편</a><a href="#settlement">정산</a><a href="#withdraw">출금</a><a href="#alerts">알림</a><a href="#report">신고</a><a href="#review">리뷰</a>
+<a href="#community">커뮤니티</a><a href="#community-post">게시글</a><a href="#shop">쇼핑</a><a href="#product">상품상세</a><a href="#register">상품등록</a><a href="#parking">주차장</a><a href="#parking-detail">주차상세</a>
+</nav></header>
+<section id="login" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><div style="width:58px;height:58px;border-radius:18px;background:#63E2B7;color:#07120E;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:20px">NW</div><div style="margin-top:28px;color:#63E2B7;font-size:12px;font-weight:800">DRIVER PLATFORM</div><h1>기사님, 다시<br>오셨군요.</h1><div class="sub">운행과 배차를 한곳에서 간편하게 관리하세요.</div><label class="formlabel">휴대폰 번호</label><input class="input" placeholder="010-1234-5678"><label class="formlabel">비밀번호</label><input class="input" type="password" placeholder="비밀번호"><a href="#home" class="btn primary">로그인</a><a href="#verify" class="btn secondary">회원가입</a></main></section><section id="verify" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><div class="muted">회원가입 · 01 / 04</div><h1>휴대폰 인증</h1><div class="sub">기사님 본인 확인을 진행합니다.</div><label class="formlabel">휴대폰 번호</label><input class="input" value="010-1234-5678"><a href="#verify" class="btn secondary">인증번호 받기</a><label class="formlabel">인증번호</label><input class="input" placeholder="6자리 인증번호"><a href="#basic" class="btn primary">인증 완료</a></main></section><section id="basic" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><div class="muted">회원가입 · 02 / 04</div><h1>기본 정보</h1><div class="sub">운행에 사용할 기사 정보를 입력합니다.</div><label class="formlabel">이름</label><input class="input" placeholder="홍길동"><label class="formlabel">비밀번호</label><input class="input" type="password" placeholder="비밀번호"><label class="formlabel">활동 지역</label><input class="input" value="서울특별시"><a href="#vehicle" class="btn primary">다음</a></main></section><section id="vehicle" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><div class="muted">회원가입 · 03 / 04</div><h1>차량 정보</h1><div class="sub">배차에 사용할 차량을 등록합니다.</div><label class="formlabel">차량 종류</label><input class="input" value="스타리아 9인승"><label class="formlabel">차량 번호</label><input class="input" placeholder="123가 4567"><label class="formlabel">차량 사진</label><div class="upload"><div class="plus">＋</div>차량 사진 등록</div><a href="#signupdone" class="btn primary">다음</a></main></section><section id="signupdone" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content" style="padding-top:90px"><div style="width:72px;height:72px;border-radius:24px;background:#63E2B71F;border:1px solid #63E2B740;display:flex;align-items:center;justify-content:center;color:#63E2B7;font-size:34px">✓</div><div style="margin-top:28px;color:#63E2B7;font-size:12px;font-weight:800">WELCOME ABOARD</div><h1>가입이<br>완료되었습니다.</h1><div class="sub">차량 인증 후 모든 배차 기능을 이용할 수 있습니다.</div><a href="#home" class="btn primary">홈으로 이동</a></main></section><section id="home" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><div class="row"><div><h1>오늘의 운행</h1><div class="sub">2026년 8월 18일 화요일</div></div><span style="color:#63E2B7">● 온라인</span></div><div class="hero" style="margin-top:18px"><div class="muted">오늘 예정 운행</div><div class="row"><div class="amount">3건</div><div style="text-align:right"><div class="muted">오늘 예상 수익</div><b style="font-size:18px">₩320,000</b></div></div></div><div class="section">진행 중인 운행</div><div class="card"><span class="badge">● 운행중</span><div class="title">인천공항 T1 → 강남</div><div class="muted">3명 · 수하물 4개 · 예상 도착 14:20</div><a href="#running" class="btn primary">운행 화면 열기</a></div><div class="section">다음 운행</div><div class="list"><div class="thumb">13:30</div><div class="listmain"><div class="listtitle">인천공항 T1 → 강남</div><div class="listmeta">13:30 · 3명 · 스타리아</div></div><div class="listprice">₩120K</div></div><div class="list"><div class="thumb">18:00</div><div class="listmain"><div class="listtitle">강남 → 인천공항 T1</div><div class="listmeta">18:00 · 2명 · 스타리아</div></div><div class="listprice">₩100K</div></div><div class="section">빠른 메뉴</div><div class="category"><a href="#matching"><b>⌁</b><span>매칭 찾기</span></a><a href="#settlement"><b>₩</b><span>정산 확인</span></a><a href="#flight"><b>✈</b><span>항공편</span></a><a href="#parking"><b>⌖</b><span>여행지 주차</span></a></div></main></section><section id="myrides" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><h1>내 운행</h1><div class="sub">예정·진행·완료 운행을 한눈에 확인합니다.</div><nav class="ride-tabs"><a href="#myrides" class="active">전체</a><a href="#myrides">오늘</a><a href="#myrides">예정</a><a href="#myrides">완료</a></nav><div class="card" style="margin-top:14px"><span class="badge">● 운행중</span><div class="title">인천공항 T1 → 강남</div><div class="muted">13:30 · 3명 · 스타리아</div><a href="#running" class="btn primary">운행 진행</a></div><div class="card"><span class="badge yellow">예정</span><div class="title">강남 → 인천공항 T1</div><div class="muted">18:00 · 2명 · 픽업 17:30</div><div class="price" style="margin-top:10px">₩100,000</div></div><div class="card"><span class="badge blue">완료</span><div class="title">인천공항 T2 → 명동</div><div class="muted">08:30 · 운행 완료 09:42</div><div class="price" style="margin-top:10px">₩110,000</div></div></main></section><section id="detail" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+<main class="content">
+<a href="#myrides" style="color:#89938F;text-decoration:none;font-size:12px">‹ 내 운행</a>
+<div class="row" style="margin-top:18px"><div><span class="badge yellow">운행 신청 대기</span><h1>운행 상세</h1><div class="sub">운행 ID #A82451</div></div><span class="state-pill yellow">승인 대기</span></div>
+
+<div class="card" style="margin-top:16px">
+<div class="title">인천공항 T1 → 강남</div>
+<div class="muted">2026.08.18 · 13:30 · 3명 · 스타리아 9인승</div>
+<div class="info" style="margin-top:10px">
+<div class="r"><span>운행 등록자</span><span>김배차</span></div>
+<div class="r"><span>운행 금액</span><span style="color:#63E2B7">₩120,000</span></div>
+<div class="r"><span>신청 제한시간</span><span style="color:#F4BE5F">04:32 남음</span></div>
+</div>
+</div>
+
+<div class="workflow">
+<div class="workflow-title">운행 처리 상태</div>
+<div class="wf-row"><div class="wf-icon active">1</div><div class="wf-text"><b>운행 신청</b><span>기사님이 운행 시작을 신청했습니다.</span></div><div class="wf-status active">완료</div></div>
+<div class="wf-row"><div class="wf-icon active">2</div><div class="wf-text"><b>등록자 승인 요청</b><span>운행 등록자에게 승인 요청을 보냅니다.</span></div><div class="wf-status active">대기</div></div>
+<div class="wf-row"><div class="wf-icon">3</div><div class="wf-text"><b>승인 수락</b><span>등록자가 승인하면 운행이 확정됩니다.</span></div><div class="wf-status">대기</div></div>
+<div class="wf-row"><div class="wf-icon">4</div><div class="wf-text"><b>운행중</b><span>승인 후 운행을 시작합니다.</span></div><div class="wf-status">대기</div></div>
+<div class="wf-row"><div class="wf-icon">5</div><div class="wf-text"><b>운행 완료</b><span>목적지 도착 후 운행을 완료합니다.</span></div><div class="wf-status">대기</div></div>
+<div class="wf-row"><div class="wf-icon">6</div><div class="wf-text"><b>정산 완료</b><span>운행 금액이 정산 처리됩니다.</span></div><div class="wf-status">대기</div></div>
+</div>
+
+<div class="request-box">
+<div class="approval-head"><b>승인 요청</b><span class="timer">04:32</span></div>
+<p>운행 등록자에게 운행 시작 승인 요청을 보냈습니다.<br>제한시간 내 승인되지 않으면 신청이 자동 취소됩니다.</p>
+<a href="#chat" class="btn primary">채팅으로 승인 요청</a>
+<a href="#cancel-request" class="btn secondary">운행 신청 취소</a>
+</div>
+
+<div class="section">고객</div>
+<div class="card"><div class="profile"><div class="avatar">王</div><div><div class="name">Wang Wei · 3명</div><div class="muted">中文 · 수하물 4개</div></div></div></div>
+</main></section><section id="running" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><span class="badge">● 운행중</span><h1>인천공항 → 강남</h1><div class="sub">현재 운행시간 32분</div><div class="map" style="margin-top:18px"><div class="road"></div><div class="pin"></div></div><div class="card" style="margin-top:14px"><div class="row"><div><div class="muted">예상 도착</div><b style="font-size:21px">14:20</b></div><div style="text-align:right"><div class="muted">남은 거리</div><b>18km</b></div></div></div><div class="section">진행 상태</div><div class="card"><div class="timeline"><div class="rail"><i class="dot"></i><i class="line"></i><i class="dot"></i><i class="line"></i><i class="dot gray"></i></div><div class="timelinebody"><div class="time">완료</div><div class="place">픽업 장소 도착</div><div class="small">13:22</div><div style="height:25px"></div><div class="time">진행중</div><div class="place">고객 탑승</div><div class="small">3명 · 수하물 4개</div><div style="height:25px"></div><div class="time" style="color:#707A76">예정</div><div class="place">강남 도착</div></div></div></div><div class="actiongrid"><a class="action" href="#customer"><b>☎</b>고객 연락</a><a class="action" href="#route"><b>↗</b>경로</a><a class="action" href="#parking"><b>⌖</b>주차장</a><a class="action" href="#report"><b>!</b>문제 신고</a></div><a href="#complete" class="btn primary">도착 완료</a></main></section><section id="complete" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><span class="badge">운행 완료</span><h1>운행이<br>완료되었습니다.</h1><div class="sub">고객 도착 14:18 · 운행시간 48분</div><div class="card" style="margin-top:20px;text-align:center"><div class="muted">이번 운행 정산금</div><div class="amount">₩120,000</div><div class="muted">기본 운행료 ₩110,000 + 추가 ₩10,000</div></div><div class="section">운행 요약</div><div class="card"><div class="moneyrow"><span>픽업</span><b>인천공항 T1</b></div><div class="moneyrow"><span>도착</span><b>강남역</b></div><div class="moneyrow"><span>거리</span><b>48km</b></div><div class="moneyrow"><span>운행시간</span><b>48분</b></div></div><a href="#review" class="btn primary">고객 리뷰 요청</a><a href="#settlement" class="btn secondary">정산 상세</a></main></section><section id="matching" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><div class="row"><div><h1>매칭</h1><div class="sub">기사님에게 맞는 운행을 추천합니다.</div></div><span style="color:#63E2B7">자동</span></div><div class="section">추천 운행</div><div class="card"><div class="row"><span class="badge">추천 96%</span><span class="price">₩120,000</span></div><div class="title">인천공항 T1 → 강남</div><div class="muted">13:30 · 3명 · 48km · 스타리아</div><a href="#detail" class="btn primary">운행 확인</a></div><div class="card"><div class="row"><span class="badge blue">추천 89%</span><span class="price">₩100,000</span></div><div class="title">강남 → 인천공항 T2</div><div class="muted">18:00 · 2명 · 42km · 스타리아</div><a href="#detail" class="btn secondary">운행 확인</a></div></main></section><section id="chat" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+<main class="content">
+<div class="chat-header">
+<a href="#detail" style="color:#89938F;text-decoration:none;font-size:12px">‹</a>
+<div class="avatar">김</div>
+<div><div class="name">김배차</div><div class="muted">운행 등록자 · 온라인</div></div>
+<div class="chat-actions"><a href="#customer">☎</a><a href="#chat-menu">⋯</a></div>
+</div>
+
+<div class="card" style="margin-top:12px;padding:12px">
+<div class="row"><div><div class="muted">현재 운행</div><div class="title">인천공항 T1 → 강남</div></div><span class="state-pill yellow">승인 대기</span></div>
+<div class="muted">13:30 · 3명 · 스타리아 · ₩120,000</div>
+</div>
+
+<div class="chat-room">
+<div class="chat-system">오늘 13:02 · 운행 신청이 생성되었습니다.</div>
+<div class="chatline me"><div><div class="bubble">13:30 운행 시작 승인 요청드립니다.</div><div class="chat-time" style="text-align:right">13:02</div></div></div>
+<div class="chatline"><div><div class="bubble">확인했습니다. 고객 정보와 픽업 위치 확인했습니다.</div><div class="chat-time">13:03</div></div></div>
+
+<div class="chat-event"><b>승인 요청</b><p>기사님이 운행 시작 승인을 요청했습니다.<br>승인 제한시간 04:32</p>
+<div class="approval-buttons"><a href="#approved" class="btn primary">승인 수락</a><a href="#reject-reason" class="btn secondary">거절</a></div></div>
+
+<div class="chatline me"><div><div class="bubble">픽업 위치 T1 3번 출구 맞는지 확인 부탁드립니다.</div><div class="chat-time" style="text-align:right">13:04</div></div></div>
+<div class="chatline"><div><div class="bubble">맞습니다. 고객에게도 3번 출구로 안내했습니다.</div><div class="chat-time">13:05</div></div></div>
+
+<div class="chat-event"><b>빠른 처리</b><p>채팅에서 바로 운행 관련 요청을 처리할 수 있습니다.</p></div>
+</div>
+
+<div class="quick-actions">
+<a class="primary-q" href="#approved">✓ 승인</a>
+<a href="#reject-reason">✕ 거절</a>
+<a href="#cancel-flow">취소 요청</a>
+<a href="#change-request">시간 변경</a>
+<a href="#route-request">경로 변경</a>
+<a href="#payment-request">요금 확인</a>
+</div>
+
+<div class="command-grid">
+<a class="command" href="#approval-request"><b>승인 요청</b><span>운행 시작 승인 다시 요청</span></a>
+<a class="command" href="#customer"><b>고객 정보</b><span>고객·수하물·픽업 정보 확인</span></a>
+<a class="command" href="#route-request"><b>픽업 위치 변경</b><span>새로운 장소를 요청</span></a>
+<a class="command" href="#change-request"><b>시간 변경</b><span>픽업 시간을 협의</span></a>
+<a class="command" href="#payment-request"><b>요금 협의</b><span>추가요금 또는 금액 확인</span></a>
+<a class="command" href="#report"><b>문제 신고</b><span>노쇼·차량·사고 등 신고</span></a>
+</div>
+
+<div class="chat-compose"><a class="plus" href="#chat-menu">＋</a><input placeholder="메시지 입력"><button>전송</button></div>
+</main></section><section id="approved" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+<main class="content">
+<span class="badge">승인 수락</span><h1>운행이 승인되었습니다.</h1><div class="sub">등록자가 운행 시작 요청을 수락했습니다.</div>
+<div class="card" style="margin-top:18px"><div class="row"><span class="state-pill green">● 승인 완료</span><span class="muted">13:07</span></div><div class="title">인천공항 T1 → 강남</div><div class="muted">3명 · 스타리아 · ₩120,000</div></div>
+<div class="workflow"><div class="workflow-title">운행 처리 상태</div><div class="wf-row"><div class="wf-icon done">✓</div><div class="wf-text"><b>운행 신청</b></div><div class="wf-status active">완료</div></div><div class="wf-row"><div class="wf-icon done">✓</div><div class="wf-text"><b>승인 수락</b></div><div class="wf-status active">완료</div></div><div class="wf-row"><div class="wf-icon active">3</div><div class="wf-text"><b>운행중</b><span>승인 완료. 운행을 시작할 수 있습니다.</span></div><div class="wf-status active">다음</div></div><div class="wf-row"><div class="wf-icon">4</div><div class="wf-text"><b>운행 완료</b></div><div class="wf-status">대기</div></div><div class="wf-row"><div class="wf-icon">5</div><div class="wf-text"><b>정산 완료</b></div><div class="wf-status">대기</div></div></div>
+<a href="#running" class="btn primary">운행 시작</a><a href="#chat" class="btn secondary">채팅 보기</a>
+</main></section><section id="rejected" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+<main class="content"><span class="badge red">승인 거절</span><h1>운행 승인이<br>거절되었습니다.</h1><div class="sub">운행 등록자가 신청을 거절했습니다.</div>
+<div class="card" style="margin-top:18px"><div class="row"><span class="state-pill red">거절됨</span><span class="muted">13:08</span></div><div class="title">인천공항 T1 → 강남</div><div class="muted">사유: 다른 기사에게 배차되었습니다.</div></div>
+<a href="#matching" class="btn primary">다른 운행 찾기</a><a href="#chat" class="btn secondary">채팅 확인</a></main></section><section id="cancel-request" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+<main class="content"><span class="badge yellow">신청 취소</span><h1>운행 신청을<br>취소하시겠습니까?</h1><div class="sub">승인 요청이 취소되고 해당 운행 신청이 종료됩니다.</div>
+<div class="card" style="margin-top:18px"><div class="title">인천공항 T1 → 강남</div><div class="muted">신청 제한시간 04:32</div></div>
+<a href="#myrides" class="btn primary">신청 취소</a><a href="#detail" class="btn secondary">돌아가기</a></main></section><section id="approval-request" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+<main class="content">
+<span class="badge yellow">새로운 승인 요청</span>
+<h1>운행 승인 요청</h1>
+<div class="sub">운행 등록자가 승인 여부를 확인해주세요.</div>
+
+<div class="card" style="margin-top:18px">
+<div class="row"><div><div class="muted">운행 금액</div><div class="amount-lg">₩120,000</div></div><div style="text-align:right"><div class="muted">승인 제한</div><div class="countdown">04:32</div></div></div>
+<div class="info" style="margin-top:12px">
+<div class="r"><span>운행일</span><span>2026.08.18 13:30</span></div>
+<div class="r"><span>픽업</span><span>인천공항 T1 3번 출구</span></div>
+<div class="r"><span>목적지</span><span>서울 강남</span></div>
+<div class="r"><span>인원</span><span>3명</span></div>
+<div class="r"><span>차량</span><span>스타리아 9인승</span></div>
+</div>
+</div>
+
+<div class="section">신청 기사</div>
+<div class="card"><div class="creator"><div class="creator-avatar">홍</div><div><div class="name">홍길동 기사</div><div class="muted">스타리아 · 12가 3456 · 평점 4.9</div></div></div></div>
+
+<div class="approval">
+<div class="approval-head"><div class="approval-title">승인 여부를 선택하세요.</div><span class="state-pill yellow">04:32</span></div>
+<div class="approval-buttons"><a href="#approved" class="btn primary">승인 수락</a><a href="#reject-reason" class="btn secondary">거절</a></div>
+<div class="notice">제한시간 내 응답하지 않으면 운행 신청이 자동 취소됩니다.</div>
+</div>
+<a href="#chat" class="btn secondary">채팅으로 확인</a>
+</main></section><section id="reject-reason" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+<main class="content">
+<a href="#approval-request" style="color:#89938F;text-decoration:none;font-size:12px">‹ 승인 요청</a>
+<h1 style="margin-top:18px">승인 거절</h1>
+<div class="sub">거절 사유를 선택하면 기사에게 전달됩니다.</div>
+<div class="section">거절 사유</div>
+<div class="reason">
+<a href="#reject-reason" class="active">이미 다른 기사에게 배차</a>
+<a href="#reject-reason">시간이 맞지 않음</a>
+<a href="#reject-reason">차량 조건 불일치</a>
+<a href="#reject-reason">거리 문제</a>
+<a href="#reject-reason">고객 요청 문제</a>
+<a href="#reject-reason">기타</a>
+</div>
+<label class="formlabel">추가 내용</label>
+<textarea class="textarea" placeholder="기사에게 전달할 내용을 입력하세요."></textarea>
+<a href="#rejected" class="btn primary">거절하기</a>
+</main></section><section id="cancel-flow" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+<main class="content">
+<span class="badge yellow">운행 확정</span><h1>운행 취소 요청</h1><div class="sub">승인된 운행은 취소 요청 후 등록자의 확인이 필요합니다.</div>
+<div class="card" style="margin-top:18px"><div class="title">인천공항 T1 → 강남</div><div class="muted">13:30 · 홍길동 기사 · ₩120,000</div></div>
+<div class="section">취소 사유</div>
+<div class="reason"><a href="#cancel-flow" class="active">고객 요청</a><a href="#cancel-flow">차량 문제</a><a href="#cancel-flow">기사 사정</a><a href="#cancel-flow">기타</a></div>
+<div class="notice">승인된 운행을 임의로 취소하면 불이익이 발생할 수 있습니다.</div>
+<a href="#cancel-pending" class="btn primary">취소 요청 보내기</a><a href="#detail" class="btn secondary">돌아가기</a>
+</main></section><section id="cancel-pending" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+<main class="content"><span class="badge yellow">취소 승인 대기</span><h1>취소 요청을<br>보냈습니다.</h1><div class="sub">등록자에게 취소 요청이 전달되었습니다.</div>
+<div class="wf-card"><div class="wf-title">취소 처리 상태</div><div class="wf-step"><div class="wf-step-icon done">✓</div><div class="wf-step-body"><b>취소 요청</b><p>기사님이 취소를 요청했습니다.</p></div><span class="wf-state active">완료</span></div><div class="wf-step"><div class="wf-step-icon active">2</div><div class="wf-step-body"><b>등록자 확인</b><p>등록자가 승인하면 운행이 취소됩니다.</p></div><span class="wf-state yellow">대기</span></div><div class="wf-step"><div class="wf-step-icon">3</div><div class="wf-step-body"><b>취소 완료</b></div><span class="wf-state">대기</span></div></div>
+<a href="#chat" class="btn primary">채팅으로 확인</a><a href="#detail" class="btn secondary">운행 상세</a></main></section><section id="timeline" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+<main class="content"><h1>운행 타임라인</h1><div class="sub">운행과 승인 과정의 모든 기록입니다.</div>
+<div class="card" style="margin-top:18px"><div class="row"><div><div class="title">인천공항 T1 → 강남</div><div class="muted">운행 ID #A82451</div></div><span class="state-pill green">운행 완료</span></div></div>
+<div class="wf-card history">
+<div class="history-row"><div class="history-time">13:02</div><div class="history-text">기사 운행 신청<span>홍길동 기사가 운행을 신청했습니다.</span></div></div>
+<div class="history-row"><div class="history-time">13:02</div><div class="history-text">승인 요청 발송<span>운행 등록자에게 승인 요청을 보냈습니다.</span></div></div>
+<div class="history-row"><div class="history-time">13:04</div><div class="history-text">채팅 승인 요청<span>채팅으로 운행 시작 승인을 요청했습니다.</span></div></div>
+<div class="history-row"><div class="history-time">13:07</div><div class="history-text">등록자 승인<span>등록자가 운행 신청을 수락했습니다.</span></div></div>
+<div class="history-row"><div class="history-time">13:22</div><div class="history-text">픽업 장소 도착<span>인천공항 T1 3번 출구</span></div></div>
+<div class="history-row"><div class="history-time">13:27</div><div class="history-text">고객 탑승<span>3명 탑승 완료</span></div></div>
+<div class="history-row"><div class="history-time">13:30</div><div class="history-text">운행 시작<span>운행중 상태로 변경</span></div></div>
+<div class="history-row"><div class="history-time">14:18</div><div class="history-text">목적지 도착<span>강남역 도착</span></div></div>
+<div class="history-row"><div class="history-time">14:20</div><div class="history-text">운행 완료<span>운행 완료 처리</span></div></div>
+<div class="history-row"><div class="history-time">14:25</div><div class="history-text">정산 완료<span>₩120,000 정산 처리</span></div></div>
+</div></main></section><section id="settlement-detail" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+<main class="content"><a href="#settlement" style="color:#89938F;text-decoration:none;font-size:12px">‹ 정산</a><h1 style="margin-top:18px">정산 상세</h1><div class="sub">완료된 운행의 정산 내역입니다.</div>
+<div class="success-box"><div class="success-icon">✓</div><div class="muted">정산 완료</div><div class="amount-lg" style="margin-top:6px">₩120,000</div><div class="muted">2026.08.18 · 14:25</div></div>
+<div class="section">정산 내역</div><div class="card"><div class="moneyrow"><span>기본 운행료</span><b>₩110,000</b></div><div class="moneyrow"><span>추가 운행료</span><b>₩10,000</b></div><div class="moneyrow"><span>수수료</span><b>₩0</b></div><div class="moneyrow"><span>최종 정산</span><b style="color:#63E2B7">₩120,000</b></div></div>
+<div class="section">정산 상태</div><div class="wf-card"><div class="wf-step"><div class="wf-step-icon done">✓</div><div class="wf-step-body"><b>운행 완료</b></div><span class="wf-state active">완료</span></div><div class="wf-step"><div class="wf-step-icon done">✓</div><div class="wf-step-body"><b>정산 처리</b></div><span class="wf-state active">완료</span></div><div class="wf-step"><div class="wf-step-icon active">₩</div><div class="wf-step-body"><b>출금 가능</b><p>출금 가능 잔액에 반영되었습니다.</p></div><span class="wf-state active">완료</span></div></div>
+<a href="#settlement" class="btn primary">정산 목록</a></main></section><section id="chat-menu" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+<main class="content"><a href="#chat" style="color:#89938F;text-decoration:none;font-size:12px">‹ 채팅</a><h1 style="margin-top:18px">운행 요청</h1><div class="sub">채팅에서 바로 처리할 수 있는 요청입니다.</div>
+<div class="menu-sheet"><div class="menu-title">승인 / 상태</div><div class="menu-list"><a href="#approval-request">승인 요청</a><a href="#approved">승인 수락</a><a href="#reject-reason" class="red">승인 거절</a><a href="#cancel-flow" class="red">운행 취소</a></div></div>
+<div class="menu-sheet"><div class="menu-title">운행 변경</div><div class="menu-list"><a href="#change-request">시간 변경</a><a href="#route-request">픽업 위치 변경</a><a href="#route-request">목적지 변경</a><a href="#payment-request">요금 변경</a></div></div>
+<div class="menu-sheet"><div class="menu-title">기타</div><div class="menu-list"><a href="#customer">고객 정보</a><a href="#flight">항공편 확인</a><a href="#parking">주차장</a><a href="#report">문제 신고</a></div></div>
+</main></section>
+
+<section id="change-request" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+<main class="content"><a href="#chat" style="color:#89938F;text-decoration:none;font-size:12px">‹ 채팅</a><h1 style="margin-top:18px">시간 변경 요청</h1><div class="sub">등록자와 픽업 시간을 협의합니다.</div>
+<div class="card" style="margin-top:18px"><div class="title">현재 픽업 시간</div><div class="amount-lg">13:30</div><div class="muted">인천공항 T1 3번 출구</div></div>
+<label class="formlabel">변경 요청 시간</label><input class="input" value="14:00">
+<label class="formlabel">요청 내용</label><textarea class="textarea" placeholder="변경 사유를 입력하세요."></textarea>
+<a href="#chat" class="btn primary">채팅으로 변경 요청</a><a href="#chat" class="btn secondary">취소</a></main></section>
+
+<section id="route-request" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+<main class="content"><a href="#chat" style="color:#89938F;text-decoration:none;font-size:12px">‹ 채팅</a><h1 style="margin-top:18px">경로 변경 요청</h1><div class="sub">픽업 또는 목적지 변경을 등록자에게 요청합니다.</div>
+<div class="section">변경 대상</div><div class="reason"><a class="active" href="#route-request">픽업 위치</a><a href="#route-request">목적지</a></div>
+<label class="formlabel">현재 위치</label><input class="input" value="인천공항 T1 3번 출구">
+<label class="formlabel">변경 위치</label><input class="input" placeholder="새로운 장소를 입력하세요">
+<label class="formlabel">요청 내용</label><textarea class="textarea" placeholder="변경 사유를 입력하세요."></textarea>
+<a href="#chat" class="btn primary">변경 요청 보내기</a></main></section>
+
+<section id="payment-request" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div>
+<main class="content"><a href="#chat" style="color:#89938F;text-decoration:none;font-size:12px">‹ 채팅</a><h1 style="margin-top:18px">요금 확인 / 협의</h1><div class="sub">운행 금액에 변경사항이 있을 경우 채팅으로 확인합니다.</div>
+<div class="card" style="margin-top:18px"><div class="muted">현재 운행 금액</div><div class="amount-lg">₩120,000</div></div>
+<label class="formlabel">변경 요청 금액</label><input class="input" placeholder="예: 130,000">
+<label class="formlabel">사유</label><textarea class="textarea" placeholder="추가 요금 또는 변경 사유를 입력하세요."></textarea>
+<a href="#chat" class="btn primary">채팅으로 협의 요청</a><a href="#settlement-detail" class="btn secondary">현재 금액 확인</a></main></section>
+<section id="customer" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><a href="#running" style="color:#89938F;text-decoration:none;font-size:12px">‹ 운행</a><h1 style="margin-top:18px">고객 정보</h1><div class="card" style="margin-top:18px"><div class="profile"><div class="avatar">王</div><div><div class="name">Wang Wei</div><div class="muted">신규 고객 · 中文</div></div></div><div class="info"><div class="r"><span>인원</span><span>3명</span></div><div class="r"><span>수하물</span><span>4개</span></div><div class="r"><span>픽업</span><span>T1 3번 출구</span></div></div></div><div class="actiongrid"><a class="action" href="#customer"><b>☎</b>전화</a><a class="action" href="#chat"><b>◌</b>채팅</a><a class="action" href="#customer"><b>⌖</b>위치 공유</a><a class="action" href="#customer"><b>▣</b>문자</a></div></main></section><section id="flight" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><h1>항공편</h1><div class="sub">운행과 연결된 실시간 항공편</div><div class="card" style="margin-top:18px"><div class="row"><span class="badge yellow">15분 지연</span><span class="muted">실시간</span></div><div class="flight" style="margin-top:22px"><div><div class="code">PVG</div><div class="city">상하이</div></div><div class="mid">→<br><small>MU5041</small></div><div><div class="code">ICN</div><div class="city">인천 T1</div></div></div><div class="info" style="margin-top:14px"><div class="r"><span>예정</span><span>13:15</span></div><div class="r"><span>변경</span><span style="color:#F4BE5F">13:30</span></div><div class="r"><span>상태</span><span>지연</span></div></div></div><a href="#customer" class="btn primary">고객 정보</a></main></section><section id="settlement" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><h1>정산</h1><div class="sub">운행 수익과 출금 가능 금액</div><div class="hero" style="margin-top:18px"><div class="muted">출금 가능 금액</div><div class="money">₩842,000</div><a href="#withdraw" class="btn primary">출금 신청</a></div><div class="section">이번 달</div><div class="card"><div class="moneyrow"><span>운행</span><b>28건</b></div><div class="moneyrow"><span>총 운행금액</span><b>₩3,420,000</b></div><div class="moneyrow"><span>수수료</span><b>-₩171,000</b></div><div class="moneyrow"><span>정산금액</span><b style="color:#63E2B7">₩3,249,000</b></div></div></main></section><section id="withdraw" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><a href="#settlement" style="color:#89938F;text-decoration:none;font-size:12px">‹ 정산</a><h1 style="margin-top:18px">출금 신청</h1><div class="card" style="margin-top:18px"><div class="muted">출금 가능</div><div class="money">₩842,000</div></div><div class="section">출금 계좌</div><div class="card"><div class="title">국민은행</div><div class="muted">123-456-789012 · 홍길동</div></div><a href="#settlement" class="btn primary">₩842,000 출금 신청</a></main></section><section id="alerts" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><h1>알림</h1><div class="sub">배차와 운행 관련 알림</div><div class="card" style="margin-top:18px"><div class="alert"><div class="alerticon">✓</div><div><b>새로운 배차가 도착했습니다.</b><p>인천공항 T1 → 강남 · 120,000원</p></div></div><div class="alert"><div class="alerticon">✈</div><div><b>항공편 도착 시간이 변경되었습니다.</b><p>MU5041 · 13:30 도착 예정</p></div></div><div class="alert"><div class="alerticon">₩</div><div><b>정산이 완료되었습니다.</b><p>8월 17일 운행금액 360,000원</p></div></div></div></main></section><section id="report" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><h1>문제 신고</h1><div class="sub">운행 중 발생한 문제를 선택해주세요.</div><div class="actiongrid" style="margin-top:20px"><a class="action" href="#report"><b>!</b>고객 노쇼</a><a class="action" href="#report"><b>✈</b>항공편 문제</a><a class="action" href="#report"><b>▣</b>차량 문제</a><a class="action" href="#report"><b>⚠</b>사고</a><a class="action" href="#report"><b>₩</b>요금 문제</a><a class="action" href="#report"><b>?</b>기타</a></div><label class="formlabel">상세 내용</label><textarea class="textarea" placeholder="문제 상황을 입력해주세요."></textarea><a href="#alerts" class="btn primary">신고 접수</a></main></section><section id="review" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><h1>고객 리뷰</h1><div class="sub">운행 완료 후 고객에게 리뷰를 요청합니다.</div><div class="card" style="margin-top:18px;text-align:center"><div class="muted">이번 운행 고객</div><div class="profile" style="justify-content:center;margin-top:12px"><div class="avatar">王</div><div><div class="name">Wang Wei</div><div class="muted">리뷰 작성 전</div></div></div><a href="#complete" class="btn primary">리뷰 요청 보내기</a></div></main></section><section id="community" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><div class="row"><div><h1>커뮤니티</h1><div class="sub">기사님들과 운행 정보를 공유하세요.</div></div></div><div class="search">⌕　게시글 검색</div><div class="tabs"><a class="tab active" href="#community">전체</a><a class="tab" href="#airport">공항정보</a><a class="tab" href="#route">운행정보</a><a class="tab" href="#region">지역</a><a class="tab" href="#car">차량</a></div><div class="section">카테고리</div><div class="category"><a href="#airport"><b>✈</b><span>공항정보</span></a><a href="#route"><b>⌁</b><span>운행정보</span></a><a href="#region"><b>◎</b><span>지역게시판</span></a><a href="#car"><b>▣</b><span>차량정보</span></a><a href="#money"><b>₩</b><span>수익·노하우</span></a><a href="#shop"><b>▤</b><span>쇼핑 / 중고거래</span></a></div><div class="section">🔥 인기 글</div><div class="card"><span class="badge red">인기</span><div class="title">오늘 인천공항 T1 대기 상황 어떠신가요?</div><div class="muted">김기사 · 12분 전 · ♡ 38 · 댓글 24</div></div><div class="card"><span class="badge blue">공항정보</span><div class="title">T2 새벽 픽업하시는 분들 주차 어디 이용하세요?</div><div class="muted">스타리아기사 · 28분 전 · ♡ 21 · 댓글 13</div></div><a href="#community-write" class="write">＋</a></main></section><section id="community-post" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><a href="#community" style="color:#89938F;text-decoration:none;font-size:12px">‹ 커뮤니티</a><div class="card" style="margin-top:18px"><span class="badge blue">공항정보</span><h1 style="font-size:22px">T2 새벽 픽업하시는 분들<br>주차 어디 이용하세요?</h1><div class="profile" style="margin-top:15px"><div class="avatar">박</div><div><div class="name">박기사</div><div class="muted">2026.08.18 · 07:42</div></div></div><p style="font-size:12px;line-height:1.75;color:#CBD2CF;margin-top:18px">새벽 4~6시 사이에 T2 픽업이 자주 있는데 요즘 주차장 상황이 어떤지 궁금합니다.</p><div class="photo" style="height:110px;border-radius:13px;background:#292F34;display:flex;align-items:center;justify-content:center;color:#69736F">게시글 사진</div><div class="comment-form"><input class="comment-input" placeholder="댓글을 입력하세요"><a href="#community-post" class="comment-submit">댓글달기</a></div></div><div class="section">댓글 13</div><div class="card"><div class="profile"><div class="avatar">김</div><div><div class="name">김기사</div><div class="muted">5분 전</div></div></div><div class="muted" style="margin-left:52px;margin-top:9px;font-size:11px">136 주차장 이용하고 있습니다. 이동 동선이 편합니다.</div></div></main></section><section id="shop" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><h1>쇼핑 / 중고거래</h1><div class="sub">기사님에게 필요한 상품을 사고팔 수 있습니다.</div><div class="search">⌕　상품명, 차량용품 검색</div><div class="tabs"><a class="tab active" href="#shop">전체</a><a class="tab" href="#used">중고거래</a><a class="tab" href="#register">판매등록</a></div><div class="section">🔥 인기 상품</div><div class="grid"><a href="#product" class="product"><div class="photo">상품 이미지</div><div class="pbody"><span class="badge">새상품</span><div class="ptitle">차량용 냉장고 20L</div><div class="price">120,000원</div><div class="muted">서울 · 3분 전</div></div></a><a href="#product" class="product"><div class="photo">상품 이미지</div><div class="pbody"><span class="badge">새상품</span><div class="ptitle">차량용 무선 청소기</div><div class="price">59,000원</div><div class="muted">인천 · 11분 전</div></div></a></div><div class="section">🛒 최근 등록</div><div class="list"><div class="thumb">MAT</div><div class="listmain"><div class="listtitle">스타리아 순정 매트</div><div class="listmeta">인천 · 중고 · 15분 전</div></div><div class="listprice">80K</div></div><a href="#register" class="write">＋</a></main></section><section id="product" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><a href="#shop" style="color:#89938F;text-decoration:none;font-size:12px">‹ 쇼핑</a><div class="photo" style="height:245px;margin:16px -18px 0">상품 이미지</div><span class="badge" style="margin-top:17px">중고 · 상태 양호</span><h1>스타리아 순정 매트</h1><div class="price" style="font-size:21px">80,000원</div><div class="profile" style="margin-top:16px"><div class="avatar">김</div><div><div class="name">김기사</div><div class="muted">평점 4.9 · 거래 38회</div></div></div><div class="info"><div class="r"><span>거래 지역</span><span>인천 부평구</span></div><div class="r"><span>거래 방법</span><span>직거래 / 택배</span></div><div class="r"><span>상품 상태</span><span>사용감 적음</span></div></div><div class="section">상품 설명</div><div class="muted" style="font-size:11px">스타리아 순정 매트입니다. 깨끗하게 사용했고 차량 교체로 판매합니다.</div><a href="#chat" class="btn primary">판매자에게 채팅하기</a><a href="#product" class="btn secondary">♡ 관심상품</a></main></section><section id="register" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><a href="#shop" style="color:#89938F;text-decoration:none;font-size:12px">‹ 취소</a><h1 style="margin-top:18px">상품 등록</h1><div class="sub">판매할 상품 정보를 입력해주세요.</div><label class="formlabel">상품 사진</label><div class="upload"><div class="plus">＋</div>사진 추가</div><label class="formlabel">상품명</label><input class="input" placeholder="상품명을 입력하세요"><label class="formlabel">가격</label><input class="input" placeholder="판매 가격"><label class="formlabel">거래 지역</label><input class="input" placeholder="서울 강서구"><label class="formlabel">상품 설명</label><textarea class="textarea" placeholder="상품 상태와 거래 내용을 입력하세요."></textarea><a href="#shop" class="btn primary">등록하기</a></main></section><section id="parking" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><h1>여행지 주차장</h1><div class="sub">관광지 주변 주차장을 빠르게 찾아보세요.</div><div class="search">⌕　관광지 또는 주차장 검색</div><div class="tabs"><a class="tab active" href="#parking">내 주변</a><a class="tab" href="#parking-detail">대형차</a><a class="tab" href="#parking-free">무료</a></div><div class="map"><div class="road"></div><div class="pin"></div></div><div class="section">주변 주차장</div><div class="card"><span class="badge">대형차 가능</span><div class="title">남산공원 주차장</div><div class="muted">1.2km · 도보 4분 · 24시간</div><div class="price" style="margin-top:8px">5,000원 / 2시간</div><a href="#parking-detail" class="btn primary">주차장 상세</a></div></main></section><section id="parking-detail" class="screen"><div class="status"><span>9:41</span><span>●●● 100%</span></div><main class="content"><a href="#parking" style="color:#89938F;text-decoration:none;font-size:12px">‹ 주차장 목록</a><div class="map" style="margin-top:16px"><div class="road"></div><div class="pin"></div></div><span class="badge" style="margin-top:16px">대형차 가능</span><h1>남산공원 주차장</h1><div class="sub">서울 중구 남산공원길 105</div><div class="info card" style="margin-top:16px"><div class="r"><span>주차요금</span><span>5,000원 / 2시간</span></div><div class="r"><span>운영시간</span><span>24시간</span></div><div class="r"><span>차량 높이</span><span>2.3m 이하</span></div><div class="r"><span>대형차</span><span style="color:#63E2B7">가능</span></div><div class="r"><span>혼잡도</span><span>보통</span></div></div><a href="#parking" class="btn primary">길찾기</a></main></section>
+</body></html>

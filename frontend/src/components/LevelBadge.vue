@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue';
 import { NButton, NModal } from 'naive-ui';
 import { LEVEL_LIST, XP_RULES, iconSvg, tierForLevel } from '../data/levels';
+import BaseIcon from './common/BaseIcon.vue';
 
 const props = defineProps({
     level: { type: Number, required: true },
@@ -26,13 +27,7 @@ const levels = computed(() =>
         :title="`Lv.${level} ${tier.label} · 탭해서 레벨 가이드 보기`"
         @click.stop="showGuide = true"
     >
-        <svg
-            class="level-badge__icon"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            stroke="none"
-            v-html="iconSvg(tier.icon)"
-        />
+        <BaseIcon class="level-badge__icon" :name="iconSvg(tier.icon)" :size="size === 'sm' ? 10 : size === 'md' ? 13 : 16" />
         <span class="level-badge__num">{{ level }}</span>
     </button>
 
@@ -70,7 +65,7 @@ const levels = computed(() =>
                             class="level-row__icon"
                             :style="{ background: row.tier.gradient }"
                         >
-                            <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" v-html="iconSvg(row.tier.icon)" />
+                            <BaseIcon :name="iconSvg(row.tier.icon)" :size="16" />
                         </span>
                         <div class="level-row__text">
                             <strong>Lv.{{ row.level }} {{ row.title }}</strong>
@@ -113,7 +108,7 @@ const levels = computed(() =>
 }
 
 .level-badge__icon {
-    display: block;
+    display: inline-flex;
     flex-shrink: 0;
 }
 
@@ -127,31 +122,16 @@ const levels = computed(() =>
     font-size: 10px;
 }
 
-.level-badge--sm .level-badge__icon {
-    width: 10px;
-    height: 10px;
-}
-
 .level-badge--md {
     height: 24px;
     padding: 0 8px;
     font-size: 12px;
 }
 
-.level-badge--md .level-badge__icon {
-    width: 13px;
-    height: 13px;
-}
-
 .level-badge--lg {
     height: 30px;
     padding: 0 10px;
     font-size: 14px;
-}
-
-.level-badge--lg .level-badge__icon {
-    width: 16px;
-    height: 16px;
 }
 
 /* 가이드 모달 */

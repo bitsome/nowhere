@@ -80,9 +80,12 @@ test('api order index marks recently created orders as new', function () {
 });
 
 test('api order index filters by service type and sorts by date', function () {
+    $dayAfter = now('Asia/Seoul')->addDay()->format('Y-m-d');
+    $twoDays = now('Asia/Seoul')->addDays(2)->format('Y-m-d');
+
     Order::factory()->create([
         'service_type' => 'pickup',
-        'service_date' => '2026-08-15',
+        'service_date' => $twoDays,
         'service_time' => '10:00',
         'pickup_location' => '인천공항',
         'dropoff_location' => '명동',
@@ -92,7 +95,7 @@ test('api order index filters by service type and sorts by date', function () {
 
     Order::factory()->create([
         'service_type' => 'sending',
-        'service_date' => '2026-08-14',
+        'service_date' => $dayAfter,
         'service_time' => '09:00',
         'pickup_location' => '강남',
         'dropoff_location' => '인천공항',
@@ -107,6 +110,218 @@ test('api order index filters by service type and sorts by date', function () {
 
     expect($rows)->toHaveCount(1);
     expect($rows->first()['route'])->toBe('인천공항 → 명동');
+});
+
+test('api order index filters by quick tomorrow', function () {
+    $today = now('Asia/Seoul')->format('Y-m-d');
+    $tomorrow = now('Asia/Seoul')->addDay()->format('Y-m-d');
+
+    Order::factory()->create([
+        'service_date' => $today,
+        'service_time' => '10:00',
+        'pickup_location' => '오늘출발',
+        'dropoff_location' => '인천공항',
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    Order::factory()->create([
+        'service_date' => $tomorrow,
+        'service_time' => '09:00',
+        'pickup_location' => '내일출발',
+        'dropoff_location' => '인천공항',
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    $response = $this->getJson('/api/orders?scope=market&quick=tomorrow')
+        ->assertOk();
+
+    $rows = collect($response->json('data'));
+
+    expect($rows)->toHaveCount(1);
+    expect($rows->first()['route'])->toBe('내일출발 → 인천공항');
+});
+
+test('api order index filters by service datetime onward', function () {
+    $tomorrow = now('Asia/Seoul')->addDay()->format('Y-m-d');
+
+    Order::factory()->create([
+        'service_date' => $tomorrow,
+        'service_time' => '10:00',
+        'pickup_location' => '오전운행',
+        'dropoff_location' => '인천공항',
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    Order::factory()->create([
+        'service_date' => $tomorrow,
+        'service_time' => '13:00',
+        'pickup_location' => '오후운행',
+        'dropoff_location' => '인천공항',
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    $response = $this->getJson('/api/orders?scope=market&date='.urlencode($tomorrow.' 12:00'))
+        ->assertOk();
+
+    $rows = collect($response->json('data'));
+
+    expect($rows)->toHaveCount(1);
+    expect($rows->first()['route'])->toBe('오후운행 → 인천공항');
+});
+
+test('api order index filters by departure and arrival', function () {
+    $tomorrow = now('Asia/Seoul')->addDay()->format('Y-m-d');
+
+    Order::factory()->create([
+        'service_date' => $tomorrow,
+        'service_time' => '10:00',
+        'pickup_location' => '서울 강남구',
+        'dropoff_location' => '인천공항 T1',
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    Order::factory()->create([
+        'service_date' => $tomorrow,
+        'service_time' => '11:00',
+        'pickup_location' => '인천공항 T2',
+        'dropoff_location' => '서울 중구',
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    Order::factory()->create([
+        'service_date' => $tomorrow,
+        'service_time' => '12:00',
+        'pickup_location' => '수원',
+        'dropoff_location' => '인천공항 T1',
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    // 출발지=서울 → 서울에서 출발하는 운행만
+    $departure = $this->getJson('/api/orders?scope=market&departure='.urlencode('서울'))
+        ->assertOk();
+
+    $departureRows = collect($departure->json('data'));
+
+    expect($departureRows)->toHaveCount(1);
+    expect($departureRows->first()['route'])->toBe('서울 강남구 → 인천공항 T1');
+
+    // 도착지=인천공항 T1 → 해당 터미널로 도착하는 운행만
+    $arrival = $this->getJson('/api/orders?scope=market&arrival='.urlencode('인천공항 T1'))
+        ->assertOk();
+
+    $arrivalRows = collect($arrival->json('data'));
+
+    expect($arrivalRows)->toHaveCount(2);
+    expect($arrivalRows->pluck('route'))
+        ->toContain('서울 강남구 → 인천공항 T1')
+        ->toContain('수원 → 인천공항 T1');
+
+    // 출발지=수원(경기도) → 구명 그대로 매칭
+    $suwon = $this->getJson('/api/orders?scope=market&departure='.urlencode('수원'))
+        ->assertOk();
+
+    $suwonRows = collect($suwon->json('data'));
+
+    expect($suwonRows)->toHaveCount(1);
+    expect($suwonRows->first()['route'])->toBe('수원 → 인천공항 T1');
+});
+
+test('api order index filters by vehicle capacity', function () {
+    $tomorrow = now('Asia/Seoul')->addDay()->format('Y-m-d');
+
+    Order::factory()->create([
+        'service_date' => $tomorrow,
+        'service_time' => '10:00',
+        'pickup_location' => '서울 강남구',
+        'dropoff_location' => '인천공항',
+        'vehicle_type' => '스타리아 9인승',
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    Order::factory()->create([
+        'service_date' => $tomorrow,
+        'service_time' => '11:00',
+        'pickup_location' => '서울 마포구',
+        'dropoff_location' => '인천공항',
+        'vehicle_type' => '스타리아 7인승',
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    Order::factory()->create([
+        'service_date' => $tomorrow,
+        'service_time' => '12:00',
+        'pickup_location' => '서울 중구',
+        'dropoff_location' => '인천공항',
+        'vehicle_type' => '카니발',
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    // 차종=스타리아 + 인승=9인승 → 해당 인승 운행만
+    $nine = $this->getJson('/api/orders?scope=market&vehicle_type='.urlencode('스타리아').'&vehicle_capacity='.urlencode('9인승'))
+        ->assertOk();
+
+    $nineRows = collect($nine->json('data'));
+
+    expect($nineRows)->toHaveCount(1);
+    expect($nineRows->first()['route'])->toBe('서울 강남구 → 인천공항');
+
+    // 인승만 7인승 → 정확히 7인승만 매칭 (9인승은 제외)
+    $seven = $this->getJson('/api/orders?scope=market&vehicle_capacity='.urlencode('7인승'))
+        ->assertOk();
+
+    $sevenRows = collect($seven->json('data'));
+
+    expect($sevenRows)->toHaveCount(1);
+    expect($sevenRows->first()['route'])->toBe('서울 마포구 → 인천공항');
+});
+
+test('api order index market search matches route only, not customer name', function () {
+    $tomorrow = now('Asia/Seoul')->addDay()->format('Y-m-d');
+
+    Order::factory()->create([
+        'service_date' => $tomorrow,
+        'service_time' => '10:00',
+        'customer_name' => '노선고객',
+        'pickup_location' => '강남역',
+        'dropoff_location' => '인천공항',
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    Order::factory()->create([
+        'service_date' => $tomorrow,
+        'service_time' => '11:00',
+        'customer_name' => '노선고객',
+        'pickup_location' => '서울역',
+        'dropoff_location' => '김포공항',
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    // 노선(도착지) 검색 — 인천공항으로 가는 운행만 매칭
+    $byDropoff = $this->getJson('/api/orders?scope=market&search='.urlencode('인천공항'))
+        ->assertOk();
+
+    $dropoffRows = collect($byDropoff->json('data'));
+
+    expect($dropoffRows)->toHaveCount(1);
+    expect($dropoffRows->first()['route'])->toBe('강남역 → 인천공항');
+
+    // 마켓 검색은 고객명을 매칭하지 않는다 — '노선고객'으로는 검색되지 않는다
+    $byCustomer = $this->getJson('/api/orders?scope=market&search='.urlencode('노선고객'))
+        ->assertOk();
+
+    expect(collect($byCustomer->json('data')))->toHaveCount(0);
 });
 
 test('api order index returns my draft orders tab', function () {
@@ -165,7 +380,7 @@ test('api order index returns my received orders with tab filter', function () {
         ->assertJsonCount(1, 'data');
 });
 
-test('api order claim takes the market order into my received orders', function () {
+test('api order claim requests the market order and notifies the owner', function () {
     $order = Order::factory()->create([
         'status' => Order::STATUS_PUBLISHED,
         'user_id' => $this->marketUser->id,
@@ -173,19 +388,17 @@ test('api order claim takes the market order into my received orders', function 
 
     $this->postJson("/api/orders/{$order->id}/claim")
         ->assertOk()
-        ->assertJsonPath('data.status', Order::STATUS_ACCEPTED);
+        ->assertJsonPath('data.status', Order::STATUS_ACCEPTANCE_PENDING);
 
-    expect($order->fresh()?->user_id)->toBe($this->driver->id);
-    expect($order->fresh()?->status)->toBe(Order::STATUS_ACCEPTED);
+    // 요청 시점에는 소유자는 그대로, 요청자만 기록된다 (등록자 승인 후 넘어간다)
+    expect($order->fresh()?->user_id)->toBe($this->marketUser->id);
+    expect($order->fresh()?->status)->toBe(Order::STATUS_ACCEPTANCE_PENDING);
+    expect($order->fresh()?->claimant_user_id)->toBe($this->driver->id);
     expect($order->fresh()?->claimed_at)->not->toBeNull();
 
-    // 가져온 드라이버와 원 소유자 모두 알림을 받는다
-    $claimNotification = $this->driver->notifications()->first();
-    expect($claimNotification?->data['title'])->toBe('오더 가져오기 완료');
-    expect($claimNotification?->data['order_id'])->toBe($order->id);
-
+    // 원 소유자에게 승인 요청 알림이 발송된다
     $ownerNotification = $this->marketUser->notifications()->first();
-    expect($ownerNotification?->data['title'])->toBe('오더 가져오기됨');
+    expect($ownerNotification?->data['title'])->toBe('운행 가져오기 요청');
     expect($ownerNotification?->data['order_id'])->toBe($order->id);
 });
 
@@ -210,7 +423,7 @@ test('api order transition follows the lifecycle rules', function () {
 
     // 상태 변경 시 소유자에게 알림이 발송된다
     $notification = $this->driver->notifications()->first();
-    expect($notification?->data['title'])->toBe('오더 상태 변경');
+    expect($notification?->data['title'])->toBe('운행 상태 변경');
     expect($notification?->data['order_id'])->toBe($order->id);
 
     $this->postJson("/api/orders/{$order->id}/status", ['status' => Order::STATUS_DRAFT])
@@ -403,6 +616,88 @@ test('api order batch settle settles only completed orders', function () {
     expect($completed->fresh()->status)->toBe(Order::STATUS_SETTLED);
     expect($alreadySettled->fresh()->status)->toBe(Order::STATUS_SETTLED);
     expect($foreign->fresh()->status)->toBe(Order::STATUS_COMPLETED);
+});
+
+test('only the registrant can settle a completed order taken over by a driver', function () {
+    // 등록자(원 등록자)가 운행을 등록하고, 진행자(드라이버)가 수행해 완료한 상태
+    // 두 사용자 모두 status.update 권한 없음 — 원 등록자 여부만으로 정산 권한이 결정돼야 한다
+    $registrant = User::factory()->create(['id' => 2000, 'role' => 'Driver', 'permissions' => []]);
+    $performer = User::factory()->create(['id' => 2001, 'role' => 'Driver', 'permissions' => []]);
+
+    $order = Order::factory()->create([
+        'user_id' => $performer->id,
+        'original_owner_id' => $registrant->id,
+        'status' => Order::STATUS_COMPLETED,
+    ]);
+
+    // 진행자는 정산 전이 불가 (정산 진행중으로 대기)
+    $this->actingAs($performer)
+        ->postJson("/api/orders/{$order->id}/status", ['status' => Order::STATUS_SETTLED])
+        ->assertForbidden();
+
+    // 등록자는 정산 전이 가능
+    $this->actingAs($registrant)
+        ->postJson("/api/orders/{$order->id}/status", ['status' => Order::STATUS_SETTLED])
+        ->assertOk();
+
+    expect($order->fresh()->status)->toBe(Order::STATUS_SETTLED);
+});
+
+test('batch settle only settles orders registered by the acting user', function () {
+    $registrant = User::factory()->create(['id' => 102]);
+    $performer = User::factory()->create(['id' => 103]);
+    $otherRegistrant = User::factory()->create(['id' => 106]);
+
+    // 등록자가 남에게 넘긴 후 완료된 운행
+    $taken = Order::factory()->create([
+        'user_id' => $performer->id,
+        'original_owner_id' => $registrant->id,
+        'status' => Order::STATUS_COMPLETED,
+    ]);
+    // 진행자가 수행한 다른 등록자의 운행
+    $foreign = Order::factory()->create([
+        'user_id' => $performer->id,
+        'original_owner_id' => $otherRegistrant->id,
+        'status' => Order::STATUS_COMPLETED,
+    ]);
+
+    // 진행자(batchSettle) — 자신이 수행했어도 등록자가 아니면 정산 대상이 아니다
+    $this->actingAs($performer)
+        ->postJson('/api/orders/batch-settle', ['ids' => [$taken->id, $foreign->id]])
+        ->assertOk()
+        ->assertJsonPath('data.settled', 0);
+
+    expect($taken->fresh()->status)->toBe(Order::STATUS_COMPLETED);
+
+    // 등록자 — 자신이 등록한 완료 운행만 정산된다
+    $this->actingAs($registrant)
+        ->postJson('/api/orders/batch-settle', ['ids' => [$taken->id, $foreign->id]])
+        ->assertOk()
+        ->assertJsonPath('data.settled', 1);
+
+    expect($taken->fresh()->status)->toBe(Order::STATUS_SETTLED);
+    expect($foreign->fresh()->status)->toBe(Order::STATUS_COMPLETED);
+});
+
+test('registered list includes taken-over orders and labels completed as settlement pending', function () {
+    $registrant = User::factory()->create(['id' => 104]);
+    $performer = User::factory()->create(['id' => 105]);
+
+    // 등록자가 남에게 넘긴 후 완료된 운행 — 등록자 목록에 보여야 한다
+    Order::factory()->create([
+        'user_id' => $performer->id,
+        'original_owner_id' => $registrant->id,
+        'status' => Order::STATUS_COMPLETED,
+    ]);
+
+    $response = $this->actingAs($registrant)
+        ->getJson('/api/orders?scope=mine&source=registered&tab=완료')
+        ->assertOk();
+
+    $rows = $response->json('data');
+    expect($rows)->toHaveCount(1)
+        ->and($rows[0]['status'])->toBe(Order::STATUS_COMPLETED)
+        ->and($rows[0]['statusLabel'])->toBe('정산 진행중');
 });
 
 test('api order structure returns structured summary', function () {

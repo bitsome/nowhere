@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>위챗 딥링크 테스트</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f4f6f8;
+            color: #1f2328;
+            padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+            max-width: 480px;
+            margin: 0 auto;
+        }
+        h1 { font-size: 20px; margin-bottom: 4px; }
+        .sub { color: #667085; font-size: 13px; margin-bottom: 18px; }
+        .card {
+            background: #fff;
+            border-radius: 14px;
+            padding: 16px;
+            margin-bottom: 14px;
+            box-shadow: 0 1px 3px rgba(16, 24, 40, 0.06);
+        }
+        .badge-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+        .badge {
+            font-size: 12px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: #eef2f6;
+            color: #475467;
+        }
+        .badge--ok { background: #ecfdf3; color: #067647; }
+        .badge--warn { background: #fffaeb; color: #b54708; }
+        .btn {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            border: 1px solid #e4e7ec;
+            background: #fff;
+            border-radius: 12px;
+            padding: 13px 14px;
+            margin-bottom: 8px;
+            font-size: 15px;
+            cursor: pointer;
+            color: #1f2328;
+        }
+        .btn:active { background: #f2f4f7; }
+        .btn code { font-size: 12px; color: #667085; }
+        .btn--main { background: #07c160; border-color: #07c160; color: #fff; justify-content: center; font-weight: 700; }
+        .btn--main:active { background: #06ad56; }
+        .row { display: flex; gap: 8px; }
+        .row input {
+            flex: 1;
+            border: 1px solid #e4e7ec;
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 14px;
+        }
+        #result {
+            min-height: 40px;
+            font-size: 13px;
+            color: #475467;
+            line-height: 1.5;
+            white-space: pre-wrap;
+        }
+        #result.ok { color: #067647; }
+        #result.fail { color: #b42318; }
+        .note { font-size: 12px; color: #667085; line-height: 1.6; }
+        .note b { color: #475467; }
+        .env {
+            font-size: 11px;
+            color: #98a2b3;
+            margin-top: 8px;
+            word-break: break-all;
+            user-select: all;
+        }
+    </style>
+</head>
+<body>
+    <h1>위챗 딥링크 테스트</h1>
+    <p class="sub">사파리에서 열어 위챗 앱으로 전환되는지 확인하는 페이지</p>
+
+    <div class="card">
+        <div class="badge-row" id="badges">
+            <span class="badge">환경 확인 중…</span>
+        </div>
+        <div class="btn btn--main" onclick="openWeixin('weixin://')">위챗 앱 열기 (weixin://)</div>
+        <button class="btn" onclick="openWeixin('weixin://dl/chat')">
+            대화 목록 열기
+            <code>weixin://dl/chat</code>
+        </button>
+        <button class="btn" onclick="openWeixin('weixin://dl/profile')">
+            내 프로필 열기
+            <code>weixin://dl/profile</code>
+        </button>
+        <button class="btn" onclick="openWeixin('weixin://scanqrcode')">
+            QR 스캔 열기
+            <code>weixin://scanqrcode</code>
+        </button>
+    </div>
+
+    <div class="card">
+        <div class="sub" style="margin-bottom:10px">특정 대화 열기 (친구일 때만 동작)</div>
+        <div class="row">
+            <input id="hash" placeholder="username 해시(또는 username)" />
+            <button class="btn" style="width:auto; margin:0" onclick="openChat()">열기</button>
+        </div>
+        <div style="height:10px"></div>
+        <div id="result">버튼을 눌러 보세요.</div>
+    </div>
+
+    <div class="card note">
+        <b>주의</b><br />
+        1. 위챗이 설치되지 않으면 사파리가 "이 페이지를 열 수 없음" 오류를 냅니다.<br />
+        2. 위챗 인앱 브라우저에서는 딥링크가 차단됩니다. 반드시 <b>사파리</b>에서 여세요.<br />
+        3. 특정 대화 열기는 상대가 친구일 때만 가능합니다.
+    </div>
+
+    <div class="env" id="ua"></div>
+
+    <script>
+        const resultEl = document.getElementById('result');
+        const ua = navigator.userAgent;
+        const isWechat = /MicroMessenger/i.test(ua);
+        const isIOS = /iPhone|iPad|iPod/i.test(ua);
+        const isSafari = /Safari/i.test(ua) && !/Chrome|CriOS|FxiOS|Edg/i.test(ua);
+
+        const badges = document.getElementById('badges');
+        badges.innerHTML = [
+            `<span class="badge ${isIOS ? 'badge--ok' : 'badge--warn'}">${isIOS ? 'iOS' : 'iOS 아님'}</span>`,
+            `<span class="badge ${isSafari ? 'badge--ok' : 'badge--warn'}">${isSafari ? '사파리' : '사파리 아님'}</span>`,
+            `<span class="badge ${isWechat ? 'badge--warn' : 'badge--ok'}">${isWechat ? '위챗 인앱(차단됨)' : '위챗 외 브라우저'}</span>`,
+        ].join('');
+
+        document.getElementById('ua').textContent = ua;
+
+        function setResult(text, cls) {
+            resultEl.textContent = text;
+            resultEl.className = cls || '';
+        }
+
+        function openWeixin(url) {
+            if (isWechat) {
+                setResult('❌ 위챗 인앱 브라우저에서는 딥링크가 차단됩니다. 사파리에서 다시 열어주세요.', 'fail');
+                return;
+            }
+            if (!isIOS) {
+                setResult('⚠️ iOS 사파리가 아닙니다. 아이폰 사파리에서 테스트해 주세요.', 'fail');
+                return;
+            }
+
+            setResult(`시도: ${url}`);
+            const opened = { flag: false };
+
+            const onLeave = () => {
+                opened.flag = true;
+                setResult('✅ 위챗 앱으로 전환됨!', 'ok');
+                cleanup();
+            };
+            const onHide = () => {
+                if (document.hidden && !opened.flag) {
+                    opened.flag = true;
+                    setResult('✅ 위챗 앱으로 전환됨!', 'ok');
+                    cleanup();
+                }
+            };
+
+            function cleanup() {
+                window.removeEventListener('pagehide', onLeave);
+                document.removeEventListener('visibilitychange', onHide);
+            }
+
+            window.addEventListener('pagehide', onLeave);
+            document.addEventListener('visibilitychange', onHide);
+
+            location.href = url;
+
+            // 1초 안에 앱 전환이 감지되지 않으면 미설치/차단으로 판단
+            setTimeout(() => {
+                if (!opened.flag) {
+                    setResult('❌ 앱이 열리지 않았습니다. 위챗이 설치돼 있는지 확인하세요.', 'fail');
+                    cleanup();
+                }
+            }, 1000);
+        }
+
+        function openChat() {
+            const hash = document.getElementById('hash').value.trim();
+            if (!hash) {
+                setResult('username 해시를 입력해 주세요.', 'fail');
+                return;
+            }
+            openWeixin(`weixin://dl/chat?t=${encodeURIComponent(hash)}`);
+        }
+    </script>
+</body>
+</html>

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { apiChatMessages, apiChats, apiCreateChat, apiSendChatMessage } from '../api/chats';
+import { apiChatMessages, apiChats, apiCreateChat, apiSendChatMessage, apiSendChatRequest } from '../api/chats';
 
 export const useChatsStore = defineStore('chats', {
     state: () => ({
@@ -51,6 +51,17 @@ export const useChatsStore = defineStore('chats', {
             }
 
             await apiSendChatMessage(this.activeId, body, image);
+            await this.reloadMessages();
+            await this.loadConversations();
+        },
+
+        // 구조화된 운행 요청 전송 (승인·시간·경로·요금·취소)
+        async sendRequest(type, payload) {
+            if (!this.activeId) {
+                return;
+            }
+
+            await apiSendChatRequest(this.activeId, type, payload);
             await this.reloadMessages();
             await this.loadConversations();
         },

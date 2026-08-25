@@ -12,21 +12,13 @@ test('order status follows the lifecycle forward through settlement', function (
         'permissions' => ['order.status.update'],
     ]);
 
+    // 초안 ↔ 공개 왕복 — 등록자가 공개 후 다시 초안으로 되돌릴 수 있다
     $order = Order::factory()->create([
         'user_id' => $user->id,
         'status' => Order::STATUS_DRAFT,
     ]);
 
-    $flow = [
-        Order::STATUS_PUBLISHED,
-        Order::STATUS_TRADING,
-        Order::STATUS_ACCEPTED,
-        Order::STATUS_DRIVING,
-        Order::STATUS_COMPLETED,
-        Order::STATUS_SETTLED,
-    ];
-
-    foreach ($flow as $status) {
+    foreach ([Order::STATUS_PUBLISHED, Order::STATUS_DRAFT, Order::STATUS_PUBLISHED] as $status) {
         $this->actingAs($user)
             ->post(route('dashboard.business.order.status.transition', $order), [
                 'status' => $status,
@@ -37,15 +29,32 @@ test('order status follows the lifecycle forward through settlement', function (
         expect($order->fresh()?->status)->toBe($status);
     }
 
+    // 수락(claim 승인) 이후 — 운행 → 완료 → 정산
+    $accepted = Order::factory()->create([
+        'user_id' => $user->id,
+        'status' => Order::STATUS_ACCEPTED,
+    ]);
+
+    foreach ([Order::STATUS_DRIVING, Order::STATUS_COMPLETED, Order::STATUS_SETTLED] as $status) {
+        $this->actingAs($user)
+            ->post(route('dashboard.business.order.status.transition', $accepted), [
+                'status' => $status,
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('status');
+
+        expect($accepted->fresh()?->status)->toBe($status);
+    }
+
     // 정산 이후에는 전환할 수 있는 상태가 없다.
     $this->actingAs($user)
-        ->post(route('dashboard.business.order.status.transition', $order), [
+        ->post(route('dashboard.business.order.status.transition', $accepted), [
             'status' => Order::STATUS_CANCELLED,
         ])
         ->assertRedirect()
         ->assertSessionHas('error');
 
-    expect($order->fresh()?->status)->toBe(Order::STATUS_SETTLED);
+    expect($accepted->fresh()?->status)->toBe(Order::STATUS_SETTLED);
 });
 
 test('order rejects a status transition that skips lifecycle stages', function () {
@@ -96,18 +105,23 @@ test('order status transition requires the order status update permission', func
         'permissions' => ['order.create'],
     ]);
 
-    $order = Order::factory()->create([
-        'user_id' => $user->id,
-        'status' => Order::STATUS_DRAFT,
+    $other = User::factory()->create([
+        'id' => 3,
     ]);
 
+    $order = Order::factory()->create([
+        'user_id' => $other->id,
+        'status' => Order::STATUS_PUBLISHED,
+    ]);
+
+    // 본인 운행이 아니고 상태 전환 권한도 없으면 거절된다
     $this->actingAs($user)
         ->post(route('dashboard.business.order.status.transition', $order), [
-            'status' => Order::STATUS_PUBLISHED,
+            'status' => Order::STATUS_CANCELLED,
         ])
         ->assertForbidden();
 
-    expect($order->fresh()?->status)->toBe(Order::STATUS_DRAFT);
+    expect($order->fresh()?->status)->toBe(Order::STATUS_PUBLISHED);
 });
 
 test('order detail page renders lifecycle status and available next transitions', function () {

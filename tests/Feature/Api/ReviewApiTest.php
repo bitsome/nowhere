@@ -16,7 +16,7 @@ beforeEach(function () {
         'permissions' => ['order.create', 'order.status.update'],
     ]);
 
-    // 등록자(owner) 등록 → 수행자(performer)가 claim → 운행·완료까지 진행시키는 헬퍼
+    // 등록자(owner) 등록 → 수행자(performer)가 claim → 등록자가 승인 → 운행·완료까지 진행시키는 헬퍼
     $this->makeCompletedOrder = function () {
         Sanctum::actingAs($this->owner);
         $order = Order::factory()->create([
@@ -26,6 +26,11 @@ beforeEach(function () {
 
         Sanctum::actingAs($this->performer);
         $this->postJson("/api/orders/{$order->id}/claim")->assertOk();
+
+        Sanctum::actingAs($this->owner);
+        $this->postJson("/api/orders/{$order->id}/claim/approve")->assertOk();
+
+        Sanctum::actingAs($this->performer);
         $this->postJson("/api/orders/{$order->id}/status", ['status' => 'driving'])->assertOk();
         $this->postJson("/api/orders/{$order->id}/status", ['status' => 'completed'])->assertOk();
 
@@ -45,8 +50,17 @@ test('claim은 원 등록자를 original_owner_id로 기록한다', function () 
     Sanctum::actingAs($this->performer);
     $this->postJson("/api/orders/{$order->id}/claim")->assertOk();
 
+    // 요청 시점에는 소유자가 그대로, 요청자만 기록된다 (등록자 승인 후 넘어간다)
     expect($order->fresh()->original_owner_id)->toBe($this->owner->id)
-        ->and($order->fresh()->user_id)->toBe($this->performer->id);
+        ->and($order->fresh()->user_id)->toBe($this->owner->id)
+        ->and($order->fresh()->status)->toBe(Order::STATUS_ACCEPTANCE_PENDING);
+
+    // 등록자가 승인하면 수행자에게 운행이 넘어간다
+    Sanctum::actingAs($this->owner);
+    $this->postJson("/api/orders/{$order->id}/claim/approve")->assertOk();
+
+    expect($order->fresh()->user_id)->toBe($this->performer->id)
+        ->and($order->fresh()->status)->toBe(Order::STATUS_ACCEPTED);
 });
 
 test('완료 오더에서 등록자가 수행자에게 리뷰를 남길 수 있다', function () {

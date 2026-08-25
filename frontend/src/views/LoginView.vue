@@ -7,7 +7,7 @@ import { getApiErrorMessage } from '../api/client';
 const router = useRouter();
 const auth = useAuthStore();
 
-const email = ref('');
+const login = ref('');
 const password = ref('');
 const loading = ref(false);
 const error = ref('');
@@ -18,8 +18,8 @@ const loadSaved = () => {
     try {
         const saved = JSON.parse(localStorage.getItem('nowhere_login_saved') || 'null');
 
-        if (saved?.email) {
-            email.value = saved.email;
+        if (saved?.login || saved?.email) {
+            login.value = saved.login || saved.email;
             password.value = saved.password || '';
             remember.value = saved.remember !== false;
         }
@@ -45,19 +45,19 @@ const submit = async () => {
     error.value = '';
 
     try {
-        await auth.login(email.value, password.value);
+        await auth.login(login.value, password.value);
 
         // 아이디·비밀번호 저장 (체크 시 localStorage에 보관)
         if (remember.value) {
             localStorage.setItem(
                 'nowhere_login_saved',
-                JSON.stringify({ email: email.value, password: password.value, remember: true }),
+                JSON.stringify({ login: login.value, password: password.value, remember: true }),
             );
         } else {
             localStorage.removeItem('nowhere_login_saved');
         }
 
-        router.push({ name: 'market' });
+        router.push({ name: 'home' });
     } catch (e) {
         error.value = getApiErrorMessage(e, '로그인에 실패했습니다.');
     } finally {
@@ -80,11 +80,10 @@ const submit = async () => {
             </n-alert>
 
             <n-form label-placement="top" size="large" @submit.prevent="submit">
-                <n-form-item label="이메일">
+                <n-form-item label="아이디(이메일) 또는 전화번호">
                     <n-input
-                        v-model:value="email"
-                        type="email"
-                        placeholder="email@example.com"
+                        v-model:value="login"
+                        placeholder="이메일 또는 전화번호"
                         autocomplete="email"
                     />
                 </n-form-item>
@@ -108,6 +107,11 @@ const submit = async () => {
                     로그인
                 </n-button>
             </n-form>
+
+            <p class="login-footer">
+                계정이 없으신가요?
+                <router-link :to="{ name: 'register' }" class="login-link">회원가입</router-link>
+            </p>
         </div>
     </div>
 </template>
@@ -182,5 +186,20 @@ const submit = async () => {
     border-radius: 12px;
     font-size: 15px;
     font-weight: 600;
+}
+
+.login-footer {
+    margin: 20px 0 0;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.login-link {
+    color: var(--brand);
+    font-weight: 700;
+    text-decoration: none;
 }
 </style>

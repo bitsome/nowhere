@@ -37,6 +37,7 @@ export const statusColorVar = {
     completed: 'var(--status-completed)',
     settled: 'var(--status-settled)',
     cancelled: 'var(--status-cancelled)',
+    acceptance_pending: 'var(--status-acceptance-pending)',
 };
 
 // 시맨틱 색상

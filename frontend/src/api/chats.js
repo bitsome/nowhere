@@ -19,3 +19,7 @@ export const apiSendChatMessage = (id, body, image = null) => {
 };
 
 export const apiCreateChat = (payload) => apiClient.post('/chats', payload);
+
+// 구조화된 운행 요청 (승인·시간·경로·요금·취소)
+export const apiSendChatRequest = (id, type, payload) =>
+    apiClient.post(`/chats/${id}/requests`, { type, payload });

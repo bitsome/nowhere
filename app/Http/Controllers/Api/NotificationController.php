@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Order;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -23,15 +24,38 @@ class NotificationController extends Controller
             ->limit($limit)
             ->get();
 
+        // 알림의 운행 카드용 정보 — 저장된 문구 대신 최신 경로·상태를 함께 내려준다.
+        $orderIds = $notifications
+            ->map(fn ($notification) => $notification->data['order_id'] ?? null)
+            ->filter()
+            ->unique();
+
+        $orders = Order::query()
+            ->whereIn('id', $orderIds)
+            ->get(['id', 'pickup_location', 'dropoff_location', 'status'])
+            ->keyBy('id');
+
         return response()->json([
-            'data' => $notifications->map(fn ($notification) => [
-                'id' => $notification->id,
-                'title' => $notification->data['title'] ?? '알림',
-                'message' => $notification->data['message'] ?? '',
-                'order_id' => $notification->data['order_id'] ?? null,
-                'read' => $notification->read_at !== null,
-                'created_at' => $notification->created_at?->diffForHumans(),
-            ]),
+            'data' => $notifications->map(function ($notification) use ($orders) {
+                $order = $orders->get($notification->data['order_id'] ?? null);
+
+                return [
+                    'id' => $notification->id,
+                    'title' => $notification->data['title'] ?? '알림',
+                    'message' => $notification->data['message'] ?? '',
+                    'order_id' => $notification->data['order_id'] ?? null,
+                    'order_route' => $order !== null
+                        ? trim(($order->pickup_location ?: '').' → '.($order->dropoff_location ?: ''))
+                        : '',
+                    'order_status' => $order->status ?? '',
+                    'order_status_label' => $order !== null
+                        ? (Order::statusOptions()[$order->status] ?? $order->status)
+                        : '',
+                    'read' => $notification->read_at !== null,
+                    'created_at' => $notification->created_at?->diffForHumans(),
+                    'created_at_iso' => $notification->created_at?->toISOString(),
+                ];
+            }),
             'unread_count' => $request->user()->unreadNotifications()->count(),
             'total' => $request->user()->notifications()->count(),
         ]);

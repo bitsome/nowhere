@@ -1,7 +1,9 @@
 <script setup>
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
+import { useAuthStore } from '../../stores/auth';
 import { statusColorVar } from '../../utils/colors';
+import BaseIcon from '../common/BaseIcon.vue';
 
 const props = defineProps({
     order: {
@@ -25,6 +27,7 @@ const props = defineProps({
 const emit = defineEmits(['toggle']);
 
 const router = useRouter();
+const auth = useAuthStore();
 
 const open = () => router.push({ name: 'order-detail', params: { id: props.order.id } });
 
@@ -41,6 +44,11 @@ const handleClick = () => {
 
 // 상태별 배지 색상 — 중앙 팔레트(utils/colors.js)에서 참조 (테마 자동 적용)
 const statusColor = computed(() => statusColorVar[props.order.status] ?? 'var(--status-draft)');
+
+// 가져오기 요청(수락 대기) — 요청자가 나인지 여부
+const isMyClaim = computed(() =>
+    props.order.status === 'acceptance_pending' && props.order.claimantUserId === auth.user?.id,
+);
 </script>
 
 <template>
@@ -56,6 +64,7 @@ const statusColor = computed(() => statusColorVar[props.order.status] ?? 'var(--
             <div class="order-card__route">
                 <div class="order-card__route-top">
                     <span v-if="order.isNew" class="order-card__new" title="새로 등록된 운행">N</span>
+                    <span v-if="order.is_matched_to_me" class="order-card__matched" title="내 매칭 조건에 맞는 운행">매칭</span>
                     <span v-if="order.isPriority" class="order-card__priority" title="긴급 운행">긴급</span>
                     <strong>{{ order.route }}</strong>
                     <span v-if="order.isUrgent" class="order-card__urgent" title="곧 운행 시작">임박</span>
@@ -63,7 +72,10 @@ const statusColor = computed(() => statusColorVar[props.order.status] ?? 'var(--
                     <span v-else-if="order.isTomorrow" class="order-card__tomorrow">내일</span>
                 </div>
                 <div class="order-card__route-bottom">
-                    <span class="order-card__datetime">{{ order.date }} {{ order.time }}</span>
+                    <span class="order-card__datetime">
+                        <BaseIcon class="order-card__datetime-icon" name="time" :size="13" />
+                        {{ order.date }} {{ order.time }}
+                    </span>
                 </div>
             </div>
             <div class="order-card__side">
@@ -74,24 +86,24 @@ const statusColor = computed(() => statusColorVar[props.order.status] ?? 'var(--
                     @click.stop
                     @update:checked="emit('toggle', order.id)"
                 />
-                <span v-else class="status-badge" :style="{ background: statusColor, borderColor: statusColor }">
+                <span v-else class="status-badge" :class="`status-badge--${order.status}`" :style="{ background: statusColor, borderColor: statusColor }">
                     {{ order.statusLabel }}
                 </span>
                 <span v-if="order.vehicle || order.passengerCount" class="order-card__side-line">
                     <span v-if="order.vehicle" class="side-chip">
-                        <svg class="side-chip__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M6 17a1 1 0 0 0 2 0M16 17a1 1 0 0 0 2 0M4 17V11l2.5-4h11L20 11v6h-1M4.5 11h15" /></svg>
+                        <BaseIcon class="side-chip__icon" name="car" :size="12" />
                         {{ order.vehicle }}
                     </span>
                     <span v-if="order.passengerCount" class="side-chip">
-                        <svg class="side-chip__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.4 3.4-5 6.5-5s5.7 1.6 6.5 5" /><circle cx="17" cy="9" r="2.5" /><path d="M15 15.5c2.3.2 4 1.3 4.8 3.7" /></svg>
+                        <BaseIcon class="side-chip__icon" name="people" :size="12" />
                         {{ order.passengerCount }}명
                     </span>
                 </span>
             </div>
         </div>
         <div class="order-card__meta">
-            <span>{{ order.serviceLabel }}</span>
-            <span v-if="order.flightNumber">{{ order.flightNumber }}</span>
+            <span v-if="order.serviceLabel" class="order-card__meta-item">{{ order.serviceLabel }}</span>
+            <span v-if="order.flightNumber" class="order-card__meta-item">{{ order.flightNumber }}</span>
             <span class="order-card__amount">{{ order.amount }}</span>
         </div>
         <div
@@ -101,6 +113,13 @@ const statusColor = computed(() => statusColorVar[props.order.status] ?? 'var(--
             <span class="order-card__owner-name">{{ order.owner.name }}</span>
             <span v-if="order.owner.review_count > 0" class="order-card__owner-trust">{{ order.owner.rating }}점 · 리뷰 {{ order.owner.review_count }}</span>
             <span v-if="order.owner.completed_count > 0" class="order-card__owner-trust">완료 {{ order.owner.completed_count }}건</span>
+        </div>
+
+        <!-- 가져오기 요청(수락 대기) 상태 — 등록자는 요청자, 요청자는 승인 안내 -->
+        <div v-if="order.status === 'acceptance_pending'" class="order-card__claim">
+            <span class="order-card__claim-dot" />
+            <span v-if="isMyClaim">등록자 승인이 필요합니다</span>
+            <span v-else>{{ order.claimantName }}님이 가져오기를 요청</span>
         </div>
     </article>
 </template>
@@ -112,6 +131,7 @@ const statusColor = computed(() => statusColorVar[props.order.status] ?? 'var(--
     border-radius: 14px;
     padding: 18px;
     cursor: pointer;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
     transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
 }
 
@@ -188,18 +208,31 @@ const statusColor = computed(() => statusColorVar[props.order.status] ?? 'var(--
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 15px;
+    font-size: 16px;
+    font-weight: 800;
+    letter-spacing: -0.2px;
 }
 
 .order-card__route-bottom {
     display: flex;
     align-items: center;
-    margin-top: 4px;
+    margin-top: 5px;
 }
 
 .order-card__datetime {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
     color: var(--text-muted);
     font-size: 13px;
+    font-weight: 500;
+}
+
+.order-card__datetime-icon {
+    width: 13px;
+    height: 13px;
+    flex-shrink: 0;
+    opacity: 0.8;
 }
 
 .order-card__side {
@@ -261,6 +294,28 @@ const statusColor = computed(() => statusColorVar[props.order.status] ?? 'var(--
 
 .order-card__owner-trust {
     color: var(--text-muted);
+}
+
+/* 가져오기 요청(수락 대기) 힌트 바 */
+.order-card__claim {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 12px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--status-acceptance-pending) 12%, transparent);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.order-card__claim-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--status-acceptance-pending);
+    flex-shrink: 0;
 }
 
 /* 신규 운행 배지 */
@@ -338,11 +393,26 @@ const statusColor = computed(() => statusColorVar[props.order.status] ?? 'var(--
     box-shadow: 0 1px 4px color-mix(in srgb, var(--status-settled) 40%, transparent);
 }
 
+/* 매칭 배지 — 내 매칭 설정 조건에 맞는 운행 */
+.order-card__matched {
+    flex-shrink: 0;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: -0.2px;
+    background: var(--brand);
+    color: #ffffff;
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--brand) 40%, transparent);
+}
+
 .order-card__amount {
     margin-left: auto;
-    color: var(--text);
-    font-weight: 700;
-    font-size: 15px;
+    color: var(--brand);
+    font-weight: 800;
+    font-size: 16.5px;
+    letter-spacing: -0.3px;
+    white-space: nowrap;
 }
 
 /* 상태 배지 */
@@ -357,5 +427,12 @@ const statusColor = computed(() => statusColorVar[props.order.status] ?? 'var(--
     white-space: nowrap;
     flex-shrink: 0;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 다크모드 — 밝은 틸(#63e2b7) 배지 위엔 검은 글자 (흰 글자는 대비가 약함) */
+html.dark .status-badge--published,
+html.dark .status-badge--driving,
+html.dark .order-card__matched {
+    color: #101418;
 }
 </style>

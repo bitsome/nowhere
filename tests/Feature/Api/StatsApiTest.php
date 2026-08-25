@@ -56,7 +56,7 @@ test('stats orders upcoming lists today service date', function () {
     Order::factory()->create([
         'user_id' => $this->user->id,
         'status' => Order::STATUS_ACCEPTED,
-        'service_date' => now()->format('Y-m-d'),
+        'service_date' => now('Asia/Seoul')->format('Y-m-d'),
         'pickup_location' => '인천공항',
         'dropoff_location' => '명동',
     ]);

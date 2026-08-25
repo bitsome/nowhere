@@ -60,6 +60,7 @@ test('user can toggle like and comment on another post', function () {
     ])->assertStatus(201);
 
     expect($comment->json('data.content'))->toBe('멋진 글이네요.');
+    expect($comment->json('data.is_mine'))->toBeTrue();
     expect($comment->json('data.comments_count'))->toBe(1);
     expect($post->comments()->count())->toBe(1);
 });
@@ -73,6 +74,81 @@ test('only author can delete a post', function () {
 
     expect(CommunityPost::find($mine->id))->toBeNull();
     expect(CommunityPost::find($theirs->id))->not->toBeNull();
+});
+
+test('only author can update a post', function () {
+    $mine = CommunityPost::create(['user_id' => $this->actor->id, 'content' => '원본 내용']);
+    $theirs = CommunityPost::create(['user_id' => $this->peer->id, 'content' => '남의 글']);
+
+    $updated = $this->putJson("/api/community/posts/{$mine->id}", [
+        'content' => '수정된 내용',
+        'category' => 'route',
+        'video_url' => 'https://youtube.com/watch?v=abc123',
+    ])->assertOk();
+
+    expect($updated->json('data.content'))->toBe('수정된 내용');
+    expect($updated->json('data.category'))->toBe('route');
+    expect($updated->json('data.video_url'))->toBe('https://youtube.com/watch?v=abc123');
+
+    $this->putJson("/api/community/posts/{$theirs->id}", ['content' => '훔쳐보기'])->assertForbidden();
+
+    expect($mine->fresh()->content)->toBe('수정된 내용');
+    expect($theirs->fresh()->content)->toBe('남의 글');
+});
+
+test('only comment author can delete a comment', function () {
+    $post = CommunityPost::create(['user_id' => $this->peer->id, 'content' => '댓글 삭제 글']);
+    $mine = $post->comments()->create(['user_id' => $this->actor->id, 'content' => '내 댓글']);
+    $theirs = $post->comments()->create(['user_id' => $this->peer->id, 'content' => '남의 댓글']);
+
+    $deleted = $this->deleteJson("/api/community/posts/{$post->id}/comments/{$mine->id}")->assertOk();
+    expect($deleted->json('data.comments_count'))->toBe(1);
+
+    $this->deleteJson("/api/community/posts/{$post->id}/comments/{$theirs->id}")->assertForbidden();
+
+    expect($post->comments()->count())->toBe(1);
+});
+
+test('comments expose is_mine flag for the current user', function () {
+    $post = CommunityPost::create(['user_id' => $this->peer->id, 'content' => 'is_mine 테스트']);
+    $post->comments()->create(['user_id' => $this->actor->id, 'content' => '내 댓글']);
+    $post->comments()->create(['user_id' => $this->peer->id, 'content' => '남의 댓글']);
+
+    $detail = $this->getJson("/api/community/posts/{$post->id}")->assertOk();
+    $comments = collect($detail->json('data.comments'));
+
+    expect($comments->firstWhere('content', '내 댓글')['is_mine'])->toBeTrue();
+    expect($comments->firstWhere('content', '남의 댓글')['is_mine'])->toBeFalse();
+});
+
+test('feed search matches content or author name', function () {
+    CommunityPost::create(['user_id' => $this->actor->id, 'content' => '강남에서 인천공항 가는 분 계신가요?']);
+    CommunityPost::create(['user_id' => $this->peer->id, 'content' => '부산 노선 문의입니다.']);
+
+    $byContent = $this->getJson('/api/community/posts?search=인천공항')->assertOk();
+    expect($byContent->json('data'))->toHaveCount(1);
+
+    $byAuthor = $this->getJson('/api/community/posts?author=다른유저')->assertOk();
+    expect($byAuthor->json('data'))->toHaveCount(1);
+    expect($byAuthor->json('data.0.content'))->toBe('부산 노선 문의입니다.');
+
+    $none = $this->getJson('/api/community/posts?author=없는사람')->assertOk();
+    expect($none->json('data'))->toHaveCount(0);
+});
+
+test('feed filters by period', function () {
+    $today = CommunityPost::create(['user_id' => $this->actor->id, 'content' => '오늘 글']);
+    $recent = CommunityPost::create(['user_id' => $this->actor->id, 'content' => '며칠 전 글']);
+
+    CommunityPost::whereKey($today->id)->update(['created_at' => now()]);
+    CommunityPost::whereKey($recent->id)->update(['created_at' => now()->subDays(5)]);
+
+    $todayFeed = $this->getJson('/api/community/posts?period=today')->assertOk();
+    expect($todayFeed->json('data'))->toHaveCount(1);
+    expect($todayFeed->json('data.0.content'))->toBe('오늘 글');
+
+    $month = $this->getJson('/api/community/posts?period=month')->assertOk();
+    expect($month->json('data'))->toHaveCount(2);
 });
 
 test('community actions grant xp to the right users', function () {

@@ -1,0 +1,1 @@
+import{wt as e,xt as t}from"./_plugin-vue_export-helper-CHFfEUVo.js";var n=t({props:{onFocus:Function,onBlur:Function},setup(t){return()=>e(`div`,{style:`width: 0; height: 0`,tabindex:0,onFocus:t.onFocus,onBlur:t.onBlur})}});export{n as t};

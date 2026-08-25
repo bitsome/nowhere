@@ -12,6 +12,8 @@ import { naiveThemeOverrides } from './utils/colors';
 import ChatListener from './components/ChatListener.vue';
 import HeaderBar from './components/HeaderBar.vue';
 import NotificationListener from './components/NotificationListener.vue';
+import BaseIcon from './components/common/BaseIcon.vue';
+import ScrollTopButton from './components/common/ScrollTopButton.vue';
 import { connectEventStream } from './utils/eventStream';
 
 const auth = useAuthStore();
@@ -22,7 +24,6 @@ const notifications = useNotificationsStore();
 const chats = useChatsStore();
 const driver = useDriverStore();
 const ui = useUiStore();
-const drawerOpen = ref(false);
 const initReady = ref(false);
 
 // 대화방 열림 — 전체 화면 모드 (상·하단 패딩 제거, 하단 네비 숨김)
@@ -61,19 +62,73 @@ onBeforeUnmount(() => {
     if (driverTimer) {
         clearInterval(driverTimer);
     }
+    if (notifyTimer) {
+        clearTimeout(notifyTimer);
+    }
 });
+
+// ── 알림 배너: 알려주고 몇 초 뒤 자동으로 사라진다 ──
+const notifyVisible = ref(false);
+let notifyTimer = null;
+
+watch(
+    () => notifications.unreadCount,
+    (count) => {
+        if (count > 0) {
+            notifyVisible.value = true;
+
+            if (notifyTimer) {
+                clearTimeout(notifyTimer);
+            }
+
+            notifyTimer = setTimeout(() => {
+                notifyVisible.value = false;
+            }, 6000);
+        } else {
+            notifyVisible.value = false;
+        }
+    },
+    { immediate: true },
+);
+
+const dismissNotify = () => {
+    notifyVisible.value = false;
+
+    if (notifyTimer) {
+        clearTimeout(notifyTimer);
+    }
+};
 
 // ── 하단 네비 탭 ──
 const navItems = [
+    { name: 'home', label: '홈' },
     { name: 'market', label: '마켓' },
-    { name: 'order-create', label: '내 운행' },
-    { name: 'chat', label: '채팅' },
     { name: 'community', label: '커뮤니티' },
-    { name: 'profile', label: '내 정보' },
+    { name: 'chat', label: '채팅' },
+    { name: 'more', label: '더보기', isMore: true },
 ];
 
-const closeDrawer = () => {
-    drawerOpen.value = false;
+// 더보기 탭의 활성 판정 — 더보기 페이지 및 그 메뉴가 열리는 화면들
+const moreActive = computed(() => ['more', 'dashboard', 'my-market', 'profile', 'admin', 'history', 'reviews', 'settlements'].includes(route.name));
+
+// 탭 전환 시 다시 마운트·재조회하는 버벅임을 없애기 위해 캐시할 화면
+// (상세/수정/채팅 쓰레드 등 상태가 복잡한 화면은 매번 새로 만든다)
+const keepAliveViews = ['HomeView', 'MarketView', 'MatchView', 'NotificationsView', 'ProfileView', 'CommunityView', 'MyMarketView', 'MoreView'];
+
+// 탭 화면 청크를 미리 내려받아 첫 전환 시 다운로드 지연을 없앤다
+const preloadTabViews = () => {
+    Promise.all([
+        import('./views/HomeView.vue'),
+        import('./views/MarketView.vue'),
+        import('./views/MatchView.vue'),
+        import('./views/OrderCreateView.vue'),
+        import('./views/NotificationsView.vue'),
+        import('./views/ProfileView.vue'),
+        import('./views/MyMarketView.vue'),
+        import('./views/CommunityView.vue'),
+        import('./views/ChatView.vue'),
+        import('./views/MoreView.vue'),
+    ]).catch(() => {});
 };
 
 // 헤더 emit 액션 처리
@@ -91,43 +146,12 @@ const handleHeaderAction = (key) => {
     }
 };
 
-const handleMenuAction = (key) => {
-    closeDrawer();
-
-    if (key.startsWith('nav:')) {
-        router.push({ name: key.slice(4) });
-        return;
-    }
-
-    switch (key) {
-        case 'community:my-posts':
-            ui.communityMyPostsOnly = !ui.communityMyPostsOnly;
-            ui.emitAction('community:reload');
-            break;
-        case 'community:sort-popular':
-            ui.communitySort = 'popular';
-            ui.emitAction('community:reload');
-            break;
-        case 'community:sort-latest':
-            ui.communitySort = 'latest';
-            ui.emitAction('community:reload');
-            break;
-        case 'theme':
-            theme.toggle();
-            break;
-        case 'logout':
-            auth.logout().then(() => router.push({ name: 'login' }));
-            break;
-        case 'refresh':
-            ui.emitAction('refresh');
-            break;
-    }
-};
-
 onMounted(async () => {
     theme.init();
     await auth.fetchMe().catch(() => {});
     initReady.value = true;
+    // 첫 화면 렌더링이 끝난 뒤 여유를 두고 탭 화면을 미리 내려받는다
+    setTimeout(preloadTabViews, 1200);
 
     // 로그인 상태에서 첫 상호작용 시 웹 알림 권한 요청 (거절 시 재요청 안 함)
     if (auth.user && 'Notification' in window && Notification.permission === 'default') {
@@ -198,79 +222,39 @@ let driverTimer = null;
                 <div class="app-shell" :class="{ 'app-shell--ready': initReady || !auth.token }">
 
                 <HeaderBar
-                    v-if="route.name !== 'login'"
-                    @open-drawer="drawerOpen = true"
+                    v-if="route.name !== 'login' && route.name !== 'register'"
                     @action="handleHeaderAction"
                 />
 
-                <!-- 드로어 오버레이 -->
-                <n-drawer
-                    v-model:show="drawerOpen"
-                    :width="320"
-                    placement="left"
-                >
-                    <div class="drawer-inner">
-                        <!-- 하단 탭과 중복되는 항목은 제거 — 하단 탭에 없는 보조 메뉴만 둔다 -->
-                        <div class="drawer-section">
-                            <p class="drawer-section__title">탐색</p>
-                            <button type="button" class="drawer-action-row" :class="{ 'drawer-nav-row--active': route.name === 'dashboard' }" @click="handleMenuAction('nav:dashboard')">
-                                <span>대시보드</span>
-                            </button>
-                            <button v-if="auth.isAdmin" type="button" class="drawer-action-row" :class="{ 'drawer-nav-row--active': route.name === 'admin' }" @click="handleMenuAction('nav:admin')">
-                                <span>운영 관리</span>
-                            </button>
-                        </div>
-
-                        <div v-if="route.name === 'community'" class="drawer-section">
-                            <p class="drawer-section__title">커뮤니티</p>
-                            <button type="button" class="drawer-action-row" @click="handleMenuAction('community:my-posts')">
-                                <span>{{ ui.communityMyPostsOnly ? '✓ 내 글만 보기' : '내 글만 보기' }}</span>
-                            </button>
-                            <button type="button" class="drawer-action-row" @click="handleMenuAction('community:sort-popular')">
-                                <span>{{ ui.communitySort === 'popular' ? '✓ 인기순' : '인기순 정렬' }}</span>
-                            </button>
-                            <button type="button" class="drawer-action-row" @click="handleMenuAction('community:sort-latest')">
-                                <span>{{ ui.communitySort === 'latest' ? '✓ 최신순' : '최신순 정렬' }}</span>
-                            </button>
-                        </div>
-
-                        <div class="drawer-section">
-                            <p class="drawer-section__title">계정</p>
-                            <button type="button" class="drawer-action-row" @click="handleMenuAction('theme')">
-                                <span>{{ theme.isDark ? '라이트 모드' : '다크 모드' }}</span>
-                            </button>
-                            <button type="button" class="drawer-action-row drawer-action-row--danger" @click="handleMenuAction('logout')">
-                                <span>로그아웃</span>
-                            </button>
-                        </div>
-                    </div>
-                </n-drawer>
-
-                <button
-                    v-if="auth.isAuthenticated && notifications.unreadCount > 0"
-                    type="button"
-                    class="notify-banner"
-                    @click="router.push({ name: 'notifications' })"
-                >
-                    알림 {{ notifications.unreadCount }}건이 도착했습니다 · 탭하여 확인
-                </button>
+                <transition name="notify-banner-fade">
+                    <button
+                        v-if="auth.isAuthenticated && notifyVisible && notifications.unreadCount > 0"
+                        type="button"
+                        class="notify-banner"
+                        @click="dismissNotify(); router.push({ name: 'notifications' })"
+                    >
+                        알림 {{ notifications.unreadCount }}건이 도착했습니다 · 탭하여 확인
+                    </button>
+                </transition>
 
                 <main
                     class="app-content"
                     :class="{ 'app-content--full': isChatThread || route.name === 'login' }"
                 >
-                    <router-view />
+                    <!-- keep-alive만 사용: 트랜지션은 iOS에서 사라지는 화면이 남아 클릭을 막는 문제가 있어 제거 -->
+                    <router-view v-slot="{ Component }">
+                        <keep-alive :include="keepAliveViews">
+                            <component :is="Component" />
+                        </keep-alive>
+                    </router-view>
                 </main>
 
-                <!-- 운행 중 필로트 — 탭바 위에 표시 -->
-                <button v-if="driver.isOnTrip" type="button" class="on-trip-pill" @click="router.push({ name: 'order-create' })">
-                    <span class="on-trip-pill__dot" />
-                    운행 중
-                </button>
+                <!-- 긴 목록에서 맨 위로 복귀 -->
+                <ScrollTopButton />
 
                 <nav v-if="auth.isAuthenticated && !chats.activeId && !isFocusedScreen" class="bottom-nav">
                     <router-link
-                        v-for="item in navItems"
+                        v-for="item in navItems.filter((i) => !i.isMore)"
                         :key="item.name"
                         :to="{ name: item.name }"
                         class="bottom-nav__item"
@@ -282,39 +266,19 @@ let driverTimer = null;
                             class="nav-badge"
                             :show="item.name === 'chat' && chats.unreadTotal > 0 && route.name !== 'chat'"
                         >
-                            <svg
-                                class="bottom-nav__icon"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="1.8"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                            >
-                                <template v-if="item.name === 'market'">
-                                    <path d="M3 10.5L12 3l9 7.5" />
-                                    <path d="M5 9.5V21h14V9.5" />
-                                </template>
-                                <template v-else-if="item.name === 'order-create'">
-                                    <path d="M8 6h13M8 12h13M8 18h13" />
-                                    <path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01" />
-                                </template>
-                                <template v-else-if="item.name === 'chat'">
-                                    <path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.3 8.6 8.6 0 0 1-3.9-.9L3 20l1.2-5.3a8.2 8.2 0 0 1-.7-3.2A8.4 8.4 0 0 1 12 3.2a8.4 8.4 0 0 1 9 8.3z" />
-                                </template>
-                                <template v-else-if="item.name === 'community'">
-                                    <circle cx="9" cy="8" r="3.5" />
-                                    <path d="M2.5 20c.8-3.4 3.4-5 6.5-5s5.7 1.6 6.5 5" />
-                                    <circle cx="17.5" cy="9" r="2.5" />
-                                    <path d="M15.5 15.2c2.6.2 4.6 1.5 5.5 4.3" />
-                                </template>
-                                <template v-else-if="item.name === 'profile'">
-                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                                    <circle cx="12" cy="7" r="4" />
-                                </template>
-                            </svg>
+                            <BaseIcon class="bottom-nav__icon" :name="item.name" :size="22" />
                         </n-badge>
                         <span>{{ item.label }}</span>
+                    </router-link>
+
+                    <!-- 더보기 — 우측 맨끝 -->
+                    <router-link
+                        :to="{ name: 'more' }"
+                        class="bottom-nav__item"
+                        :class="{ 'bottom-nav__item--active': moreActive }"
+                    >
+                        <BaseIcon class="bottom-nav__icon" name="more" :size="22" />
+                        <span>더보기</span>
                     </router-link>
                 </nav>
 
@@ -327,63 +291,21 @@ let driverTimer = null;
 </template>
 
 <style>
-/* ── 운행 중 필로트 — 탭바 위 ── */
-.on-trip-pill {
-    position: fixed;
-    bottom: calc(68px + env(safe-area-inset-bottom));
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 40;
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    padding: 8px 18px;
+/* ── 하단 네비 '더보기' 버튼 — 링크와 동일한 모양 ── */
+.bottom-nav__item--button {
     border: 0;
-    border-radius: 999px;
-    background: var(--brand);
-    color: #ffffff;
-    font-size: 13px;
-    font-weight: 700;
+    background: transparent;
     cursor: pointer;
-    box-shadow: 0 6px 18px color-mix(in srgb, var(--brand) 35%, transparent);
-    animation: on-trip-in 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.2);
-}
-
-.on-trip-pill__dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #ffffff;
-    animation: on-trip-pulse 1.4s ease-in-out infinite;
-}
-
-@keyframes on-trip-in {
-    from {
-        opacity: 0;
-        transform: translateX(-50%) translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(-50%) translateY(0);
-    }
-}
-
-@keyframes on-trip-pulse {
-    0%,
-    100% {
-        opacity: 1;
-        transform: scale(1);
-    }
-    50% {
-        opacity: 0.5;
-        transform: scale(0.7);
-    }
+    font-family: inherit;
+    text-align: center;
 }
 
 /* ── 대화방 전체 화면 — 상·하단 패딩 제거, window 스크롤 제거 ── */
-.app-content--full {
+/* 특이도를 높여(0-1-1) base.css의 .app-content 패딩/폭 제한을 확실히 덮어쓴다 */
+main.app-content--full {
     padding: 0;
     max-width: none;
+    margin: 0;
 }
 
 /* ── 하단 네비 배지 등장 애니메이션 ── */
@@ -400,55 +322,5 @@ let driverTimer = null;
         transform: scale(1);
         opacity: 1;
     }
-}
-
-/* ── 드로어 오버레이 ── */
-.drawer-inner {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 4px 0;
-}
-
-.drawer-section {
-    padding: 8px 0;
-}
-
-.drawer-section__title {
-    margin: 0 0 8px 4px;
-    color: var(--text-muted);
-    font-size: 12px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.drawer-nav-row--active {
-    background: var(--brand-soft);
-    color: var(--brand);
-    font-weight: 700;
-}
-
-.drawer-action-row {
-    display: flex;
-    align-items: center;
-    width: 100%;
-    border: 0;
-    border-radius: 10px;
-    background: transparent;
-    color: var(--text);
-    font-size: 14px;
-    text-align: left;
-    cursor: pointer;
-    padding: 10px 12px;
-    transition: background 0.12s ease;
-}
-
-.drawer-action-row:hover {
-    background: rgba(0, 0, 0, 0.05);
-}
-
-.drawer-action-row--danger {
-    color: var(--danger);
 }
 </style>

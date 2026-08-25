@@ -13,6 +13,8 @@ export const apiUpdateOrder = (id, payload) => apiClient.patch(`/orders/${id}`, 
 export const apiStructureOrder = (summary) => apiClient.post('/orders/structure', { summary });
 
 export const apiClaimOrder = (id) => apiClient.post(`/orders/${id}/claim`);
+export const apiApproveClaim = (id) => apiClient.post(`/orders/${id}/claim/approve`);
+export const apiRejectClaim = (id) => apiClient.post(`/orders/${id}/claim/reject`);
 
 export const apiDuplicateOrder = (id) => apiClient.post(`/orders/${id}/duplicate`);
 

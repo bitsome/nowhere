@@ -55,6 +55,7 @@ class Driver extends Model
             'status_updated_at' => 'datetime',
             'online_date' => 'date',
             'online_seconds' => 'integer',
+            'match_enabled' => 'boolean',
         ];
     }
 }
