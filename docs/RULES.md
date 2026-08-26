@@ -264,8 +264,7 @@
 - 보안 기준은 [SECURITY.md](./SECURITY.md)를 기준으로 유지한다.
 
 ## 배포·운영 규칙
-- **서버 접속 정보**: IP `114.132.240.52`, SSH 사용자 `ubuntu`, 비밀번호 `***REDACTED***`, 호스트 키 `***REDACTED***`. 접속 도구는 PuTTY(plink/pscp)이며 앱 경로는 `/var/www/nowhere`다.
-- **서버 테스트 계정**: 관리자 `market@example.com` / `123456` (user_id=2). 서버 재시드 이후 모든 테스트 계정 비밀번호는 `123456`으로 통일되어 있다 (`test@example.com`, `driver01~06@example.com` 포함).
+- **서버 접속 정보(아이디·비밀번호·호스트 키)와 테스트 계정·API 키 같은 민감 정보는 로컬 전용 `.cursor/skills/nowhere-deployment/SECRETS.md`에 기록한다. 이 파일은 `.gitignore` 대상이라 GitHub에 올라가지 않는다.** 문서·코드·커밋에 민감 정보를 직접 넣지 않는다.
 - 배포는 git 기반으로 동기화한다: 로컬에서 커밋·`origin/main` push → 서버(`/var/www/nowhere`)에서 `git fetch origin main && git reset --hard origin/main`.
 - 서버 반영 전에는 현재 서버 상태를 `git stash push -m deploy-backup`으로 백업한 뒤 reset한다. 검증이 끝나면 백업 스태시를 정리한다.
 - `public/`은 프론트 빌드본(SPA dist 동기화 산출물)을 커밋한다. 서버는 npm 빌드 없이 nginx root(`/var/www/nowhere/public`)로 그대로 서빙한다.
