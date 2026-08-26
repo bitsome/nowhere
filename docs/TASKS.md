@@ -48,8 +48,26 @@
 - [x] 권한 검증 Policy 도입 (Board/Order/User Policy + 라우트 can: 미들웨어)
 - [x] 대시보드 공용 컴포넌트 적용 (x-alert 로그인 안내 · Empty State 오더 카드)
 
+### NoWhere 마켓 (SPA + Laravel API, 2026-08)
+- [x] 마켓: 운행 등록/목록/필터/정렬/퀵 칩/긴급 배지
+- [x] 마켓: 본인 등록 운행도 노출하되 본인 claim 차단 (관리자 검증용)
+- [x] 운행 가져오기(claim) 요청/승인/거절 라이프사이클 + 채팅 이벤트 카드
+- [x] 자동 운행 등록 (orders:auto-register, 관리자 설정 화면, 매일 09:00 KST)
+- [x] 정산 관리: 완료→정산 전이, 일괄 정산 (useBatchSettle/SettlementView)
+- [x] 운행 매칭: 매칭 설정(preferences), is_matched_to_me, matched=1 필터, 콜링
+- [x] 웹 푸시(VAPID) + 실시간 알림 센터 (상황별 카테고리/색상)
+- [x] 커뮤니티: 카테고리 7종/검색/인기 글/작성 모달
+- [x] 채팅: 승인/시간변경/경로변경/요금협의/취소 요청 카드, 날짜·유형 분류
+- [x] 리뷰/평점: 완료·정산 후 상호 리뷰, 등록자 신뢰 정보(마켓 카드)
+- [x] 기사 앱: 홈(오늘 운행/수익/빠른 매칭)·운행 이력·정산·설정/더보기
+- [x] KST 시간대, 색상 토큰 체계(라이트/다크), 880px 공통 레이아웃
+- [x] 배포 자동화: deploy.sh, SKILL.md(nowhere-deployment), RULES.md 반영
+- [x] 민감 정보 관리: SECRETS.md 로컬 전용 분리 (커밋·업로드 금지)
+
 ## Current
-- [ ] Order Module
+- [ ] 서버 운영 안정화 — SSH 접속 복구(비밀번호 확정·shadow 복구) 및 키 인증 전환
+- [ ] SQLite DB 자동 백업 cron 설정
+- [ ] SSL 인증서 적용 (도메인 확보 후 Let's Encrypt)
 
 ## 원칙
 - 이 문서는 현재 작업을 하나만 지정하는 기준 문서다.
@@ -60,51 +78,34 @@
 - 현재 작업이 완료되면 종료하고, 다음 작업은 이 문서를 갱신한 뒤 시작한다.
 
 ## Module
-- Business
+- NoWhere 마켓 SPA (`frontend/`) + Laravel API (`app/`, `routes/`, `database/`)
 
 ## Step
-- STEP 2 완료 · Shared Module(Foundation + API) 마감
+- 마켓 기능 개발 완료 · 서버 운영 안정화 단계
 
 ## Current Work
-- 공통 Foundation(DataTable 2차 · Loading · Empty State · Feedback)과 API 규약(STEP 2-5)을 완료 선언하고, 다음 작업은 Order Module이다.
+- NoWhere 마켓 기능(자동 등록·정산·매칭·웹푸시·커뮤니티·기사 앱)을 완료 선언하고, 현재는 서버 운영 안정화(SSH 접속 복구·백업·SSL)를 진행한다.
 
 ## Scope
-- 공통 `ToastEditor` / `ToastViewer` 구조 추가 완료
-- 대시보드 `Toast UI Editor 테스트` 모듈 연결 완료
-- 문서형 본문 입력 재사용 규칙 문서 반영 완료
+- 서버 SSH 접속 복구 (비밀번호 확정, shadow 해시 정상화, SSH 키 인증 등록)
+- SQLite 백업 cron (매일 자동 백업, 보존 정책)
+- SSL 인증서 (도메인 확보 시 Let's Encrypt 적용)
+- 상용화 전 임시 검증 환경 유지 (Cloudflare Quick Tunnel)
 
 ## Foundation Roadmap
 
 ### 목표
-- Foundation을 먼저 완성한 뒤 `Order`, `Dispatch`, `Driver` 비즈니스 로직에 집중한다.
-- `Order` 개발이 시작된 이후에는 공통 컴포넌트 수정 비용이 커지므로, 지금 단계에서 기반을 우선 마감한다.
-- Foundation이 끝나면 각 비즈니스 모듈은 공통 컴포넌트를 조합하는 방식으로만 확장한다.
-
-### Foundation
-- [x] 1. DataTable 1차 List Framework
-- [x] 1. DataTable 2차 정리 (정렬 · 행 선택)
-- [x] 2. Form Components 1차
-- [x] 2. Form Components 2차 BaseInput 계층 재구성
-- [x] 3. Modal
-- [x] 4. Dialog
-- [x] 5. Toast
-- [x] 6. Loading
-- [x] 7. Empty State
-- [x] 8. Search 1차
-- [x] 9. Filter 1차
-- [x] 10. Pagination 1차
-
-### Foundation 완료 기준
-- `DataTable`, `Form Components`, `Modal`, `Dialog`, `Toast`, `Loading`, `Empty State`, `Search`, `Filter`, `Pagination`가 공통 규칙으로 정리되어 있어야 한다.
-- 비즈니스 모듈 구현 시 공통 컴포넌트를 다시 설계하지 않고 조합만으로 화면 구성이 가능해야 한다.
-- 테스트용 페이지와 재사용 규칙 문서가 함께 정리되어 있어야 한다.
+- 마켓 핵심 기능(운행 등록→가져오기→운행→정산→리뷰)을 마무리하고, 서버 운영 안정화 후 상용화 준비로 전환한다.
 
 ### Business Queue
-- [ ] 11. Order
-- [ ] 12. Dispatch
-- [ ] 13. Driver
+- [x] Order (등록/마켓/가져오기/전이/정산)
+- [x] Match (매칭 설정/추천/콜링)
+- [x] Driver (기사 앱 홈/이력/정산/설정)
+- [ ] Settlement 고도화 (정산서·세금계산서 등, 필요 시)
+- [ ] 상용화 전환 (고정 주소·도메인·SSL, SQLite→MySQL 검토)
 
 ## 완료 기준
-- 다음 작업이 지정되기 전까지 임의 구현 금지
-- 현재 작업 범위 밖의 기능은 추가하지 않는다.
+- 서버 접속이 SSH 키로 안정화되고, 비밀번호 노출 문제가 해소된다.
+- SQLite 백업이 cron으로 매일 자동 수행된다.
+- 다음 작업이 지정되기 전까지 임의 구현 금지.
 - 작업 완료 후 종료한다.
