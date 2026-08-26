@@ -1,1 +1,0 @@
-import{Mt as e,Pt as t,et as n}from"./_plugin-vue_export-helper-CHFfEUVo.js";import{b as r}from"./fade-in-scale-up.cssr-BtnHCQZi.js";var i=r?document?.fonts?.ready:void 0,a=!1;i===void 0?a=!0:i.then(()=>{a=!0});function o(n){if(a)return;let r=!1;t(()=>{a||i?.then(()=>{r||n()})}),e(()=>{r=!0})}var{c:s}=n(),c=`vueuc-style`;export{c as n,o as r,s as t};

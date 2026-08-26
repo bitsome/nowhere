@@ -19,6 +19,8 @@ node_modules/
 /frontend/dist
 /frontend/.env.local
 /public/build
+/public/assets
+/public/index.html
 /public/fonts-manifest.dev.json
 /public/hot
 /public/storage

@@ -1,1 +1,0 @@
-function e(e=8){return Math.random().toString(16).slice(2,2+e)}export{e as t};

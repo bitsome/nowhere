@@ -1,1 +1,0 @@
-import{t as e}from"./client-BwupJhI7.js";var t=()=>e.get(`/me/match-preferences`),n=t=>e.post(`/me/match-preferences`,t),r=(t,n)=>e.patch(`/me/match-preferences/${t}`,n),i=t=>e.delete(`/me/match-preferences/${t}`);export{r as i,i as n,t as r,n as t};
