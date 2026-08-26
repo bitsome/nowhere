@@ -44,6 +44,8 @@ class NotificationController extends Controller
                     'title' => $notification->data['title'] ?? '알림',
                     'message' => $notification->data['message'] ?? '',
                     'order_id' => $notification->data['order_id'] ?? null,
+                    'offer_id' => $notification->data['offer_id'] ?? null,
+                    'offer_amount' => $notification->data['offer_amount'] ?? null,
                     'order_route' => $order !== null
                         ? trim(($order->pickup_location ?: '').' → '.($order->dropoff_location ?: ''))
                         : '',

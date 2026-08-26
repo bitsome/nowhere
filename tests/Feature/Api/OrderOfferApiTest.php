@@ -154,3 +154,65 @@ test('가져오기 요청이 걸리면 남아 있는 대기 제안이 자동 정
     expect(OrderOffer::where('order_id', $this->order->id)
         ->where('status', OrderOffer::STATUS_CANCELLED)->count())->toBe(1);
 });
+
+test('제안 도착 알림에 제안 정보(offer_id·금액)가 담기고 알림 API에도 노출된다', function () {
+    $this->postJson("/api/orders/{$this->order->id}/offers", ['amount' => 140000])->assertCreated();
+
+    $notification = $this->owner->notifications()
+        ->where('type', OrderNotification::class)
+        ->where('data->title', '요금 제안 도착')
+        ->first();
+
+    expect($notification->data['offer_id'])->toBeInt();
+    expect($notification->data['offer_amount'])->toBe(140000);
+
+    Sanctum::actingAs($this->owner);
+
+    $this->getJson('/api/notifications')
+        ->assertOk()
+        ->assertJsonPath('data.0.offer_id', $notification->data['offer_id'])
+        ->assertJsonPath('data.0.offer_amount', 140000);
+});
+
+test('등록자는 제안 받은 편지함에서 내 운행의 대기 제안을 금액순으로 확인한다', function () {
+    $otherDriver = User::factory()->create(['id' => 3, 'role' => User::ROLE_DRIVER]);
+
+    $this->postJson("/api/orders/{$this->order->id}/offers", ['amount' => 140000])->assertCreated();
+
+    Sanctum::actingAs($otherDriver);
+    $this->postJson("/api/orders/{$this->order->id}/offers", ['amount' => 145000])->assertCreated();
+
+    Sanctum::actingAs($this->owner);
+
+    $this->getJson('/api/offers/inbox')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.id', $this->order->id)
+        ->assertJsonPath('data.0.pending_count', 2)
+        ->assertJsonCount(2, 'data.0.offers')
+        ->assertJsonPath('data.0.offers.0.amount', 145000)
+        ->assertJsonPath('data.0.offers.0.driver.name', $otherDriver->name)
+        ->assertJsonMissingPath('data.0.offers.0.driver.phone')
+        ->assertJsonMissingPath('data.0.offers.0.driver.email');
+});
+
+test('대기 제안이 없는 등록자는 받은 편지함이 비어 있다', function () {
+    Sanctum::actingAs($this->owner);
+
+    $this->getJson('/api/offers/inbox')->assertOk()->assertJsonCount(0, 'data');
+});
+
+test('내 등록 운행 목록에 대기 제안 건수 배지가 포함된다', function () {
+    $otherDriver = User::factory()->create(['id' => 3, 'role' => User::ROLE_DRIVER]);
+
+    $this->postJson("/api/orders/{$this->order->id}/offers", ['amount' => 140000])->assertCreated();
+
+    Sanctum::actingAs($otherDriver);
+    $this->postJson("/api/orders/{$this->order->id}/offers", ['amount' => 145000])->assertCreated();
+
+    Sanctum::actingAs($this->owner);
+
+    $this->getJson('/api/orders?scope=mine&source=registered&tab='.urlencode('진행중'))
+        ->assertOk()
+        ->assertJsonPath('data.0.pendingOffers', 2);
+});

@@ -14,6 +14,8 @@ class OrderNotification extends Notification
         public readonly string $title,
         public readonly string $message,
         public readonly ?int $orderId = null,
+        public readonly ?int $offerId = null,
+        public readonly ?int $offerAmount = null,
     ) {}
 
     /**
@@ -47,6 +49,8 @@ class OrderNotification extends Notification
             'title' => $this->title,
             'message' => $this->message,
             'order_id' => $this->orderId,
+            'offer_id' => $this->offerId,
+            'offer_amount' => $this->offerAmount,
         ];
     }
 }

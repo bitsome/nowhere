@@ -28,6 +28,18 @@ class OrderOfferController extends Controller
     }
 
     /**
+     * 등록자의 제안 받은 편지함 — 대기 제안이 있는 내 공개 운행 목록 (비교·수락용).
+     *
+     * @return JsonResponse{data: array<int, array<string, mixed>>}
+     */
+    public function inbox(Request $request, OrderOfferService $offerService): JsonResponse
+    {
+        return response()->json([
+            'data' => $offerService->inboxFor($request->user()),
+        ]);
+    }
+
+    /**
      * 기사가 공개 운행에 운임을 제안한다.
      *
      * @return JsonResponse{data: array<string, mixed>}

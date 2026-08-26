@@ -10,6 +10,7 @@ use App\Support\Orders\OrderWorkspaceListBuilder;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 /**
  * 운행 목록 조회 — 내 운행/마켓 스코프, 필터·정렬·매칭 필터·등록자 신뢰 정보를 한곳에서 처리한다.
@@ -49,6 +50,11 @@ class OrderListService
                 }
             }
             unset($row);
+
+            // 등록한 운행 — 카드에 대기 제안(오퍼) 건수 배지를 붙인다
+            if ($request->string('source', '')->toString() === 'registered') {
+                $rows = $this->attachPendingOffers($rows, collect($orders->items()));
+            }
         }
 
         return [
@@ -448,6 +454,32 @@ class OrderListService
         ];
 
         return array_values(array_unique(array_diff($tokens, $blocklist)));
+    }
+
+    /**
+     * 등록한 운행 행에 대기 제안(오퍼) 건수를 붙인다 — 카드 배지용.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @param  Collection<int, Order>  $orderItems
+     * @return array<int, array<string, mixed>>
+     */
+    private function attachPendingOffers(array $rows, Collection $orderItems): array
+    {
+        $counts = app(OrderOfferService::class)->pendingCountsByOrder($orderItems->pluck('id'));
+
+        foreach ($rows as &$row) {
+            if (($row['kind'] ?? '') === 'set') {
+                // 셋트 — 그룹 내 운행들의 대기 제안 합산
+                $row['pendingOffers'] = $orderItems
+                    ->where('group_id', $row['id'] ?? null)
+                    ->sum(fn (Order $order) => $counts[$order->id] ?? 0);
+            } else {
+                $row['pendingOffers'] = $counts[$row['id'] ?? null] ?? 0;
+            }
+        }
+        unset($row);
+
+        return $rows;
     }
 
     private function paginate(Builder $query, Request $request, int $perPage): LengthAwarePaginator

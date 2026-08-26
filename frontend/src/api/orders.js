@@ -26,6 +26,9 @@ export const apiAcceptOffer = (orderId, offerId) => apiClient.post(`/orders/${or
 export const apiRejectOffer = (orderId, offerId) => apiClient.post(`/orders/${orderId}/offers/${offerId}/reject`);
 export const apiDeleteOffer = (orderId, offerId) => apiClient.delete(`/orders/${orderId}/offers/${offerId}`);
 
+// 제안 받은 편지함 — 내 공개 운행의 대기 제안 목록 (비교·수락용 허브)
+export const apiOfferInbox = () => apiClient.get('/offers/inbox');
+
 export const apiDuplicateOrder = (id) => apiClient.post(`/orders/${id}/duplicate`);
 
 export const apiTransitionOrder = (id, status, cancelReason = '', actualRevenue = null) => apiClient.post(`/orders/${id}/status`, {

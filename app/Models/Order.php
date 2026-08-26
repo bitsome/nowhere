@@ -248,6 +248,11 @@ class Order extends Model
         return $this->hasMany(OrderLineItem::class);
     }
 
+    public function offers(): HasMany
+    {
+        return $this->hasMany(OrderOffer::class);
+    }
+
     #[Scope]
     protected function search(Builder $query, string $search): void
     {

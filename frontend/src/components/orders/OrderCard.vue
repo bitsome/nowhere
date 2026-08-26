@@ -65,6 +65,7 @@ const isMyClaim = computed(() =>
                 <div class="order-card__route-top">
                     <span v-if="order.isNew" class="order-card__new" title="새로 등록된 운행">N</span>
                     <span v-if="order.is_matched_to_me" class="order-card__matched" title="내 매칭 조건에 맞는 운행">매칭</span>
+                    <span v-if="order.pendingOffers > 0" class="order-card__offer" title="대기 중인 요금 제안">제안 {{ order.pendingOffers }}</span>
                     <span v-if="order.isPriority" class="order-card__priority" title="긴급 운행">긴급</span>
                     <strong>{{ order.route }}</strong>
                     <span v-if="order.isUrgent" class="order-card__urgent" title="곧 운행 시작">임박</span>
@@ -404,6 +405,30 @@ const isMyClaim = computed(() =>
     background: var(--brand);
     color: #ffffff;
     box-shadow: 0 1px 4px color-mix(in srgb, var(--brand) 40%, transparent);
+}
+
+/* 요금 제안 배지 — 대기 중인 제안이 있는 운행 */
+.order-card__offer {
+    flex-shrink: 0;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: -0.2px;
+    background: var(--status-trading);
+    color: #ffffff;
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--status-trading) 45%, transparent);
+    animation: offer-pulse 2s ease-in-out infinite;
+}
+
+@keyframes offer-pulse {
+    0%,
+    100% {
+        box-shadow: 0 1px 4px color-mix(in srgb, var(--status-trading) 45%, transparent);
+    }
+    50% {
+        box-shadow: 0 1px 9px color-mix(in srgb, var(--status-trading) 85%, transparent);
+    }
 }
 
 .order-card__amount {

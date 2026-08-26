@@ -49,6 +49,8 @@ class OrderOfferService
                 '요금 제안 도착',
                 "드라이버가 {$order->rideSummary()} 운행에 {$amount}원을 제안했습니다. 상세에서 확인하고 수락할 수 있습니다.",
                 $order->id,
+                $offer->id,
+                $amount,
             ));
         }
 
@@ -74,6 +76,75 @@ class OrderOfferService
 
         return $query->get()
             ->map(fn (OrderOffer $offer) => $this->payload($offer))
+            ->values()
+            ->all();
+    }
+
+    /**
+     * 운행 id 목록의 대기 제안 건수 집계 — 내 운행 목록 카드 배지용.
+     *
+     * @param  iterable<int>  $orderIds
+     * @return array<int, int> [order_id => 대기 제안 수]
+     */
+    public function pendingCountsByOrder(iterable $orderIds): array
+    {
+        $orderIds = collect($orderIds)->filter()->unique()->values();
+
+        if ($orderIds->isEmpty()) {
+            return [];
+        }
+
+        return OrderOffer::query()
+            ->whereIn('order_id', $orderIds)
+            ->where('status', OrderOffer::STATUS_PENDING)
+            ->selectRaw('order_id, COUNT(*) as cnt')
+            ->groupBy('order_id')
+            ->pluck('cnt', 'order_id')
+            ->map(fn ($cnt) => (int) $cnt)
+            ->all();
+    }
+
+    /**
+     * 등록자의 제안 받은 편지함 — 대기 제안이 있는 내 공개 운행 목록을 제안과 함께 돌려준다.
+     * 제안은 금액 내림차순으로 정렬해 등록자가 비교하기 쉽게 한다.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function inboxFor(User $user): array
+    {
+        $orders = Order::query()
+            ->where('user_id', $user->id)
+            ->whereIn('status', [Order::STATUS_PUBLISHED, Order::STATUS_TRADING])
+            ->whereNull('claimed_at')
+            ->whereHas('offers', fn ($query) => $query->where('status', OrderOffer::STATUS_PENDING))
+            ->with(['offers' => fn ($query) => $query
+                ->where('status', OrderOffer::STATUS_PENDING)
+                ->with('driver')
+                ->orderByDesc('amount'),
+            ])
+            ->orderByDesc('created_at')
+            ->get();
+
+        return $orders
+            ->map(function (Order $order) {
+                $offers = $order->offers
+                    ->map(fn (OrderOffer $offer) => $this->payload($offer))
+                    ->values()
+                    ->all();
+
+                return [
+                    'id' => $order->id,
+                    'order_number' => $order->order_number ?: '#'.$order->id,
+                    'route' => trim(($order->pickup_location ?: '').' → '.($order->dropoff_location ?: '')),
+                    'service_date' => $order->service_date,
+                    'service_time' => $order->service_time,
+                    'expected_revenue' => (int) ($order->expected_revenue ?? $order->amount_value ?? 0),
+                    'status' => $order->status,
+                    'status_label' => Order::statusOptions()[$order->status] ?? $order->status,
+                    'pending_count' => count($offers),
+                    'offers' => $offers,
+                ];
+            })
             ->values()
             ->all();
     }

@@ -118,6 +118,7 @@ const logout = async () => {
             <UiCard :padded="false" class="more-list">
                 <UiListRow tag="button" icon="dashboard" arrow @click="go('dashboard')">대시보드</UiListRow>
                 <UiListRow tag="button" icon="my-market" arrow @click="go('my-market')">내가 등록한 운행</UiListRow>
+                <UiListRow tag="button" icon="cash" arrow @click="go('offer-inbox')">제안 관리</UiListRow>
                 <UiListRow tag="button" icon="history" arrow @click="go('history')">운행 기록</UiListRow>
                 <UiListRow tag="button" icon="settlements" arrow @click="go('settlements')">정산 내역</UiListRow>
                 <UiListRow tag="button" icon="reviews" arrow @click="go('reviews')">받은 리뷰</UiListRow>

@@ -86,7 +86,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders/{order}/claim', [OrderController::class, 'claim']);
     Route::post('/orders/{order}/claim/approve', [OrderController::class, 'approveClaim']);
     Route::post('/orders/{order}/claim/reject', [OrderController::class, 'rejectClaim']);
-    // 요금 제안(오퍼) — 기사 운임 제안 / 등록자 수락·거절
+    // 요금 제안(오퍼) — 기사 운임 제안 / 등록자 수락·거절 / 제안 받은 편지함
+    Route::get('/offers/inbox', [OrderOfferController::class, 'inbox']);
     Route::get('/orders/{order}/offers', [OrderOfferController::class, 'index']);
     Route::post('/orders/{order}/offers', [OrderOfferController::class, 'store']);
     Route::post('/orders/{order}/offers/{offer}/accept', [OrderOfferController::class, 'accept']);
