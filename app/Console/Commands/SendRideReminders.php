@@ -20,8 +20,10 @@ class SendRideReminders extends Command
         $now = now('Asia/Seoul');
 
         // 서비스 시작이 1시간 전 ~ 3분 전 구간인 운행 (스케줄 지연에도 놓치지 않도록 여유)
-        $from = $now->copy()->addHour()->subMinutes(3)->format('Y-m-d H:i');
-        $to = $now->copy()->addHour()->format('Y-m-d H:i');
+        $from = $now->copy()->addHour()->subMinutes(3);
+        $to = $now->copy()->addHour();
+        [$fromDate, $fromTime] = explode(' ', $from->format('Y-m-d H:i'));
+        [$toDate, $toTime] = explode(' ', $to->format('Y-m-d H:i'));
 
         $orders = Order::query()
             ->where('status', Order::STATUS_ACCEPTED)
@@ -29,8 +31,21 @@ class SendRideReminders extends Command
             ->where('service_date', '!=', '')
             ->whereNotNull('service_time')
             ->where('service_time', '!=', '')
-            ->whereRaw("(service_date || ' ' || service_time) >= ?", [$from])
-            ->whereRaw("(service_date || ' ' || service_time) < ?", [$to])
+            // 날짜+시간 문자열 비교 대신 날짜·시간을 분리 비교 (SQLite/MySQL 공용)
+            ->where(function ($query) use ($fromDate, $fromTime) {
+                $query->where('service_date', '>', $fromDate)
+                    ->orWhere(function ($q) use ($fromDate, $fromTime) {
+                        $q->where('service_date', $fromDate)
+                            ->where('service_time', '>=', $fromTime);
+                    });
+            })
+            ->where(function ($query) use ($toDate, $toTime) {
+                $query->where('service_date', '<', $toDate)
+                    ->orWhere(function ($q) use ($toDate, $toTime) {
+                        $q->where('service_date', $toDate)
+                            ->where('service_time', '<', $toTime);
+                    });
+            })
             ->limit(50)
             ->get();
 

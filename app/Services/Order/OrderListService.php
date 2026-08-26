@@ -143,15 +143,23 @@ class OrderListService
         });
 
         // 서비스 시작 시각이 현재보다 2시간 넘게 지난 운행은 제외 (일시 불완전 운행은 유지)
-        $cutoff = now('Asia/Seoul')->subHours(2)->format('Y-m-d H:i');
+        $cutoff = now('Asia/Seoul')->subHours(2);
+        [$cutoffDate, $cutoffTime] = explode(' ', $cutoff->format('Y-m-d H:i'));
 
-        $query->where(function ($sub) use ($cutoff) {
-            $sub->where(function ($q) use ($cutoff) {
+        $query->where(function ($sub) use ($cutoffDate, $cutoffTime) {
+            $sub->where(function ($q) use ($cutoffDate, $cutoffTime) {
                 $q->whereNotNull('service_date')
                     ->where('service_date', '!=', '')
                     ->whereNotNull('service_time')
                     ->where('service_time', '!=', '')
-                    ->whereRaw("(service_date || ' ' || service_time) >= ?", [$cutoff]);
+                    ->where(function ($dateQuery) use ($cutoffDate, $cutoffTime) {
+                        // 날짜+시간 문자열 비교 대신 날짜·시간을 분리 비교 (SQLite/MySQL 공용)
+                        $dateQuery->where('service_date', '>', $cutoffDate)
+                            ->orWhere(function ($q2) use ($cutoffDate, $cutoffTime) {
+                                $q2->where('service_date', $cutoffDate)
+                                    ->where('service_time', '>=', $cutoffTime);
+                            });
+                    });
             })->orWhere(function ($q) {
                 $q->whereNull('service_date')
                     ->orWhere('service_date', '')
@@ -184,7 +192,16 @@ class OrderListService
         if ($date !== '') {
             // 날짜만(Y-m-d)이면 그 날짜 전체, 날짜시간(Y-m-d H:i)이면 해당 시각 이후 운행
             if (str_contains($date, ' ')) {
-                $query->whereRaw("(service_date || ' ' || service_time) >= ?", [$date]);
+                [$dateOnly, $timeOnly] = explode(' ', $date);
+
+                // 날짜+시간 문자열 비교 대신 날짜·시간을 분리 비교 (SQLite/MySQL 공용)
+                $query->where(function ($q) use ($dateOnly, $timeOnly) {
+                    $q->where('service_date', '>', $dateOnly)
+                        ->orWhere(function ($q2) use ($dateOnly, $timeOnly) {
+                            $q2->where('service_date', $dateOnly)
+                                ->where('service_time', '>=', $timeOnly);
+                        });
+                });
             } else {
                 $query->where('service_date', $date);
             }

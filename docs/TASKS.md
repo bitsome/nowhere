@@ -89,8 +89,15 @@
 - [x] 활용 갭 개선: 템플릿 UI가 manual 모드에서만 보이던 것을 AI 구조화/직접 입력 공통으로 확장
 - [x] 템플릿 API 테스트 4건 추가 (저장/목록/본인만 삭제/사용자 스코프)
 
+### SQLite → MySQL 전환 (2026-08-26, MariaDB)
+- [x] 서버 MariaDB 설치·스키마 구성: DB `nowhere`(utf8mb4) + 전용 유저, 28개 테이블 마이그레이션
+- [x] SQLite 데이터 이관: orders 75·users 3·notifications 등 PDO 스크립트로 전부 복사 (migrations/cache/sessions/jobs 제외)
+- [x] MySQL 호환 쿼리 수정: `(service_date || ' ' || service_time)` concat → 날짜·시간 분리 비교 (OrderListService·SendRideReminders)
+- [x] 서버 `.env` DB 전환(`mysql`)+config:cache + AUTO_INCREMENT 정상 (orders 76, users 4)
+- [x] 라이브 검증: 로그인·상세·마켓 목록 38건·내 운행 완료 탭 정상 — 전환 직후 마켓 0건이던 서버 미배포(구버전 concat 쿼리) 문제 수정
+
 ## Current
-- [ ] 다음 작업 미지정 (후보: ① GitHub 히스토리 정리 후 리포 private 전환 ② 상용화 준비(고정 도메인·SSL·SQLite→MySQL 검토) ③ Settlement 고도화(정산서·세금계산서))
+- [ ] 다음 작업 미지정 (후보: ① GitHub 히스토리 정리 후 리포 private 전환 ② 상용화 준비(고정 도메인·SSL) ③ Settlement 고도화(정산서·세금계산서))
 
 ## 원칙
 - 이 문서는 현재 작업을 하나만 지정하는 기준 문서다.
@@ -107,13 +114,13 @@
 - 마켓 기능 개발 완료 · 서버 운영 안정화 완료 · 다음 작업 결정 대기
 
 ## Current Work
-- NoWhere 마켓 기능과 서버 운영 안정화(SSH 키 인증·백업 cron·https 터널)가 완료된 상태. 다음 작업(GitHub 히스토리 정리 / 서버 보안 강화 / 상용화 준비)은 사용자가 지정할 때까지 대기한다.
+- NoWhere 마켓 기능과 서버 운영 안정화(SSH 키 인증·백업 cron·https 터널), SQLite→MySQL(MariaDB) 전환이 완료된 상태. 다음 작업(GitHub 리포 private 전환 / 상용화 준비(고정 도메인·SSL) / Settlement 고도화)은 사용자가 지정할 때까지 대기한다.
 
 ## Scope
 - 다음 작업 후보
   - GitHub 커밋 히스토리에 노출된 구 비밀번호 정리 + 리포 private 전환 검토
   - 서버 보안 강화: 비밀번호 로그인 비활성화(`PasswordAuthentication no`) — 키 인증만 유지
-  - 상용화 준비: 고정 도메인 확보 + Let's Encrypt SSL, SQLite→MySQL 전환 검토
+  - 상용화 준비: 고정 도메인 확보 + Let's Encrypt SSL (SQLite→MySQL은 완료)
   - Settlement 고도화 (정산서·세금계산서 등, 필요 시)
 
 ## Foundation Roadmap
@@ -126,7 +133,7 @@
 - [x] Match (매칭 설정/추천/콜링)
 - [x] Driver (기사 앱 홈/이력/정산/설정)
 - [ ] Settlement 고도화 (정산서·세금계산서 등, 필요 시)
-- [ ] 상용화 전환 (고정 주소·도메인·SSL, SQLite→MySQL 검토)
+- [ ] 상용화 전환 (고정 주소·도메인·SSL — SQLite→MySQL(MariaDB) 전환 완료)
 
 ## 완료 기준
 - 서버 접속이 SSH 키로 안정화되었다. (완료)
