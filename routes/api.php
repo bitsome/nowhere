@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\ActionCenterController;
 use App\Http\Controllers\Api\AdminController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ChatController;
@@ -86,6 +87,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders/{order}/claim', [OrderController::class, 'claim']);
     Route::post('/orders/{order}/claim/approve', [OrderController::class, 'approveClaim']);
     Route::post('/orders/{order}/claim/reject', [OrderController::class, 'rejectClaim']);
+    // 처리할 일(액션 센터) — 운행 관련 대기 액션 한 페이지
+    Route::get('/actions', [ActionCenterController::class, 'index']);
+
     // 요금 제안(오퍼) — 기사 운임 제안 / 등록자 수락·거절 / 제안 받은 편지함
     Route::get('/offers/inbox', [OrderOfferController::class, 'inbox']);
     Route::get('/orders/{order}/offers', [OrderOfferController::class, 'index']);

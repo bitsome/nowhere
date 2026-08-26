@@ -26,13 +26,13 @@ const {
     statusLabel, canReview,
     reviewOpen, reviewRating, reviewContent, reviewSubmitting, openReview, submitReview,
     canChat, hasRegistrantChat, canEdit, goEdit, isClaimPending, isRegistrantPending, isClaimantPending,
-    isWaitingClaims, confirmState, closeConfirm, doConfirm, approveClaim, rejectClaim, withdrawClaim, openChat, goUserPage,
+    isWaitingClaims, confirmState, closeConfirm, doConfirm, withdrawClaim, openChat, goUserPage,
     primaryAction, primaryActionStatus, statusButtonColor, groupOrderRows, groupTotalAmount, stepStyle,
     lineItems, statusTagType, refresh, claim, transition, cancelOpen, cancelReason, requestTransition,
     confirmCancel, completionOpen, completionRevenue, confirmComplete, detach,
     offers, offersLoading, canOffer, myPendingOffer,
     offerOpen, offerAmount, offerMessage, offerSubmitting, openOffer, submitOffer,
-    acceptOffer, rejectOffer, withdrawOffer,
+    withdrawOffer,
     SERVICE_LABELS, STATUS_FLOW,
 } = detail;
 
@@ -41,6 +41,9 @@ const {
 } = map;
 
 onMounted(refresh);
+
+// 승인·제안 처리는 액션 센터(처리할 일)에서
+const goActions = () => router.push({ name: 'actions' });
 </script>
 
 <template>
@@ -104,7 +107,7 @@ onMounted(refresh);
                 </n-alert>
 
                 <n-alert v-if="isRegistrantPending" type="info" :show-icon="true" class="detail-block">
-                    드라이버가 이 운행을 가져오기 요청했습니다. 승인하면 운행이 넘어가고, 거절하면 마켓에 그대로 남습니다.
+                    드라이버가 이 운행을 가져오기 요청했습니다. 승인·거절은 처리할 일(액션 센터)에서 진행할 수 있습니다.
                 </n-alert>
 
                 <n-card v-else-if="!isCancelled" :bordered="true" class="detail-block">
@@ -491,11 +494,8 @@ onMounted(refresh);
                                     <span v-if="offer.message" class="offer-item__msg">{{ offer.message }}</span>
                                 </div>
                                 <div v-if="offer.status === 'pending'" class="offer-item__actions">
-                                    <n-button size="small" secondary type="error" :loading="acting" @click="rejectOffer(offer)">
-                                        거절
-                                    </n-button>
-                                    <n-button size="small" type="primary" :loading="acting" @click="acceptOffer(offer)">
-                                        수락
+                                    <n-button size="small" type="primary" @click="goActions">
+                                        처리할 일에서 처리
                                     </n-button>
                                 </div>
                             </div>
@@ -647,17 +647,13 @@ onMounted(refresh);
                 요금 제안
             </n-button>
             <template v-if="isRegistrantPending">
-                <n-button size="large" secondary type="error" :loading="acting" @click="rejectClaim">
-                    거절
-                </n-button>
                 <n-button
                     type="primary"
                     size="large"
-                    :loading="acting"
                     class="detail-actionbar__primary"
-                    @click="approveClaim"
+                    @click="goActions"
                 >
-                    승인
+                    처리할 일에서 승인
                 </n-button>
             </template>
             <n-button

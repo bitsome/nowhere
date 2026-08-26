@@ -155,13 +155,6 @@ const onRequestSent = async () => {
     await scrollToBottom();
 };
 
-// 승인 수락/거절 후 상태 반영
-const onRequestActed = async () => {
-    await store.reloadMessages();
-    await store.loadConversations();
-    await scrollToBottom();
-};
-
 const send = async () => {
     const body = draft.value.trim();
     if ((!body && !pendingImage.value) || sending.value) return;
@@ -260,7 +253,6 @@ onMounted(() => {
                     v-if="row.isEvent"
                     :msg="row.msg"
                     :is-mine="row.msg.user_id === auth.user?.id"
-                    @acted="onRequestActed"
                 />
                 <MessageBubble
                     v-else

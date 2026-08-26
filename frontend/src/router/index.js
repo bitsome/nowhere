@@ -21,7 +21,7 @@ const SettingsNotificationsView = () => import('../views/SettingsNotificationsVi
 const SettingsVerificationView = () => import('../views/SettingsVerificationView.vue');
 const SettingsAppearanceView = () => import('../views/SettingsAppearanceView.vue');
 const MyMarketView = () => import('../views/MyMarketView.vue');
-const OfferInboxView = () => import('../views/OfferInboxView.vue');
+const ActionCenterView = () => import('../views/ActionCenterView.vue');
 const MatchView = () => import('../views/MatchView.vue');
 const AdminView = () => import('../views/AdminView.vue');
 const MoreView = () => import('../views/MoreView.vue');
@@ -49,7 +49,7 @@ const routes = [
     { path: '/settings/verification', name: 'settings-verification', component: SettingsVerificationView, meta: { requiresAuth: true } },
     { path: '/settings/appearance', name: 'settings-appearance', component: SettingsAppearanceView, meta: { requiresAuth: true } },
     { path: '/my-market', name: 'my-market', component: MyMarketView, meta: { requiresAuth: true } },
-    { path: '/offers', name: 'offer-inbox', component: OfferInboxView, meta: { requiresAuth: true } },
+    { path: '/actions', name: 'actions', component: ActionCenterView, meta: { requiresAuth: true } },
     { path: '/more', name: 'more', component: MoreView, meta: { requiresAuth: true } },
     { path: '/history', name: 'history', component: RideHistoryView, meta: { requiresAuth: true } },
     { path: '/reviews', name: 'reviews', component: ReviewsView, meta: { requiresAuth: true } },

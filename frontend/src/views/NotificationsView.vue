@@ -1,11 +1,8 @@
 <script setup>
 import { computed, onActivated, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { useMessage } from 'naive-ui';
 import { useNotificationsStore } from '../stores/notifications';
 import { useUiStore } from '../stores/ui';
-import { apiAcceptOffer, apiRejectOffer } from '../api/orders';
-import { getApiErrorMessage } from '../api/client';
 import BaseIcon from '../components/common/BaseIcon.vue';
 import EmptyState from '../components/common/EmptyState.vue';
 import UiCard from '../components/ui/UiCard.vue';
@@ -18,7 +15,6 @@ defineOptions({ name: 'NotificationsView' });
 const router = useRouter();
 const store = useNotificationsStore();
 const ui = useUiStore();
-const naiveMessage = useMessage();
 
 // 필터: 전체 / 요청 / 완료 / 채팅 / 시스템
 const filter = ref('all');
@@ -215,35 +211,9 @@ const openNotification = async (notification) => {
 
 const formatWon = (v) => `${Number(v ?? 0).toLocaleString('ko-KR')}원`;
 
-// ── 요금 제안 — 알림에서 바로 수락/거절 ──
-const actingOfferId = ref(null);
-
-const goOffers = () => {
-    router.push({ name: 'offer-inbox' });
-};
-
-const handleOfferAction = async (notification, action) => {
-    if (!notification.offer_id || !notification.order_id || actingOfferId.value) {
-        return;
-    }
-
-    actingOfferId.value = notification.offer_id;
-
-    try {
-        if (action === 'accept') {
-            await apiAcceptOffer(notification.order_id, notification.offer_id);
-            naiveMessage.success(`제안을 수락했습니다. ${formatWon(notification.offer_amount)}에 딜이 성사되었습니다.`);
-        } else {
-            await apiRejectOffer(notification.order_id, notification.offer_id);
-            naiveMessage.success('제안을 거절했습니다. 운행은 마켓에 그대로 남습니다.');
-        }
-        await store.markRead([notification.id]);
-        await store.load();
-    } catch (e) {
-        naiveMessage.error(getApiErrorMessage(e, '제안 처리에 실패했습니다.'));
-    } finally {
-        actingOfferId.value = null;
-    }
+// 제안·승인 처리는 액션 센터(처리할 일)에서 — 알림은 안내 역할만 한다
+const goActions = () => {
+    router.push({ name: 'actions' });
 };
 </script>
 
@@ -303,26 +273,13 @@ const handleOfferAction = async (notification, action) => {
                                 </span>
                                 <span class="v8-priority-time">{{ formatTime(notification.created_at) }}</span>
                             </div>
-                            <!-- 요금 제안 — 알림에서 바로 수락/거절 -->
+                            <!-- 요금 제안 — 처리는 액션 센터에서 -->
                             <div v-if="notification.offer_id" class="v8-offer-actions" @click.stop>
                                 <span v-if="notification.offer_amount" class="v8-offer-actions__amount">
                                     {{ formatWon(notification.offer_amount) }}
                                 </span>
-                                <button
-                                    type="button"
-                                    class="v8-offer-btn v8-offer-btn--ok"
-                                    :disabled="actingOfferId"
-                                    @click="handleOfferAction(notification, 'accept')"
-                                >
-                                    수락
-                                </button>
-                                <button
-                                    type="button"
-                                    class="v8-offer-btn v8-offer-btn--no"
-                                    :disabled="actingOfferId"
-                                    @click="handleOfferAction(notification, 'reject')"
-                                >
-                                    거절
+                                <button type="button" class="v8-offer-btn v8-offer-btn--link" @click="goActions">
+                                    처리할 일에서 처리
                                 </button>
                             </div>
                         </div>
@@ -337,8 +294,8 @@ const handleOfferAction = async (notification, action) => {
                         <UiChip variant="purple">항공편</UiChip>
                     </div>
 
-                    <button type="button" class="v8-priority-go" @click="goOffers">
-                        제안 관리 허브로 이동 →
+                    <button type="button" class="v8-priority-go" @click="goActions">
+                        처리할 일(운행 승인 · 제안 · 요청)로 이동 →
                     </button>
                 </UiCard>
 
@@ -398,21 +355,8 @@ const handleOfferAction = async (notification, action) => {
                             <div class="v8-desc">{{ notification.message }}</div>
                             <div v-if="notification.offer_id" class="v8-offer-inline" @click.stop>
                                 <span class="v8-offer-inline__amount">{{ formatWon(notification.offer_amount) }} 제안</span>
-                                <button
-                                    type="button"
-                                    class="v8-offer-inline__btn v8-offer-inline__btn--ok"
-                                    :disabled="actingOfferId"
-                                    @click="handleOfferAction(notification, 'accept')"
-                                >
-                                    수락
-                                </button>
-                                <button
-                                    type="button"
-                                    class="v8-offer-inline__btn v8-offer-inline__btn--no"
-                                    :disabled="actingOfferId"
-                                    @click="handleOfferAction(notification, 'reject')"
-                                >
-                                    거절
+                                <button type="button" class="v8-offer-inline__btn v8-offer-inline__btn--link" @click="goActions">
+                                    처리할 일에서 처리
                                 </button>
                             </div>
                             <div class="v8-time">{{ formatTime(notification.created_at) }}</div>
@@ -829,7 +773,7 @@ html.dark .v8-icon.system { background: rgba(140, 151, 148, 0.1); color: #b6c0bc
     margin-top: 4px;
 }
 
-/* 요금 제안 — 알림에서 바로 수락/거절 (우선 알림 영역) */
+/* 요금 제안 — 액션 센터로 안내 (우선 알림 영역) */
 .v8-offer-actions {
     display: flex;
     align-items: center;
@@ -858,13 +802,10 @@ html.dark .v8-icon.system { background: rgba(140, 151, 148, 0.1); color: #b6c0bc
 .v8-offer-btn:not(:disabled):active {
     transform: scale(0.96);
 }
-.v8-offer-btn--ok {
-    background: var(--brand);
-    color: #07120e;
-}
-.v8-offer-btn--no {
-    background: color-mix(in srgb, var(--danger) 12%, transparent);
-    color: var(--danger);
+.v8-offer-btn--link {
+    border: 1px solid color-mix(in srgb, var(--brand) 40%, transparent);
+    background: transparent;
+    color: var(--brand);
 }
 
 /* 요금 제안 — 목록 행 인라인 액션 */
@@ -892,13 +833,10 @@ html.dark .v8-icon.system { background: rgba(140, 151, 148, 0.1); color: #b6c0bc
     opacity: 0.5;
     cursor: default;
 }
-.v8-offer-inline__btn--ok {
-    background: var(--brand);
-    color: #07120e;
-}
-.v8-offer-inline__btn--no {
-    background: color-mix(in srgb, var(--danger) 12%, transparent);
-    color: var(--danger);
+.v8-offer-inline__btn--link {
+    border: 1px solid color-mix(in srgb, var(--brand) 40%, transparent);
+    background: transparent;
+    color: var(--brand);
 }
 
 /* 제안 관리 허브 이동 */
