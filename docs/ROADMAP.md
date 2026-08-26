@@ -116,7 +116,7 @@
   - 사용 규약은 `docs/API.md`를 기준으로 유지한다.
 
 ## 현재 우선순위
-1. 서버 운영 안정화 (SSH 접속 복구·키 인증, SQLite 백업 cron, SSL) — 진행 중
+1. 서버 운영 안정화 (SSH 키 인증, SQLite 백업 cron, https 터널) — 완료 (2026-08-26)
 2. NoWhere 마켓 (SPA + Laravel API) — 기능 개발 완료
 3. 상용화 준비 (고정 주소·도메인, SQLite→MySQL 검토) — 예정
 
@@ -137,15 +137,17 @@
   - 민감 정보는 로컬 전용 `SECRETS.md`로 분리해 커밋·업로드하지 않는다.
   - DB는 상용화 전까지 서버 SQLite 유지.
 
-### 서버 운영 안정화 (현재)
-- 상태: `진행 중`
+### 서버 운영 안정화
+- 상태: `완료` (2026-08-26, 서버 초기화 후 재구성)
 - 범위
-  - SSH 접속 복구: 비밀번호 확정(shadow 해시 정상화), SSH 키 인증 등록
-  - SQLite DB 자동 백업 cron (매일, 보존 정책 포함)
-  - SSL 인증서 적용 (도메인 확보 후 Let's Encrypt)
+  - 새 서버 환경 재구성: PHP 8.3/nginx/composer/node/cloudflared 설치, 코드 재배포
+  - SSH 접속 복구: 키 인증(OpenSSH ssh + SSH_ASKPASS) 전환 — 비밀번호 로그인 의존 제거
+  - SQLite DB 자동 백업 cron (매일 01:00, 14일 보존)
+  - SSL: 도메인 없이 Cloudflare Quick Tunnel(https, systemd 서비스) 적용
 - 완료 기준
-  - SSH 키로 접속이 안정화되고, git 히스토리에 노출된 비밀번호 의존이 제거된다.
-  - DB 백업이 매일 자동 수행되고 복원 검증이 가능하다.
+  - SSH 키로 접속 안정화되고, 비밀번호 노출 의존이 제거된다. (완료)
+  - DB 백업이 매일 자동 수행된다. (완료)
+  - 남은 후보: GitHub 히스토리 정리·리포 private, 비밀번호 로그인 비활성화, 고정 도메인+Let's Encrypt, SQLite→MySQL 검토
 
 ## 작업 원칙
 - 한 번에 하나의 기능만 개발한다.

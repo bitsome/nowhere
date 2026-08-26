@@ -265,6 +265,7 @@
 
 ## 배포·운영 규칙
 - **서버 접속 정보(아이디·비밀번호·호스트 키)와 테스트 계정·API 키 같은 민감 정보는 로컬 전용 `.cursor/skills/nowhere-deployment/SECRETS.md`에 기록한다. 이 파일은 `.gitignore` 대상이라 GitHub에 올라가지 않는다.** 문서·코드·커밋에 민감 정보를 직접 넣지 않는다.
+- **서버 SSH 접속은 비밀번호 대신 키 인증(OpenSSH)을 사용한다.** 로컬 개인키는 `.deploy/id_rsa`(커밋 금지, 패스프레이즈 있음). Windows에서 접속할 때는 ① 키를 `%TEMP%\trae-agent-toolhost\`에 복사 → ② `icacls /inheritance:r` + 본인 계정만 `F` 권한 부여(안 하면 OpenSSH가 "bad permissions"로 거부) → ③ `SSH_ASKPASS=<askpass.bat>`·`SSH_ASKPASS_REQUIRE=force` 설정 후 `ssh -i`로 접속한다. 정확한 절차·패스프레이즈·호스트 키 지문은 SECRETS.md를 참조한다.
 - 배포는 git 기반으로 동기화한다: 로컬에서 커밋·`origin/main` push → 서버(`/var/www/nowhere`)에서 `git fetch origin main && git reset --hard origin/main`.
 - 서버 반영 전에는 현재 서버 상태를 `git stash push -m deploy-backup`으로 백업한 뒤 reset한다. 검증이 끝나면 백업 스태시를 정리한다.
 - `public/`은 프론트 빌드본(SPA dist 동기화 산출물)을 커밋한다. 서버는 npm 빌드 없이 nginx root(`/var/www/nowhere/public`)로 그대로 서빙한다.

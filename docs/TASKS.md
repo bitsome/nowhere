@@ -64,10 +64,15 @@
 - [x] 배포 자동화: deploy.sh, SKILL.md(nowhere-deployment), RULES.md 반영
 - [x] 민감 정보 관리: SECRETS.md 로컬 전용 분리 (커밋·업로드 금지)
 
+### 서버 운영 안정화 (2026-08-26, 서버 초기화 후 재구성)
+- [x] 새 서버 환경 재구성: PHP 8.3/nginx/composer(알리윤 미러)/node/cloudflared 설치, 코드 tar 업로드 배포
+- [x] SSH 접속 안정화: 키 인증(OpenSSH ssh + SSH_ASKPASS, `.deploy/id_rsa`)으로 전환
+- [x] 계정 재설정: 전 계정 비밀번호 `123456`, `market@example.com`=Admin (SECRETS.md 기준)
+- [x] SQLite DB 자동 백업 cron (매일 01:00, 14일 보존, `/var/www/backups/`)
+- [x] 외부 접속: Cloudflare Quick Tunnel systemd 서비스(`cloudflared-quick`, https)
+
 ## Current
-- [ ] 서버 운영 안정화 — SSH 접속 복구(비밀번호 확정·shadow 복구) 및 키 인증 전환
-- [ ] SQLite DB 자동 백업 cron 설정
-- [ ] SSL 인증서 적용 (도메인 확보 후 Let's Encrypt)
+- [ ] 다음 작업 미지정 (후보: ① GitHub 비밀번호 히스토리 정리·리포 private ② 서버 보안 강화(비밀번호 로그인 비활성화) ③ 상용화 준비(고정 도메인·SSL·SQLite→MySQL 검토))
 
 ## 원칙
 - 이 문서는 현재 작업을 하나만 지정하는 기준 문서다.
@@ -81,16 +86,17 @@
 - NoWhere 마켓 SPA (`frontend/`) + Laravel API (`app/`, `routes/`, `database/`)
 
 ## Step
-- 마켓 기능 개발 완료 · 서버 운영 안정화 단계
+- 마켓 기능 개발 완료 · 서버 운영 안정화 완료 · 다음 작업 결정 대기
 
 ## Current Work
-- NoWhere 마켓 기능(자동 등록·정산·매칭·웹푸시·커뮤니티·기사 앱)을 완료 선언하고, 현재는 서버 운영 안정화(SSH 접속 복구·백업·SSL)를 진행한다.
+- NoWhere 마켓 기능과 서버 운영 안정화(SSH 키 인증·백업 cron·https 터널)가 완료된 상태. 다음 작업(GitHub 히스토리 정리 / 서버 보안 강화 / 상용화 준비)은 사용자가 지정할 때까지 대기한다.
 
 ## Scope
-- 서버 SSH 접속 복구 (비밀번호 확정, shadow 해시 정상화, SSH 키 인증 등록)
-- SQLite 백업 cron (매일 자동 백업, 보존 정책)
-- SSL 인증서 (도메인 확보 시 Let's Encrypt 적용)
-- 상용화 전 임시 검증 환경 유지 (Cloudflare Quick Tunnel)
+- 다음 작업 후보
+  - GitHub 커밋 히스토리에 노출된 구 비밀번호 정리 + 리포 private 전환 검토
+  - 서버 보안 강화: 비밀번호 로그인 비활성화(`PasswordAuthentication no`) — 키 인증만 유지
+  - 상용화 준비: 고정 도메인 확보 + Let's Encrypt SSL, SQLite→MySQL 전환 검토
+  - Settlement 고도화 (정산서·세금계산서 등, 필요 시)
 
 ## Foundation Roadmap
 
@@ -105,7 +111,7 @@
 - [ ] 상용화 전환 (고정 주소·도메인·SSL, SQLite→MySQL 검토)
 
 ## 완료 기준
-- 서버 접속이 SSH 키로 안정화되고, 비밀번호 노출 문제가 해소된다.
-- SQLite 백업이 cron으로 매일 자동 수행된다.
+- 서버 접속이 SSH 키로 안정화되었다. (완료)
+- SQLite 백업이 cron으로 매일 자동 수행된다. (완료 — 01:00, 14일 보존)
 - 다음 작업이 지정되기 전까지 임의 구현 금지.
 - 작업 완료 후 종료한다.
