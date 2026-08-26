@@ -263,8 +263,31 @@
 ## 보안 규칙
 - 보안 기준은 [SECURITY.md](./SECURITY.md)를 기준으로 유지한다.
 
+## 배포·운영 규칙
+- **서버 접속 정보**: IP `114.132.240.52`, SSH 사용자 `ubuntu`, 비밀번호 `***REDACTED***`, 호스트 키 `***REDACTED***`. 접속 도구는 PuTTY(plink/pscp)이며 앱 경로는 `/var/www/nowhere`다.
+- **서버 테스트 계정**: 관리자 `market@example.com` / `123456` (user_id=2). 서버 재시드 이후 모든 테스트 계정 비밀번호는 `123456`으로 통일되어 있다 (`test@example.com`, `driver01~06@example.com` 포함).
+- 배포는 git 기반으로 동기화한다: 로컬에서 커밋·`origin/main` push → 서버(`/var/www/nowhere`)에서 `git fetch origin main && git reset --hard origin/main`.
+- 서버 반영 전에는 현재 서버 상태를 `git stash push -m deploy-backup`으로 백업한 뒤 reset한다. 검증이 끝나면 백업 스태시를 정리한다.
+- `public/`은 프론트 빌드본(SPA dist 동기화 산출물)을 커밋한다. 서버는 npm 빌드 없이 nginx root(`/var/www/nowhere/public`)로 그대로 서빙한다.
+- 의존성(composer.json)이 바뀌면 서버에서 `composer install`을 실행한다. 서버에서 GitHub 접속이 느리면 Aliyun composer 미러(`composer config -g repo.packagist composer https://mirrors.aliyun.com/composer/`)를 사용하고, 그래도 느리면 로컬 vendor를 tar.gz로 압축해 업로드·해제 후 `composer dump-autoload -o`로 정리한다.
+- 마이그레이션은 `php artisan migrate --force`, 캐시는 `config:clear / route:clear / view:clear`, php-fpm은 `systemctl reload php8.3-fpm`으로 반영한다.
+- 배포 후에는 반드시 `/up`(200), 루트 페이지(200), 새 빌드 asset 적용 여부로 검증한다.
+- 데이터베이스는 상용화 전까지 SQLite(`database/database.sqlite`)를 유지한다. 동시 접속·성능이 필요해지는 시점에 MySQL로 전환을 검토한다.
+- 개선 작업은 시간이 오래 걸리는 작업(DB 이전, 도메인·SSL, 고정 터널 등)보다 빠르게 완료되는 작업부터 우선 진행한다.
+
+## 개발 워크플로우 규칙
+- 기능 개발·수정·업데이트는 원칙적으로 로컬에서만 진행하고 검증한다. 서버 배포·빌드는 사용자가 명시적으로 요청할 때만 수행한다.
+- 데이터베이스는 서버 SQLite를 사용한다: 로컬 SPA(vite dev `localhost:5174`, `/api`는 서버 프록시) → 서버 API(114.132.240.52) → 서버 DB(`/var/www/nowhere/database/database.sqlite`).
+- 외부 확인용 임시 주소는 로컬 개발 서버 기준 Cloudflare Quick Tunnel로 발급한다. "플래어주소 열어줘" 같은 요청이 오면 기존 터널만 종료 → 새 터널 발급 → `/up`·루트 200 검증 → URL 공유한다.
+- 백엔드 PHP 단일 파일 수정은 서버 즉시 반영이 가능하다 (pscp → `sudo cp` → `sudo systemctl reload php8.3-fpm`, opcache 갱신 필수). 단, 사용자 지시 없이 임의로 배포하지 않는다.
+- 편집 후에는 반드시 grep/Read로 변경 내용이 실제 파일에 반영됐는지 재검증한다. 이 프로젝트는 import·선언·블록이 부분적으로 되돌아가는 원복 현상이 반복 발생한다.
+- 서버 API 응답은 nginx SPA 폴백으로 HTML(200)이 오는 함정이 있으므로 `Array.isArray(data?.data)` 같은 방어 코드로 JSON을 판별한다.
+
 ## 외부 접속 (Cloudflare Tunnel) 규칙
-- 터널 설정 및 운영 절차는 [DEPLOY.md](./DEPLOY.md)를 기준으로 유지한다.
+- 상용화 전 임시 외부 접속 주소는 서버에서 cloudflared Quick Tunnel을 사용한다 (임시 nginx 포트 8080 경유, `cloudflared tunnel --url http://127.0.0.1:8080`).
+- Quick Tunnel 주소는 프로세스가 살아있는 동안만 유효하며, 서버 재부팅 시 사라지고 새로 발급된다. 재사용할 수 없다.
+- 고정 주소가 필요하면 Named Tunnel + 도메인 연결로 전환한다.
+- 상세 절차는 [DEPLOY.md](./DEPLOY.md)를 기준으로 유지한다.
 
 ## AI 행동 규칙
 - AI는 UI 생성 시 가능한 한 `title`, `Icon`, `aria-label`을 기본으로 추가한다.
@@ -307,6 +330,14 @@
 - AI는 외부 접속 URL을 안내할 때 반드시 `/up` 헬스체크(HTTP 200)로 실제 동작을 검증한 뒤 안내한다.
 - AI는 새 공통 컴포넌트를 만들면 반드시 대시보드 허브와 개별 미리보기 페이지(`/dashboard/modules/{module}`)를 함께 등록한다.
 - AI는 컴포넌트의 모든 variant와 상태를 대시보드 미리보기 페이지에서 확인할 수 있게 구성한다.
+- AI는 배포를 진행할 때 로컬에서 검증(테스트·빌드)을 마친 뒤 커밋·푸시하고, 서버에서는 백업 스태시 후 `git reset --hard origin/main`으로 동기화한다.
+- AI는 서버 배포 후 `/up`(200)과 루트 페이지(200)로 동작을 검증한 뒤 사용자에게 결과를 안내한다.
+- AI는 서버의 GitHub 접속이 느려 의존성 설치가 지연될 때 Aliyun composer 미러 또는 로컬 vendor 업로드 같은 대체 경로를 먼저 제안한다.
+- AI는 임시 외부 접속 주소 안내 시 Quick Tunnel의 임시성(프로세스 유지 동안만 유효, 재부팅 시 변경)을 함께 안내한다.
+- AI는 개선 작업 목록을 제시할 때 완료까지 오래 걸리는 항목과 빠르게 완료되는 항목을 구분해 제안한다.
+- AI는 사용자가 배포·빌드를 요청하기 전까지 서버 배포나 프론트 빌드를 임의로 수행하지 않는다.
+- AI는 파일 편집 후 grep/Read로 실제 반영 여부를 확인하고, 프론트 변경 후에는 import·선언 누락으로 인한 ReferenceError를 검증한다.
+- AI는 로컬 개발 시 DB를 서버 SQLite에 연결된 서버 API를 통해 사용한다 (로컬 SQLite를 별도로 사용하지 않는다).
 
 ## 개발 원칙
 - Laravel 기본 구조와 관례를 우선 사용한다.
