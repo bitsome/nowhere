@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\DriverController;
 use App\Http\Controllers\Api\MatchController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrderController;
+use App\Http\Controllers\Api\OrderOfferController;
 use App\Http\Controllers\Api\OrderTemplateController;
 use App\Http\Controllers\Api\PushSubscriptionController;
 use App\Http\Controllers\Api\ReviewController;
@@ -84,6 +85,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders/{order}/claim', [OrderController::class, 'claim']);
     Route::post('/orders/{order}/claim/approve', [OrderController::class, 'approveClaim']);
     Route::post('/orders/{order}/claim/reject', [OrderController::class, 'rejectClaim']);
+    // 요금 제안(오퍼) — 기사 운임 제안 / 등록자 수락·거절
+    Route::get('/orders/{order}/offers', [OrderOfferController::class, 'index']);
+    Route::post('/orders/{order}/offers', [OrderOfferController::class, 'store']);
+    Route::post('/orders/{order}/offers/{offer}/accept', [OrderOfferController::class, 'accept']);
+    Route::post('/orders/{order}/offers/{offer}/reject', [OrderOfferController::class, 'reject']);
+    Route::delete('/orders/{order}/offers/{offer}', [OrderOfferController::class, 'destroy']);
     Route::post('/orders/{order}/status', [OrderController::class, 'transition'])->middleware('can:transition,order');
     Route::post('/orders/{order}/duplicate', [OrderController::class, 'duplicate'])->middleware('can:create,App\Models\Order');
     Route::post('/orders/{order}/detach', [OrderController::class, 'detachFromGroup'])->middleware('can:update,order');

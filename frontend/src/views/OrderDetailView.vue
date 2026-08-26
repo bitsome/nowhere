@@ -30,6 +30,9 @@ const {
     primaryAction, primaryActionStatus, statusButtonColor, groupOrderRows, groupTotalAmount, stepStyle,
     lineItems, statusTagType, refresh, claim, transition, cancelOpen, cancelReason, requestTransition,
     confirmCancel, completionOpen, completionRevenue, confirmComplete, detach,
+    offers, offersLoading, canOffer, myPendingOffer,
+    offerOpen, offerAmount, offerMessage, offerSubmitting, openOffer, submitOffer,
+    acceptOffer, rejectOffer, withdrawOffer,
     SERVICE_LABELS, STATUS_FLOW,
 } = detail;
 
@@ -427,6 +430,79 @@ onMounted(refresh);
                     </div>
                 </n-card>
 
+                <!-- 요금 제안(오퍼) — 등록자는 전체 제안 관리, 기사는 제안/철회 -->
+                <n-card
+                    v-if="order && ['published', 'trading'].includes(order.status) && (canOffer || order.user_id === auth.user?.id)"
+                    :bordered="true"
+                    class="detail-block"
+                >
+                    <template #header>
+                        <n-space align="center" :size="10">
+                            <span>요금 제안</span>
+                            <n-tag v-if="offers.length" size="small" round type="warning">
+                                {{ offers.length }}
+                            </n-tag>
+                        </n-space>
+                    </template>
+
+                    <!-- 기사 — 아직 제안 전이면 제안하기 버튼 -->
+                    <template v-if="canOffer && !myPendingOffer">
+                        <p class="offer-hint">
+                            이 운행의 운임을 직접 제안해 보세요. 등록자가 제안을 비교한 뒤 수락하면 운행이 넘어옵니다.
+                        </p>
+                        <n-button type="primary" size="large" class="offer-propose-btn" @click="openOffer">
+                            요금 제안하기
+                        </n-button>
+                    </template>
+
+                    <!-- 기사 — 보낸 제안이 수락 대기 중이면 철회 가능 -->
+                    <div v-else-if="myPendingOffer" class="offer-item">
+                        <div class="offer-item__info">
+                            <strong>{{ Number(myPendingOffer.amount).toLocaleString() }}원</strong>
+                            <n-tag size="small" round type="warning">수락 대기</n-tag>
+                            <span v-if="myPendingOffer.message" class="offer-item__msg">{{ myPendingOffer.message }}</span>
+                        </div>
+                        <n-button size="small" secondary type="warning" :loading="acting" @click="withdrawOffer(myPendingOffer)">
+                            철회
+                        </n-button>
+                    </div>
+
+                    <!-- 등록자 — 모든 제안을 비교하고 수락/거절 -->
+                    <template v-else-if="order.user_id === auth.user?.id">
+                        <n-empty
+                            v-if="!offers.length"
+                            description="아직 요금 제안이 없습니다."
+                            :show-description="true"
+                        />
+                        <div v-else class="offer-list">
+                            <div
+                                v-for="offer in offers"
+                                :key="offer.id"
+                                class="offer-item"
+                                :class="`offer-item--${offer.status}`"
+                            >
+                                <div class="offer-item__info">
+                                    <strong>{{ Number(offer.amount).toLocaleString() }}원</strong>
+                                    <span class="offer-item__driver">{{ offer.driver?.name || '기사' }}</span>
+                                    <span v-if="offer.driver?.rating" class="offer-item__rating">
+                                        ★ {{ offer.driver.rating }} ({{ offer.driver.review_count }})
+                                    </span>
+                                    <n-tag size="small" round>{{ offer.status_label }}</n-tag>
+                                    <span v-if="offer.message" class="offer-item__msg">{{ offer.message }}</span>
+                                </div>
+                                <div v-if="offer.status === 'pending'" class="offer-item__actions">
+                                    <n-button size="small" secondary type="error" :loading="acting" @click="rejectOffer(offer)">
+                                        거절
+                                    </n-button>
+                                    <n-button size="small" type="primary" :loading="acting" @click="acceptOffer(offer)">
+                                        수락
+                                    </n-button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </n-card>
+
                 <!-- 리뷰 작성 모달 -->
                 <n-modal
                     v-model:show="reviewOpen"
@@ -503,6 +579,42 @@ onMounted(refresh);
                     </template>
                 </n-modal>
 
+                <!-- 요금 제안 작성 모달 — 기사가 운임과 메모를 입력 -->
+                <n-modal
+                    v-model:show="offerOpen"
+                    preset="card"
+                    title="요금 제안"
+                    :style="{ maxWidth: '400px' }"
+                >
+                    <div class="offer-modal">
+                        <p class="cancel-modal__desc">
+                            이 운행의 운임을 제안하세요. 등록자가 여러 제안을 비교한 뒤 수락하면 운행이 넘어옵니다. (수락 전까지 기사 연락처는 비공개)
+                        </p>
+                        <n-input-number
+                            v-model:value="offerAmount"
+                            :min="1000"
+                            :step="1000"
+                            placeholder="제안 금액 (원)"
+                            class="offer-amount"
+                        />
+                        <n-input
+                            v-model:value="offerMessage"
+                            type="textarea"
+                            placeholder="메모 (선택) — 예) 오전 출발 가능합니다"
+                            :maxlength="500"
+                            :rows="3"
+                        />
+                    </div>
+                    <template #footer>
+                        <div class="filter-footer">
+                            <n-button @click="offerOpen = false">취소</n-button>
+                            <n-button type="primary" :loading="offerSubmitting" @click="submitOffer">
+                                제안 보내기
+                            </n-button>
+                        </div>
+                    </template>
+                </n-modal>
+
                 <!-- 공용 확인 다이얼로그 — 모든 상태 변경 전 확인 -->
                 <ConfirmDialog
                     v-model:open="confirmState.open"
@@ -530,6 +642,9 @@ onMounted(refresh);
             </div>
             <n-button v-if="canEdit" size="large" secondary @click="goEdit">
                 수정
+            </n-button>
+            <n-button v-if="canOffer && !myPendingOffer" size="large" secondary @click="openOffer">
+                요금 제안
             </n-button>
             <template v-if="isRegistrantPending">
                 <n-button size="large" secondary type="error" :loading="acting" @click="rejectClaim">
@@ -623,6 +738,90 @@ onMounted(refresh);
 }
 
 .completion-revenue {
+    width: 100%;
+}
+
+/* ── 요금 제안(오퍼) ── */
+.offer-hint {
+    margin: 0 0 12px;
+    color: var(--text-muted);
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.offer-propose-btn {
+    width: 100%;
+}
+
+.offer-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.offer-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+}
+
+.offer-item--accepted {
+    border-color: var(--status-accepted);
+    background: color-mix(in srgb, var(--status-accepted) 6%, transparent);
+}
+
+.offer-item--rejected,
+.offer-item--cancelled {
+    opacity: 0.55;
+}
+
+.offer-item__info {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+}
+
+.offer-item__info strong {
+    font-size: 15px;
+}
+
+.offer-item__driver {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.offer-item__rating {
+    color: #ffa940;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.offer-item__msg {
+    width: 100%;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.offer-item__actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.offer-modal {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.offer-amount {
     width: 100%;
 }
 

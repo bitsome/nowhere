@@ -16,6 +16,13 @@ export const apiClaimOrder = (id) => apiClient.post(`/orders/${id}/claim`);
 export const apiApproveClaim = (id) => apiClient.post(`/orders/${id}/claim/approve`);
 export const apiRejectClaim = (id) => apiClient.post(`/orders/${id}/claim/reject`);
 
+// 요금 제안(오퍼) — 기사가 운임을 제안하고 등록자가 수락/거절
+export const apiOrderOffers = (id) => apiClient.get(`/orders/${id}/offers`);
+export const apiCreateOffer = (id, payload) => apiClient.post(`/orders/${id}/offers`, payload);
+export const apiAcceptOffer = (orderId, offerId) => apiClient.post(`/orders/${orderId}/offers/${offerId}/accept`);
+export const apiRejectOffer = (orderId, offerId) => apiClient.post(`/orders/${orderId}/offers/${offerId}/reject`);
+export const apiDeleteOffer = (orderId, offerId) => apiClient.delete(`/orders/${orderId}/offers/${offerId}`);
+
 export const apiDuplicateOrder = (id) => apiClient.post(`/orders/${id}/duplicate`);
 
 export const apiTransitionOrder = (id, status, cancelReason = '', actualRevenue = null) => apiClient.post(`/orders/${id}/status`, {

@@ -13,6 +13,10 @@ use App\Notifications\OrderNotification;
  */
 class OrderClaimService
 {
+    public function __construct(
+        private readonly OrderOfferService $offerService,
+    ) {}
+
     /**
      * 마켓의 공개 운행을 가져오기 요청한다.
      * 요청 시점에 '수락 대기'가 되고, 등록자가 승인해야 내 운행이 된다.
@@ -40,6 +44,9 @@ class OrderClaimService
             'claimed_at' => now(),
             'claimant_user_id' => $actor->id,
         ])->save();
+
+        // 운행이 마켓에서 벗어났으므로 남아 있는 요금 제안은 모두 정리
+        $this->offerService->cancelPendingFor($order);
 
         // 등록자에게 승인 요청 알림
         $registrant = User::query()->find($registrantId);
@@ -150,6 +157,9 @@ class OrderClaimService
             'claimant_user_id' => null,
             'status' => Order::STATUS_ACCEPTED,
         ])->save();
+
+        // 운행이 확정되었으므로 남아 있는 요금 제안은 모두 정리
+        $this->offerService->cancelPendingFor($order);
 
         // 기사 상태 자동 연동 — 승인된 순간부터 '운행 중'
         if ($claimant !== null) {

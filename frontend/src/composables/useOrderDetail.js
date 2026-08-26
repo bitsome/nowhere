@@ -1,5 +1,8 @@
 import { computed, ref } from 'vue';
-import { apiApproveClaim, apiClaimOrder, apiDetachOrder, apiOrder, apiRejectClaim, apiReviewOrder, apiTransitionOrder } from '../api/orders';
+import {
+    apiAcceptOffer, apiApproveClaim, apiClaimOrder, apiCreateOffer, apiDeleteOffer, apiDetachOrder,
+    apiOrder, apiOrderOffers, apiRejectClaim, apiRejectOffer, apiReviewOrder, apiTransitionOrder,
+} from '../api/orders';
 import { getApiErrorMessage } from '../api/client';
 import { statusColorVar } from '../utils/colors';
 
@@ -354,6 +357,143 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         });
     };
 
+    // ── 요금 제안(오퍼) — 기사가 운임을 제안하면 등록자가 비교 후 수락/거절 ──
+    const offers = ref([]);
+    const offersLoading = ref(false);
+
+    // 공개/거래중 운행만 제안 대상 (본인 운행 제외)
+    const canOffer = computed(() => Boolean(order.value && isClaimable.value && !isMine.value));
+
+    // 나의 대기 제안 — 기사가 이미 제안했으면 철회 가능
+    const myPendingOffer = computed(
+        () => offers.value.find((o) => o.status === 'pending' && o.driver?.id === auth.user?.id) ?? null,
+    );
+
+    const loadOffers = async () => {
+        if (!order.value?.id || !['published', 'trading'].includes(order.value.status)) {
+            offers.value = [];
+
+            return;
+        }
+        if (!canOffer.value && order.value.user_id !== auth.user?.id) {
+            offers.value = [];
+
+            return;
+        }
+        offersLoading.value = true;
+        try {
+            const { data } = await apiOrderOffers(order.value.id);
+            offers.value = data.data ?? [];
+        } catch {
+            offers.value = [];
+        } finally {
+            offersLoading.value = false;
+        }
+    };
+
+    // 제안 작성 모달
+    const offerOpen = ref(false);
+    const offerAmount = ref(null);
+    const offerMessage = ref('');
+    const offerSubmitting = ref(false);
+
+    const openOffer = () => {
+        offerAmount.value = order.value?.expected_revenue ?? null;
+        offerMessage.value = '';
+        offerOpen.value = true;
+    };
+
+    const submitOffer = async () => {
+        const amount = Number(offerAmount.value);
+
+        if (!Number.isFinite(amount) || amount < 1000) {
+            naiveMessage.warning('제안 금액을 입력해 주세요 (최소 1,000원).');
+
+            return;
+        }
+
+        offerSubmitting.value = true;
+
+        try {
+            await apiCreateOffer(order.value.id, { amount, message: offerMessage.value.trim() });
+            naiveMessage.success('요금 제안을 보냈습니다. 등록자의 수락을 기다려 주세요.');
+            offerOpen.value = false;
+            await load();
+            await loadOffers();
+        } catch (e) {
+            naiveMessage.error(getApiErrorMessage(e, '요금 제안에 실패했습니다.'));
+        } finally {
+            offerSubmitting.value = false;
+        }
+    };
+
+    const acceptOffer = (offer) => {
+        askConfirm({
+            title: '요금 제안 수락',
+            message: `${offer.driver?.name}님의 ${Number(offer.amount).toLocaleString()}원 제안을 수락할까요?\n수락하면 운행이 해당 기사에게 넘어갑니다.`,
+            confirmText: '수락',
+            type: 'primary',
+            onConfirm: async () => {
+                acting.value = true;
+
+                try {
+                    await apiAcceptOffer(order.value.id, offer.id);
+                    await load();
+                    naiveMessage.success('제안을 수락했습니다. 운행이 기사에게 넘어갔습니다.');
+                    await loadOffers();
+                } catch (e) {
+                    naiveMessage.error(getApiErrorMessage(e, '제안 수락에 실패했습니다.'));
+                } finally {
+                    acting.value = false;
+                }
+            },
+        });
+    };
+
+    const rejectOffer = (offer) => {
+        askConfirm({
+            title: '요금 제안 거절',
+            message: `${offer.driver?.name}님의 제안을 거절할까요? 운행은 마켓에 그대로 남습니다.`,
+            confirmText: '거절',
+            type: 'error',
+            onConfirm: async () => {
+                acting.value = true;
+
+                try {
+                    await apiRejectOffer(order.value.id, offer.id);
+                    naiveMessage.success('제안을 거절했습니다.');
+                    await loadOffers();
+                } catch (e) {
+                    naiveMessage.error(getApiErrorMessage(e, '제안 거절에 실패했습니다.'));
+                } finally {
+                    acting.value = false;
+                }
+            },
+        });
+    };
+
+    const withdrawOffer = (offer) => {
+        askConfirm({
+            title: '요금 제안 철회',
+            message: '보낸 요금 제안을 철회할까요?',
+            confirmText: '철회',
+            type: 'warning',
+            onConfirm: async () => {
+                acting.value = true;
+
+                try {
+                    await apiDeleteOffer(order.value.id, offer.id);
+                    naiveMessage.success('요금 제안을 철회했습니다.');
+                    await loadOffers();
+                } catch (e) {
+                    naiveMessage.error(getApiErrorMessage(e, '제안 철회에 실패했습니다.'));
+                } finally {
+                    acting.value = false;
+                }
+            },
+        });
+    };
+
     const openChat = async () => {
         if (!chatTargetId.value) {
             return;
@@ -500,6 +640,7 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
 
         try {
             await load();
+            await loadOffers();
         } catch (e) {
             error.value = getApiErrorMessage(e, '운행을 불러오지 못했습니다.');
         } finally {
@@ -658,6 +799,19 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         approveClaim,
         rejectClaim,
         withdrawClaim,
+        offers,
+        offersLoading,
+        canOffer,
+        myPendingOffer,
+        offerOpen,
+        offerAmount,
+        offerMessage,
+        offerSubmitting,
+        openOffer,
+        submitOffer,
+        acceptOffer,
+        rejectOffer,
+        withdrawOffer,
         openChat,
         goUserPage,
         primaryAction,

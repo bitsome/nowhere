@@ -17,6 +17,7 @@ class OrderTransitionService
     public function __construct(
         private readonly MatchService $matchService,
         private readonly OrderClaimService $claimService,
+        private readonly OrderOfferService $offerService,
     ) {}
 
     /**
@@ -57,6 +58,11 @@ class OrderTransitionService
         }
 
         $order->transitionTo($status);
+
+        // 운행이 확정(수락)되면 마켓에서 벗어나므로 남은 요금 제안을 정리한다
+        if ($order->status === Order::STATUS_ACCEPTED) {
+            $this->offerService->cancelPendingFor($order);
+        }
 
         // 운행 시간·실제 수익 기록 — 운행 시작 시각, 완료 시각(+실제 수익)을 남긴다
         if ($status === Order::STATUS_DRIVING) {
