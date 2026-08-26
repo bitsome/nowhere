@@ -21,7 +21,7 @@ beforeEach(function () {
     Sanctum::actingAs($this->driver);
 });
 
-test('api order index returns claimable market orders from other users', function () {
+test('api order index shows all market orders including my own, but claim is blocked', function () {
     Order::factory()->create([
         'pickup_location' => '인천공항 T1',
         'dropoff_location' => '명동',
@@ -43,14 +43,15 @@ test('api order index returns claimable market orders from other users', functio
         'user_id' => $this->marketUser->id,
     ]);
 
+    // 본인 등록 운행도 마켓에 보여야 한다 — 그래야 관리자가 검증할 수 있다.
     $response = $this->getJson('/api/orders?scope=market')
         ->assertOk()
-        ->assertJsonCount(1, 'data')
-        ->assertJsonPath('meta.pagination.total', 1);
+        ->assertJsonCount(2, 'data')
+        ->assertJsonPath('meta.pagination.total', 2);
 
     expect(collect($response->json('data'))->pluck('route'))
         ->toContain('인천공항 T1 → 명동')
-        ->not->toContain('내오더출발 → 인천공항')
+        ->toContain('내오더출발 → 인천공항')
         ->not->toContain('수락출발 → 인천공항');
 });
 

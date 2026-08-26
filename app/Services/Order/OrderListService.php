@@ -133,8 +133,7 @@ class OrderListService
             Order::STATUS_TRADING,
             Order::STATUS_ACCEPTANCE_PENDING,
         ])
-            ->whereNull('claimed_at')
-            ->where('user_id', '!=', $user->id);
+            ->whereNull('claimed_at');
 
         // 서비스 날짜가 이미 지난 운행은 노출하지 않는다 (날짜 미정 운행은 유지, KST 기준)
         $query->where(function ($sub) {
