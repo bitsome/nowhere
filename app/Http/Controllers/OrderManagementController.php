@@ -9,11 +9,13 @@ use App\Http\Requests\UpdateOrderRequest;
 use App\Http\Requests\UpdateOrderStatusRequest;
 use App\Models\Order;
 use App\Models\User;
+use App\Services\Order\OrderTransitionService;
 use App\Services\OrderSummaryAiStructurer;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 use InvalidArgumentException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
@@ -244,15 +246,17 @@ class OrderManagementController extends Controller
     {
         $actor = $this->resolveActor();
 
-        $status = $request->validated('status');
-
-        if (! $order->canTransitionTo($status)) {
-            return back()->with('error', '운행 상태를 전환할 수 없는 단계입니다.');
+        try {
+            app(OrderTransitionService::class)->transition(
+                $actor,
+                $order,
+                $request->validated('status'),
+            );
+        } catch (ValidationException $exception) {
+            return back()->with('error', $exception->validator->errors()->first());
         }
 
-        $order->transitionTo($status);
-
-        return back()->with('status', sprintf('운행 상태가 "%s"(으)로 변경되었습니다.', Order::statusOptions()[$status] ?? $status));
+        return back()->with('status', sprintf('운행 상태가 "%s"(으)로 변경되었습니다.', Order::statusOptions()[$request->validated('status')] ?? $request->validated('status')));
     }
 
     /**

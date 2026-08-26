@@ -26,10 +26,10 @@ const {
     statusLabel, canReview,
     reviewOpen, reviewRating, reviewContent, reviewSubmitting, openReview, submitReview,
     canChat, hasRegistrantChat, canEdit, goEdit, isClaimPending, isRegistrantPending, isClaimantPending,
-    isWaitingClaims, confirmState, closeConfirm, doConfirm, approveClaim, rejectClaim, openChat, goUserPage,
+    isWaitingClaims, confirmState, closeConfirm, doConfirm, approveClaim, rejectClaim, withdrawClaim, openChat, goUserPage,
     primaryAction, primaryActionStatus, statusButtonColor, groupOrderRows, groupTotalAmount, stepStyle,
     lineItems, statusTagType, refresh, claim, transition, cancelOpen, cancelReason, requestTransition,
-    confirmCancel, detach,
+    confirmCancel, completionOpen, completionRevenue, confirmComplete, detach,
     SERVICE_LABELS, STATUS_FLOW,
 } = detail;
 
@@ -171,6 +171,13 @@ onMounted(refresh);
                         <div class="detail-row">
                             <span>금액</span>
                             <strong>{{ (order.expected_revenue ?? order.amount_value)?.toLocaleString() ?? '-' }}원</strong>
+                        </div>
+                        <div
+                            v-if="['completed', 'settled'].includes(order.status) && order.actual_revenue != null"
+                            class="detail-row"
+                        >
+                            <span>실제 수익</span>
+                            <strong>{{ Number(order.actual_revenue).toLocaleString() }}원</strong>
                         </div>
                         <div class="detail-row">
                             <span>서비스까지</span>
@@ -350,8 +357,9 @@ onMounted(refresh);
                     </n-alert>
 
                     <!-- 주 동작(가져오기/첫 전이)은 하단 바에서, 여기선 나머지 전이/사유/리뷰 -->
+                    <!-- 승인 대기 상태의 요청자는 여기서 전이를 직접 하지 않고 하단 바에서 '철회'만 한다 -->
                     <p
-                        v-if="nextTransitions.length && !(order?.status === 'completed' && !isRegistrant)"
+                        v-if="nextTransitions.length && !(order?.status === 'completed' && !isRegistrant) && !(order?.status === 'acceptance_pending' && !isRegistrant)"
                         class="detail-next-hint"
                     >
                         다음 단계:
@@ -361,7 +369,7 @@ onMounted(refresh);
                         </template>
                     </p>
                     <n-space
-                        v-if="nextTransitions.slice(1).length && !(order?.status === 'completed' && !isRegistrant)"
+                        v-if="nextTransitions.slice(1).length && !(order?.status === 'completed' && !isRegistrant) && !(order?.status === 'acceptance_pending' && !isRegistrant)"
                         wrap
                     >
                         <n-button
@@ -466,6 +474,30 @@ onMounted(refresh);
                             <n-button @click="cancelOpen = false">닫기</n-button>
                             <n-button type="error" :loading="acting" @click="confirmCancel">
                                 운행 취소
+                            </n-button>
+                        </div>
+                    </template>
+                </n-modal>
+
+                <!-- 운행 완료 모달 — 실제 수익 입력 (입력 없으면 기대 금액 유지) -->
+                <n-modal
+                    v-model:show="completionOpen"
+                    preset="card"
+                    title="운행 완료"
+                    :style="{ maxWidth: '400px' }"
+                >
+                    <p class="cancel-modal__desc">운행이 완료되었습니다. 실제 수익을 입력해 주세요. (입력하지 않으면 기대 금액으로 기록됩니다)</p>
+                    <n-input-number
+                        v-model:value="completionRevenue"
+                        :min="0"
+                        placeholder="실제 수익 (원)"
+                        class="completion-revenue"
+                    />
+                    <template #footer>
+                        <div class="filter-footer">
+                            <n-button @click="completionOpen = false">닫기</n-button>
+                            <n-button type="primary" :loading="acting" @click="confirmComplete">
+                                운행 완료
                             </n-button>
                         </div>
                     </template>
@@ -588,6 +620,10 @@ onMounted(refresh);
     display: flex;
     justify-content: flex-end;
     gap: 8px;
+}
+
+.completion-revenue {
+    width: 100%;
 }
 
 /* 진행상태 — 세로 타임라인: 완료(✓)·현재(●)·대기(○)를 연결선으로 표현 */

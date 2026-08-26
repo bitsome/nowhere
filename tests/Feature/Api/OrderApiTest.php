@@ -432,6 +432,103 @@ test('api order transition follows the lifecycle rules', function () {
         ->assertJsonValidationErrors(['status']);
 });
 
+test('api order cannot publish without required fields', function () {
+    $order = Order::factory()->create([
+        'status' => Order::STATUS_DRAFT,
+        'user_id' => $this->driver->id,
+        'pickup_location' => null,
+        'dropoff_location' => null,
+        'vehicle_type' => null,
+        'service_type' => null,
+        'service_date' => null,
+        'service_time' => null,
+        'expected_revenue' => null,
+    ]);
+
+    $this->postJson("/api/orders/{$order->id}/status", ['status' => Order::STATUS_PUBLISHED])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['status']);
+
+    expect($order->fresh()?->status)->toBe(Order::STATUS_DRAFT);
+});
+
+test('api order records ride start, completion timestamps and actual revenue', function () {
+    $order = Order::factory()->create([
+        'status' => Order::STATUS_ACCEPTED,
+        'user_id' => $this->driver->id,
+        'expected_revenue' => 100000,
+    ]);
+
+    // 운행중 전이 — 시작 시각 기록
+    $this->postJson("/api/orders/{$order->id}/status", ['status' => Order::STATUS_DRIVING])
+        ->assertOk();
+
+    $driving = $order->fresh();
+
+    expect($driving?->status)->toBe(Order::STATUS_DRIVING);
+    expect($driving?->started_at)->not->toBeNull();
+
+    // 완료 전이 — 완료 시각 + 실제 수익 기록
+    $this->postJson("/api/orders/{$order->id}/status", [
+        'status' => Order::STATUS_COMPLETED,
+        'actual_revenue' => 95000,
+    ])->assertOk();
+
+    $completed = $order->fresh();
+
+    expect($completed?->status)->toBe(Order::STATUS_COMPLETED);
+    expect($completed?->started_at)->not->toBeNull();
+    expect($completed?->completed_at)->not->toBeNull();
+    expect($completed?->actual_revenue)->toBe(95000);
+});
+
+test('driver can withdraw a pending claim and the order returns to the market', function () {
+    $order = Order::factory()->create([
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    // 가져오기 요청 → 수락 대기
+    $this->postJson("/api/orders/{$order->id}/claim")
+        ->assertOk();
+
+    expect($order->fresh()?->status)->toBe(Order::STATUS_ACCEPTANCE_PENDING);
+
+    // 요청자가 transition API로 published 전이 → 철회 처리
+    $this->postJson("/api/orders/{$order->id}/status", ['status' => Order::STATUS_PUBLISHED])
+        ->assertOk()
+        ->assertJsonPath('data.status', Order::STATUS_PUBLISHED);
+
+    $fresh = $order->fresh();
+
+    expect($fresh?->status)->toBe(Order::STATUS_PUBLISHED);
+    expect($fresh?->claimant_user_id)->toBeNull();
+    expect($fresh?->claimed_at)->toBeNull();
+});
+
+test('registrant can approve a pending claim through the transition endpoint', function () {
+    $order = Order::factory()->create([
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    $this->actingAs($this->driver)
+        ->postJson("/api/orders/{$order->id}/claim")
+        ->assertOk();
+
+    // 등록자가 transition API로 accepted 전이 → claim 서비스가 승인 처리 (claimant 정리 포함)
+    $this->actingAs($this->marketUser)
+        ->postJson("/api/orders/{$order->id}/status", ['status' => Order::STATUS_ACCEPTED])
+        ->assertOk()
+        ->assertJsonPath('data.status', Order::STATUS_ACCEPTED);
+
+    $fresh = $order->fresh();
+
+    expect($fresh?->status)->toBe(Order::STATUS_ACCEPTED);
+    expect($fresh?->user_id)->toBe($this->driver->id);
+    expect($fresh?->claimant_user_id)->toBeNull();
+});
+
 test('api order options returns dropdown options', function () {
     $this->getJson('/api/options/orders')
         ->assertOk()

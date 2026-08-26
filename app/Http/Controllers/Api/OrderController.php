@@ -126,6 +126,7 @@ class OrderController extends Controller
         $data = $request->validate([
             'status' => ['required', 'string'],
             'cancel_reason' => ['nullable', 'string', 'max:500'],
+            'actual_revenue' => ['nullable', 'integer', 'min:0'],
         ]);
 
         $transitionService->transition(
@@ -133,6 +134,7 @@ class OrderController extends Controller
             $order,
             $data['status'],
             $data['cancel_reason'] ?? null,
+            $data['actual_revenue'] ?? null,
         );
 
         return response()->json([

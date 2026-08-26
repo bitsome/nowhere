@@ -78,6 +78,34 @@ test('order rejects a status transition that skips lifecycle stages', function (
     expect($order->fresh()?->status)->toBe(Order::STATUS_DRAFT);
 });
 
+test('order cannot be published without required fields', function () {
+    $user = User::factory()->create([
+        'id' => 2,
+        'permissions' => ['order.status.update'],
+    ]);
+
+    $order = Order::factory()->create([
+        'user_id' => $user->id,
+        'status' => Order::STATUS_DRAFT,
+        'pickup_location' => null,
+        'dropoff_location' => null,
+        'vehicle_type' => null,
+        'service_type' => null,
+        'service_date' => null,
+        'service_time' => null,
+        'expected_revenue' => null,
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('dashboard.business.order.status.transition', $order), [
+            'status' => Order::STATUS_PUBLISHED,
+        ])
+        ->assertRedirect()
+        ->assertSessionHas('error');
+
+    expect($order->fresh()?->status)->toBe(Order::STATUS_DRAFT);
+});
+
 test('order can be cancelled from active lifecycle stages but not after settlement', function () {
     $user = User::factory()->create([
         'id' => 2,

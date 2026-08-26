@@ -49,6 +49,9 @@ use InvalidArgumentException;
     'claimant_user_id',
     'user_id',
     'original_owner_id',
+    'started_at',
+    'completed_at',
+    'actual_revenue',
 ])]
 class Order extends Model
 {
@@ -83,6 +86,8 @@ class Order extends Model
         // 공개 ↔ 초안 왕복 — 등록자가 공개 후 다시 비공개(초안)로 되돌릴 수 있다.
         // 거래중(trading)은 과거 데이터 대응용으로 흐름에서 제외했다 (claim → 승인 흐름 사용).
         self::STATUS_PUBLISHED => [self::STATUS_DRAFT, self::STATUS_CANCELLED],
+        // 가져오기 요청(수락 대기) — 승인·거절·철회·취소. 실제 처리 규칙은 OrderClaimService/OrderTransitionService가 담당한다.
+        self::STATUS_ACCEPTANCE_PENDING => [self::STATUS_ACCEPTED, self::STATUS_PUBLISHED, self::STATUS_CANCELLED],
         self::STATUS_TRADING => [self::STATUS_ACCEPTED, self::STATUS_CANCELLED],
         self::STATUS_ACCEPTED => [self::STATUS_DRIVING, self::STATUS_CANCELLED],
         self::STATUS_DRIVING => [self::STATUS_COMPLETED],
@@ -276,6 +281,50 @@ class Order extends Model
             'claimed_at' => 'datetime',
             'estimated_duration_minutes' => 'integer',
             'is_priority' => 'boolean',
+            'started_at' => 'datetime',
+            'completed_at' => 'datetime',
+            'actual_revenue' => 'integer',
         ];
+    }
+
+    /**
+     * 마켓 공개(publish) 전 필수 입력 요건을 검사한다.
+     * 공개된 운행은 드라이버가 바로 가져갈 수 있어야 하므로 핵심 정보는 반드시 채워야 한다.
+     *
+     * @return string|null 누락 항목 안내 메시지 (요건 충족 시 null)
+     */
+    public function publishRequirementError(): ?string
+    {
+        $missing = [];
+
+        if (blank($this->pickup_location)) {
+            $missing[] = '출발지';
+        }
+
+        if (blank($this->dropoff_location)) {
+            $missing[] = '도착지';
+        }
+
+        if (blank($this->vehicle_type)) {
+            $missing[] = '차량';
+        }
+
+        if (blank($this->service_type)) {
+            $missing[] = '구분';
+        }
+
+        // 서비스 일시 — 통합 일시 또는 (날짜+시간) 중 하나는 있어야 한다
+        $hasDatetime = filled($this->service_datetime)
+            || (filled($this->service_date) && filled($this->service_time));
+
+        if (! $hasDatetime) {
+            $missing[] = '서비스 일시';
+        }
+
+        if (! filled($this->expected_revenue) || (int) $this->expected_revenue <= 0) {
+            $missing[] = '금액';
+        }
+
+        return $missing === [] ? null : '마켓 공개 전에 다음 항목을 입력해 주세요: '.implode(', ', $missing).'.';
     }
 }

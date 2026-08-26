@@ -174,6 +174,20 @@ class OrderClaimService
     }
 
     /**
+     * 가져오기 요청을 요청자(드라이버)가 직접 철회한다 — 운행이 마켓으로 돌아간다.
+     */
+    public function withdraw(Order $order): void
+    {
+        abort_unless($order->status === Order::STATUS_ACCEPTANCE_PENDING, 403, '승인 대기 상태가 아닙니다.');
+
+        $order->forceFill([
+            'status' => Order::STATUS_PUBLISHED,
+            'claimant_user_id' => null,
+            'claimed_at' => null,
+        ])->save();
+    }
+
+    /**
      * 가져오기 요청을 등록자가 거절한다 — 운행이 마켓으로 돌아간다.
      */
     public function reject(User $registrant, Order $order): void

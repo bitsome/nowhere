@@ -18,7 +18,11 @@ export const apiRejectClaim = (id) => apiClient.post(`/orders/${id}/claim/reject
 
 export const apiDuplicateOrder = (id) => apiClient.post(`/orders/${id}/duplicate`);
 
-export const apiTransitionOrder = (id, status, cancelReason = '') => apiClient.post(`/orders/${id}/status`, { status, cancel_reason: cancelReason });
+export const apiTransitionOrder = (id, status, cancelReason = '', actualRevenue = null) => apiClient.post(`/orders/${id}/status`, {
+    status,
+    cancel_reason: cancelReason,
+    actual_revenue: actualRevenue,
+});
 
 export const apiDetachOrder = (id) => apiClient.post(`/orders/${id}/detach`);
 

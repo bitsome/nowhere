@@ -16,20 +16,57 @@ class OrderTransitionService
 {
     public function __construct(
         private readonly MatchService $matchService,
+        private readonly OrderClaimService $claimService,
     ) {}
 
     /**
      * 라이프사이클 규칙에 따라 운행 상태를 전환한다.
      */
-    public function transition(User $actor, Order $order, string $status, ?string $cancelReason = null): void
+    public function transition(User $actor, Order $order, string $status, ?string $cancelReason = null, ?int $actualRevenue = null): void
     {
+        // 수락 대기(가져오기 요청) 상태의 승인/복귀는 claim 서비스가 전담한다 —
+        // claimant 정리·알림·채팅 카드 확정까지 함께 처리되어야 하므로 이 경로로 위임한다.
+        if ($order->status === Order::STATUS_ACCEPTANCE_PENDING
+            && in_array($status, [Order::STATUS_ACCEPTED, Order::STATUS_PUBLISHED], true)) {
+            if ($status === Order::STATUS_ACCEPTED) {
+                $this->claimService->approve($actor, $order);
+            } elseif ($order->claimant_user_id === $actor->id) {
+                $this->claimService->withdraw($order);
+            } else {
+                $this->claimService->reject($actor, $order);
+            }
+
+            return;
+        }
+
         if (! $order->canTransitionTo($status)) {
             throw ValidationException::withMessages([
                 'status' => ['전환할 수 없는 상태입니다.'],
             ]);
         }
 
+        // 마켓 공개 전 필수 입력 검증 — 빈 운행이 마켓에 노출되는 것을 막는다
+        if ($status === Order::STATUS_PUBLISHED) {
+            $publishError = $order->publishRequirementError();
+
+            if ($publishError !== null) {
+                throw ValidationException::withMessages([
+                    'status' => [$publishError],
+                ]);
+            }
+        }
+
         $order->transitionTo($status);
+
+        // 운행 시간·실제 수익 기록 — 운행 시작 시각, 완료 시각(+실제 수익)을 남긴다
+        if ($status === Order::STATUS_DRIVING) {
+            $order->forceFill(['started_at' => now()])->save();
+        } elseif ($status === Order::STATUS_COMPLETED) {
+            $order->forceFill([
+                'completed_at' => now(),
+                'actual_revenue' => $actualRevenue ?? $order->actual_revenue,
+            ])->save();
+        }
 
         // 취소 사유 기록
         if ($status === Order::STATUS_CANCELLED && filled($cancelReason)) {

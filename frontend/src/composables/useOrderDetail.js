@@ -343,6 +343,17 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         });
     };
 
+    // 가져오기 요청을 내가 직접 철회 — 등록자 승인 전에 마음을 바꿀 수 있다
+    const withdrawClaim = () => {
+        askConfirm({
+            title: '가져오기 요청 철회',
+            message: '가져오기 요청을 철회할까요?\n철회하면 운행은 마켓에 그대로 남습니다.',
+            confirmText: '철회',
+            type: 'warning',
+            onConfirm: () => run(() => apiTransitionOrder(order.value.id, 'published'), '가져오기 요청을 철회했습니다.'),
+        });
+    };
+
     const openChat = async () => {
         if (!chatTargetId.value) {
             return;
@@ -364,8 +375,12 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         }
     };
 
-    // 하단 액션 바의 주 동작 — 가져오기(남의 운행만) > 다음 상태 전이 > 리뷰
+    // 하단 액션 바의 주 동작 — 가져오기 요청 철회(요청자) > 가져오기(남의 운행만) > 다음 상태 전이 > 리뷰
     const primaryAction = computed(() => {
+        // 승인 대기 중인 가져오기 요청은 내가 직접 철회할 수 있다
+        if (isClaimantPending.value) {
+            return { label: '가져오기 요청 철회', handler: withdrawClaim };
+        }
         if (isClaimable.value && !isMine.value) {
             return { label: '내 운행으로 가져오기', handler: claim };
         }
@@ -552,10 +567,31 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
     const cancelOpen = ref(false);
     const cancelReason = ref('');
 
+    // ── 운행 완료 시 실제 수익 입력 ──
+    const completionOpen = ref(false);
+    const completionRevenue = ref(null);
+
+    const openCompletion = () => {
+        completionRevenue.value = order.value?.actual_revenue ?? order.value?.expected_revenue ?? null;
+        completionOpen.value = true;
+    };
+
+    const confirmComplete = async () => {
+        const revenue = completionRevenue.value == null ? null : Number(completionRevenue.value);
+        completionOpen.value = false;
+
+        await run(
+            () => apiTransitionOrder(order.value.id, 'completed', '', Number.isFinite(revenue) ? revenue : null),
+            '운행이 완료되었습니다.',
+        );
+    };
+
     const requestTransition = (status) => {
         if (status === 'cancelled') {
             cancelReason.value = '';
             cancelOpen.value = true;
+        } else if (status === 'completed') {
+            openCompletion();
         } else {
             transition(status);
         }
@@ -621,6 +657,7 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         doConfirm,
         approveClaim,
         rejectClaim,
+        withdrawClaim,
         openChat,
         goUserPage,
         primaryAction,
@@ -642,6 +679,9 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         cancelReason,
         requestTransition,
         confirmCancel,
+        completionOpen,
+        completionRevenue,
+        confirmComplete,
         detach,
     };
 }

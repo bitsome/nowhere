@@ -78,8 +78,14 @@
 - [x] 서버 로그 점검: nginx·php-fpm 에러 0건, 최근 500 응답 0건, Laravel 로그(LOG_LEVEL=error) 에러 없음
 - [x] 프론트엔드 소스(`frontend/src` 96파일) git 트래킹 확인 — `dist`만 빌드물 제외, 재배포 시 서버 빌드 필요
 
+### 운행 플로우 개선 (2026-08-26)
+- [x] claim 수락 대기 상태 완성: `STATUS_FLOW`에 `acceptance_pending` 경로 명시, 전이 API에서 claim 서비스로 승인/거절/철회 위임(claimant 정리 일관), 드라이버 요청 철회 기능
+- [x] 운행 시간·실제 수익 기록: `started_at`/`completed_at`/`actual_revenue` 컬럼 추가, 운행중·완료 전이 시 기록, 완료 시 실제 수익 입력 UI, 상세 화면 표시
+- [x] 마켓 공개 필수 입력 검증: publish 전 출발지/도착지/차량/구분/서비스 일시/금액 필수 (API·대시보드 공통)
+- [x] 테스트 7건 추가, 전체 220개 통과 · 라이브 서버 배포 후 전 구간 검증 완료 (빈 운행 publish 422, claim 철회, transition 승인, 시간/금액 기록)
+
 ## Current
-- [ ] 다음 작업 미지정 (후보: ① GitHub 히스토리 정리 후 리포 private 전환 ② 서버 보안 강화(비밀번호 로그인 비활성화) ③ 상용화 준비(고정 도메인·SSL·SQLite→MySQL 검토))
+- [ ] 다음 작업 미지정 (후보: ① GitHub 히스토리 정리 후 리포 private 전환 ② 상용화 준비(고정 도메인·SSL·SQLite→MySQL 검토) ③ Settlement 고도화(정산서·세금계산서))
 
 ## 원칙
 - 이 문서는 현재 작업을 하나만 지정하는 기준 문서다.
