@@ -328,6 +328,109 @@ class OrderListService
             : $request->string('sort', 'latest')->toString();
     }
 
+    /**
+     * 왕복 노선 추천 — 내가 맡은 운행(수락/운행중)의 하차지 근처에서 시작하는 마켓 운행을 찾는다.
+     * (CJ 더운반/uber Freight의 리턴 로드 개념 — 하차 후 공차 이동을 줄이기 위한 우선 노출)
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function returnRoutes(Request $request): array
+    {
+        $user = $request->user();
+
+        // 내가 맡은 운행의 하차지 — 복귀 노선의 시작점이 될 지역 토큰
+        $dropoffs = Order::query()
+            ->where('user_id', $user->id)
+            ->whereIn('status', [Order::STATUS_ACCEPTED, Order::STATUS_DRIVING])
+            ->whereNotNull('dropoff_location')
+            ->where('dropoff_location', '!=', '')
+            ->pluck('dropoff_location')
+            ->map(fn (string $location) => $this->locationTokens($location))
+            ->filter(fn (array $tokens) => $tokens !== [])
+            ->values();
+
+        if ($dropoffs->isEmpty()) {
+            return [];
+        }
+
+        // 마켓 후보 — 공개/거래중, 가져오기 요청 없음, 남의 운행, 서비스 시각이 지나지 않음
+        $cutoff = now('Asia/Seoul')->subHours(2);
+        [$cutoffDate, $cutoffTime] = explode(' ', $cutoff->format('Y-m-d H:i'));
+
+        $candidates = Order::query()
+            ->whereIn('status', [Order::STATUS_PUBLISHED, Order::STATUS_TRADING])
+            ->whereNull('claimed_at')
+            ->where('user_id', '!=', $user->id)
+            ->whereNotNull('pickup_location')
+            ->where('pickup_location', '!=', '')
+            ->where(function ($sub) use ($cutoffDate, $cutoffTime) {
+                $sub->where(function ($q) use ($cutoffDate, $cutoffTime) {
+                    $q->whereNotNull('service_date')
+                        ->where('service_date', '!=', '')
+                        ->whereNotNull('service_time')
+                        ->where('service_time', '!=', '')
+                        ->where(function ($dateQuery) use ($cutoffDate, $cutoffTime) {
+                            $dateQuery->where('service_date', '>', $cutoffDate)
+                                ->orWhere(function ($q2) use ($cutoffDate, $cutoffTime) {
+                                    $q2->where('service_date', $cutoffDate)
+                                        ->where('service_time', '>=', $cutoffTime);
+                                });
+                        });
+                })->orWhere(function ($q) {
+                    $q->whereNull('service_date')
+                        ->orWhere('service_date', '')
+                        ->orWhereNull('service_time')
+                        ->orWhere('service_time', '');
+                });
+            })
+            ->orderBy('service_date')
+            ->orderBy('service_time')
+            ->limit(50)
+            ->get();
+
+        // 출발지가 내 하차지와 지역(토큰)이 겹치는 운행만 추천
+        $matched = $candidates
+            ->filter(fn (Order $order) => $dropoffs->contains(
+                fn (array $dropTokens) => array_intersect($this->locationTokens($order->pickup_location), $dropTokens) !== [],
+            ))
+            ->take(10);
+
+        if ($matched->isEmpty()) {
+            return [];
+        }
+
+        $rows = app(OrderWorkspaceListBuilder::class)->build($matched, null, 'date');
+
+        return $this->withOwnerTrust($rows, $matched->all());
+    }
+
+    /**
+     * 위치 문자열을 지역 매칭용 토큰으로 분리한다.
+     * 공항 터미널 코드(T1/T2)와 방향 기호는 제거하고 2글자 이상 어절만 남긴다.
+     * 예: '인천공항 T2' → ['인천공항'], '서울 강남' → ['서울', '강남']
+     *
+     * @return array<int, string>
+     */
+    private function locationTokens(string $location): array
+    {
+        $normalized = preg_replace('/\bT\d\b/i', '', str_replace('국제', '', $location));
+        $parts = preg_split('/[\s>→\-·,()（）\/]+/u', $normalized);
+
+        $tokens = [];
+
+        foreach ($parts as $part) {
+            $part = trim($part);
+
+            if (mb_strlen($part) < 2) {
+                continue;
+            }
+
+            $tokens[] = mb_strtolower($part);
+        }
+
+        return array_values(array_unique($tokens));
+    }
+
     private function paginate(Builder $query, Request $request, int $perPage): LengthAwarePaginator
     {
         return match ($this->sortKey($request)) {

@@ -1,7 +1,7 @@
 <script setup>
 import { computed, h, onActivated, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useNotification } from 'naive-ui';
-import { apiOrders } from '../api/orders';
+import { apiOrders, apiReturnRoutes } from '../api/orders';
 import { getApiErrorMessage } from '../api/client';
 import { useUiStore } from '../stores/ui';
 import OrderCard from '../components/orders/OrderCard.vue';
@@ -37,13 +37,17 @@ const clearSearch = () => {
 // 추천(매칭) 운행 — is_matched_to_me 플래그 기준
 const recommended = computed(() => orders.value.filter((o) => o.is_matched_to_me && o.kind !== 'set'));
 
+// 왕복 노선 추천 — 내가 맡은 운행의 하차지 근처에서 시작하는 운행 (CJ 더운반/uber Freight 리턴 로드 개념)
+const returnRoutes = ref([]);
+const returnRouteKeys = computed(() => new Set(returnRoutes.value.map((o) => o.key)));
+
 const applyFilter = () => {
     filterOpen.value = false;
     handleFilterChange();
 };
 
-// kind에 따라 분류 — 추천(매칭) 운행은 추천 섹션에 이미 노출되므로 전체 목록에서 제외(중복 방지)
-const singleRows = computed(() => orders.value.filter((o) => o.kind !== 'set' && !o.is_matched_to_me));
+// kind에 따라 분류 — 추천(매칭)/왕복 추천 운행은 전용 섹션에 이미 노출되므로 전체 목록에서 제외(중복 방지)
+const singleRows = computed(() => orders.value.filter((o) => o.kind !== 'set' && !o.is_matched_to_me && !returnRouteKeys.value.has(o.key)));
 const setRows = computed(() => orders.value.filter((o) => o.kind === 'set'));
 const serviceType = ref('');
 const date = ref('');
@@ -485,6 +489,14 @@ const load = async (silent = false) => {
         notifyNewOrders(data.data);
         orders.value = data.data;
         pagination.value = data.meta.pagination;
+
+        // 왕복 추천 — 내가 맡은 운행의 하차지 근처에서 시작하는 운행 (실패해도 마켓 목록에는 영향 없음)
+        try {
+            const rr = await apiReturnRoutes();
+            returnRoutes.value = rr.data.data ?? [];
+        } catch {
+            returnRoutes.value = [];
+        }
     } catch (e) {
         error.value = getApiErrorMessage(e, '운행 목록을 불러오지 못했습니다.');
     } finally {
@@ -931,6 +943,22 @@ watch(
                 hint="필터를 줄이거나 잠시 후 다시 확인해 주세요"
             />
             <template v-else>
+                <!-- 왕복 추천 — 내가 맡은 운행의 하차지 근처에서 시작하는 운행 (공차 복귀 절감) -->
+                <div v-if="returnRoutes.length" class="market-section">
+                    <div class="market-section__head">
+                        <b>왕복 추천</b>
+                        <span class="market-section__count">하차지 근처 {{ returnRoutes.length }}건 <BaseIcon name="arrow-forward" :size="12" /></span>
+                    </div>
+                    <div class="order-grid">
+                        <OrderCard
+                            v-for="order in returnRoutes"
+                            :key="order.key"
+                            :order="order"
+                            :highlight="highlightKeys.has(order.key)"
+                        />
+                    </div>
+                </div>
+
                 <!-- 추천 운행 — 내 매칭 조건에 맞는 운행 -->
                 <div v-if="recommended.length" class="market-section">
                     <div class="market-section__head">

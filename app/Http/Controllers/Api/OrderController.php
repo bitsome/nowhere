@@ -37,6 +37,18 @@ class OrderController extends Controller
     }
 
     /**
+     * 왕복 노선 추천 — 내가 맡은 운행의 하차지 근처에서 시작하는 마켓 운행.
+     *
+     * @return JsonResponse{data: array<int, array<string, mixed>>}
+     */
+    public function returnRoutes(Request $request, OrderListService $listService): JsonResponse
+    {
+        return response()->json([
+            'data' => $listService->returnRoutes($request),
+        ]);
+    }
+
+    /**
      * 운행 상세 — 라인아이템, 셋트면 그룹 전체 일정 포함.
      *
      * @return JsonResponse{data: array<string, mixed>}
