@@ -70,6 +70,7 @@ class OrderOfferController extends Controller
                 'id' => $order->id,
                 'status' => $order->status,
                 'accepted_driver_id' => $offer->driver_id,
+                'accepted_amount' => $offer->amount,
             ],
         ]);
     }

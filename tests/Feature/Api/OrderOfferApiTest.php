@@ -90,13 +90,18 @@ test('등록자가 제안을 수락하면 운행이 기사에게 넘어가고 �
 
     $this->postJson("/api/orders/{$this->order->id}/offers/{$offerA['id']}/accept")
         ->assertOk()
-        ->assertJsonPath('data.status', 'accepted');
+        ->assertJsonPath('data.status', 'accepted')
+        ->assertJsonPath('data.accepted_amount', 140000);
 
     $this->order->refresh();
 
     expect($this->order->status)->toBe(Order::STATUS_ACCEPTED);
     expect($this->order->user_id)->toBe($this->driver->id);
     expect($this->order->original_owner_id)->toBe($this->owner->id);
+
+    // 딜 성사 — 수락한 제안 금액이 운행 계약 금액이 된다 (등록 금액 15만 대신 14만)
+    expect($this->order->expected_revenue)->toBe(140000);
+    expect($this->order->amount_value)->toBe(140000);
 
     expect(OrderOffer::find($offerA['id'])->status)->toBe(OrderOffer::STATUS_ACCEPTED);
     expect(OrderOffer::where('order_id', $this->order->id)

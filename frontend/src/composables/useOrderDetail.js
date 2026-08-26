@@ -439,7 +439,7 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
                 try {
                     await apiAcceptOffer(order.value.id, offer.id);
                     await load();
-                    naiveMessage.success('제안을 수락했습니다. 운행이 기사에게 넘어갔습니다.');
+                    naiveMessage.success(`제안을 수락했습니다. ${Number(offer.amount).toLocaleString()}원에 딜이 성사되어 운행이 기사에게 넘어갔습니다.`);
                     await loadOffers();
                 } catch (e) {
                     naiveMessage.error(getApiErrorMessage(e, '제안 수락에 실패했습니다.'));

@@ -94,10 +94,14 @@ class OrderOfferService
             $order->forceFill(['original_owner_id' => $order->user_id]);
         }
 
+        // 딜 성사 — 수락된 제안 금액이 운행의 계약 금액이 된다.
+        // 등록자가 6만에 등록했어도 기사가 6만5천에 제안하고 수락하면 계약 금액은 6만5천이다.
         $order->forceFill([
             'user_id' => $offer->driver_id,
             'claimant_user_id' => null,
             'claimed_at' => now(),
+            'expected_revenue' => $offer->amount,
+            'amount_value' => $offer->amount,
             'status' => Order::STATUS_ACCEPTED,
         ])->save();
 
@@ -123,7 +127,7 @@ class OrderOfferService
 
             $driver->notify(new OrderNotification(
                 '요금 제안 수락됨',
-                "{$order->rideSummary()} 운행의 요금 제안이 수락되었습니다. 운행을 진행할 수 있습니다.",
+                "{$order->rideSummary()} 운행의 요금 제안이 수락되어 ".number_format($offer->amount).'원에 딜이 성사되었습니다. 운행을 진행할 수 있습니다.',
                 $order->id,
             ));
         }
