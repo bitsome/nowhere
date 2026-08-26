@@ -406,8 +406,10 @@ class OrderListService
 
     /**
      * 위치 문자열을 지역 매칭용 토큰으로 분리한다.
-     * 공항 터미널 코드(T1/T2)와 방향 기호는 제거하고 2글자 이상 어절만 남긴다.
-     * 예: '인천공항 T2' → ['인천공항'], '서울 강남' → ['서울', '강남']
+     * - 공항 터미널 코드(T1/T2)와 방향 기호는 제거
+     * - '강남구' → '강남'처럼 구/동/읍/면/리 접미사를 벗겨 상세 구역 단위로도 매칭
+     * - 시/도 단위 토큰('서울', '경기' 등)은 너무 넓어 왕복 매칭에서 제외
+     * 예: '서울 마포구' → ['마포', '마포구'], '인천공항 T2' → ['인천공항']
      *
      * @return array<int, string>
      */
@@ -426,9 +428,26 @@ class OrderListService
             }
 
             $tokens[] = mb_strtolower($part);
+
+            // '강남구' → '강남' — 상세 구역만으로도 겹치게
+            $stripped = preg_replace('/(구|동|읍|면|리)$/u', '', mb_strtolower($part));
+
+            if (mb_strlen($stripped) >= 2) {
+                $tokens[] = $stripped;
+            }
         }
 
-        return array_values(array_unique($tokens));
+        $blocklist = [
+            '서울', '서울특별시', '부산', '부산광역시', '인천', '인천광역시',
+            '대구', '대전', '광주', '울산', '세종',
+            '경기', '경기도', '강원', '강원도',
+            '충북', '충청북도', '충남', '충청남도',
+            '전북', '전라북도', '전남', '전라남도',
+            '경북', '경상북도', '경남', '경상남도',
+            '제주', '제주도',
+        ];
+
+        return array_values(array_unique(array_diff($tokens, $blocklist)));
     }
 
     private function paginate(Builder $query, Request $request, int $perPage): LengthAwarePaginator

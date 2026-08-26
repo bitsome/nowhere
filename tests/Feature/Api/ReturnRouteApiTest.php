@@ -77,6 +77,63 @@ test('공항 터미널 코드가 달라도 같은 공항이면 왕복 추천된�
         ->assertJsonCount(1, 'data');
 });
 
+test('시 단위 토큰만으로 겹치는 운행은 왕복 추천되지 않는다', function () {
+    // 하차지 '서울 마포구' — '서울' 시 단위만 겹치는 강남구 운행은 추천 제외
+    Order::factory()->create([
+        'user_id' => $this->driver->id,
+        'status' => Order::STATUS_ACCEPTED,
+        'pickup_location' => '인천공항 T2',
+        'dropoff_location' => '서울 마포구',
+        'service_date' => now('Asia/Seoul')->format('Y-m-d'),
+    ]);
+
+    // 마포구에서 출발하는 운행 → 추천
+    Order::factory()->create([
+        'user_id' => $this->owner->id,
+        'status' => Order::STATUS_PUBLISHED,
+        'pickup_location' => '서울 마포구',
+        'dropoff_location' => '인천공항',
+        'service_date' => now('Asia/Seoul')->addDays(1)->format('Y-m-d'),
+    ]);
+
+    // 강남구에서 출발하는 운행 → 같은 시지만 구가 다르므로 추천 제외
+    Order::factory()->create([
+        'user_id' => $this->owner->id,
+        'status' => Order::STATUS_PUBLISHED,
+        'pickup_location' => '서울 강남구',
+        'dropoff_location' => '인천공항',
+        'service_date' => now('Asia/Seoul')->addDays(1)->format('Y-m-d'),
+    ]);
+
+    $this->getJson('/api/orders/return-routes')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.route', '서울 마포구 → 인천공항');
+});
+
+test('구 접미사가 달라도 같은 상세 구역이면 왕복 추천된다', function () {
+    // 하차지 '강남' ↔ 출발지 '서울 강남구' — 접미사 정규화로 매칭
+    Order::factory()->create([
+        'user_id' => $this->driver->id,
+        'status' => Order::STATUS_ACCEPTED,
+        'pickup_location' => '인천공항 T2',
+        'dropoff_location' => '강남',
+        'service_date' => now('Asia/Seoul')->format('Y-m-d'),
+    ]);
+
+    Order::factory()->create([
+        'user_id' => $this->owner->id,
+        'status' => Order::STATUS_PUBLISHED,
+        'pickup_location' => '서울 강남구',
+        'dropoff_location' => '인천공항',
+        'service_date' => now('Asia/Seoul')->addDays(1)->format('Y-m-d'),
+    ]);
+
+    $this->getJson('/api/orders/return-routes')
+        ->assertOk()
+        ->assertJsonCount(1, 'data');
+});
+
 test('맡은 운행이 없으면 왕복 추천도 비어 있다', function () {
     Order::factory()->create([
         'user_id' => $this->owner->id,
