@@ -7,6 +7,7 @@ use App\Models\MatchPreference;
 use App\Models\Order;
 use App\Models\User;
 use App\Notifications\OrderNotification;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
 /**
@@ -18,6 +19,8 @@ use Illuminate\Support\Carbon;
  */
 class MatchService
 {
+    public const MATCH_TITLE = '매칭 운행 도착';
+
     /**
      * 공개된 운행을 조건에 맞는 기사에게 매칭 제안(알림)한다.
      *
@@ -25,15 +28,12 @@ class MatchService
      */
     public function matchForOrder(Order $order): int
     {
-        if (! in_array($order->status, [
-            Order::STATUS_PUBLISHED,
-            Order::STATUS_TRADING,
-        ], true)) {
+        if (! $this->isOfferable($order)) {
             return 0;
         }
 
-        // 가져오기 요청(승인 대기)이 걸린 운행은 매칭 대상에서 제외
-        if ($order->claimant_user_id !== null) {
+        // 서비스 날짜가 이미 지난 운행은 매칭하지 않는다
+        if (filled($order->service_date) && $order->service_date < now('Asia/Seoul')->format('Y-m-d')) {
             return 0;
         }
 
@@ -55,18 +55,111 @@ class MatchService
                 continue;
             }
 
-            $revenueText = $order->expected_revenue > 0 ? " (예상 {$order->expected_revenue}원)" : '';
+            // 같은 운행에 대한 매칭 알림이 이미 있으면 보내지 않는다 (재공개·재스캔 대비)
+            if ($this->alreadyNotified($user, $order)) {
+                continue;
+            }
 
-            $user->notify(new OrderNotification(
-                '매칭 운행 도착',
-                "{$order->customer_name}님의 {$order->rideSummary()} 운행이 설정 조건에 맞아 매칭되었습니다{$revenueText}. 수락하시겠어요?",
-                $order->id,
-            ));
+            $this->sendMatchNotification($user, $order);
 
             $matched++;
         }
 
         return $matched;
+    }
+
+    /**
+     * 콜링(온라인+매칭 켬)을 시작한 기사에게 현재 열려 있는 매칭 운행을 알린다.
+     * 운행 공개 시점에 오프라인/매칭 꺼짐이던 기사가 놓친 매칭을 되돌려 받는다.
+     *
+     * @return int 매칭 제안을 보낸 운행 수
+     */
+    public function matchForDriver(User $user): int
+    {
+        if ($user->role !== User::ROLE_DRIVER) {
+            return 0;
+        }
+
+        $driver = $user->driver()->first();
+
+        if ($driver === null || $driver->status !== Driver::STATUS_ONLINE || ! $driver->match_enabled) {
+            return 0;
+        }
+
+        $preferences = $user->matchPreferences()->where('is_active', true)->get();
+
+        if ($preferences->isEmpty()) {
+            return 0;
+        }
+
+        $matched = 0;
+
+        foreach ($this->availableOrders()->get() as $order) {
+            foreach ($preferences as $preference) {
+                if (! $this->isEligible($user, $preference, $order)) {
+                    continue;
+                }
+
+                if ($this->alreadyNotified($user, $order)) {
+                    break;
+                }
+
+                $this->sendMatchNotification($user, $order);
+
+                $matched++;
+
+                break;
+            }
+        }
+
+        return $matched;
+    }
+
+    /**
+     * 매칭 대상 운행 — 마켓에 열려 있고(공개/거래중, 가져오기 요청 없음) 서비스 날짜가 지나지 않은 운행.
+     */
+    private function availableOrders(): Builder
+    {
+        return Order::query()
+            ->whereIn('status', [Order::STATUS_PUBLISHED, Order::STATUS_TRADING])
+            ->whereNull('claimed_at')
+            ->where(function ($query) {
+                $query->where('service_date', '>=', now('Asia/Seoul')->format('Y-m-d'))
+                    ->orWhereNull('service_date')
+                    ->orWhere('service_date', '');
+            });
+    }
+
+    /**
+     * 운행이 매칭 제안 대상인지 (공개/거래중 + 가져오기 요청 없음).
+     */
+    private function isOfferable(Order $order): bool
+    {
+        return in_array($order->status, [Order::STATUS_PUBLISHED, Order::STATUS_TRADING], true)
+            && $order->claimant_user_id === null;
+    }
+
+    /**
+     * 같은 운행에 대해 이미 '매칭 운행 도착' 알림을 보냈는지 확인한다.
+     */
+    private function alreadyNotified(User $user, Order $order): bool
+    {
+        return $user->notifications()
+            ->where('type', OrderNotification::class)
+            ->where('data->order_id', $order->id)
+            ->where('data->title', self::MATCH_TITLE)
+            ->exists();
+    }
+
+    private function sendMatchNotification(User $user, Order $order): void
+    {
+        $revenueText = $order->expected_revenue > 0 ? " (예상 {$order->expected_revenue}원)" : '';
+
+        $user->notify(new OrderNotification(
+            self::MATCH_TITLE,
+            "{$order->customer_name}님의 {$order->rideSummary()} 운행이 설정 조건에 맞아 매칭되었습니다{$revenueText}. 수락하시겠어요?",
+            $order->id,
+        ));
     }
 
     /**

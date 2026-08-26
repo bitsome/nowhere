@@ -5,6 +5,7 @@ namespace App\Services\Driver;
 use App\Models\Driver;
 use App\Models\Order;
 use App\Models\User;
+use App\Services\MatchService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
@@ -14,6 +15,10 @@ use Illuminate\Support\Carbon;
 class DriverService
 {
     private const SELF_STATUSES = [Driver::STATUS_OFFLINE, Driver::STATUS_ONLINE, Driver::STATUS_REST];
+
+    public function __construct(
+        private readonly MatchService $matchService,
+    ) {}
 
     public function statuses(): array
     {
@@ -54,6 +59,11 @@ class DriverService
             'status_updated_at' => $now,
         ])->save();
 
+        // 콜링 조건(온라인 + 매칭 켬)을 갖춘 순간 현재 열려 있는 매칭 운행을 놓치지 않도록 알림
+        if ($status === Driver::STATUS_ONLINE && $driver->match_enabled) {
+            $this->matchService->matchForDriver($user);
+        }
+
         return $driver;
     }
 
@@ -66,6 +76,11 @@ class DriverService
 
         $driver = $this->driverFor($user);
         $driver->forceFill(['match_enabled' => $enabled])->save();
+
+        // 매칭을 켠 순간 이미 열려 있는 매칭 운행을 알림 (온라인 상태일 때만)
+        if ($enabled && $driver->status === Driver::STATUS_ONLINE) {
+            $this->matchService->matchForDriver($user);
+        }
 
         return $driver;
     }

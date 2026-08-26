@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\MatchPreference;
 use App\Models\User;
+use App\Services\MatchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -14,6 +15,10 @@ use Illuminate\Validation\Rule;
  */
 class MatchController extends Controller
 {
+    public function __construct(
+        private readonly MatchService $matchService,
+    ) {}
+
     /**
      * 내 매칭 설정 목록.
      *
@@ -37,6 +42,11 @@ class MatchController extends Controller
 
         $preference = $request->user()->matchPreferences()->create([...$data, 'user_id' => $request->user()->id]);
 
+        // 활성 설정으로 등록하면 현재 열려 있는 매칭 운행을 바로 알린다
+        if ((bool) ($data['is_active'] ?? true)) {
+            $this->matchService->matchForDriver($request->user());
+        }
+
         return response()->json(['data' => $this->payload($preference)], 201);
     }
 
@@ -48,6 +58,11 @@ class MatchController extends Controller
         $this->authorizeOwnership($request->user(), $preference);
 
         $preference->forceFill($this->validated($request))->save();
+
+        // 활성화 시점의 보류 매칭도 놓치지 않도록 재스캔
+        if ((bool) $preference->is_active) {
+            $this->matchService->matchForDriver($request->user());
+        }
 
         return response()->json(['data' => $this->payload($preference)]);
     }
