@@ -318,7 +318,8 @@ onMounted(() => {
             </div>
         </n-card>
 
-        <n-card v-if="mode === 'manual' && !isEdit" :bordered="true" class="create-block">
+        <!-- 템플릿 — AI 구조화/직접 입력 모두에서 재사용 (수정 모드는 제외) -->
+        <n-card v-if="!isEdit" :bordered="true" class="create-block">
             <div class="template-head">
                 <strong>템플릿</strong>
                 <n-button size="small" secondary :disabled="!form.pickup_location && !form.dropoff_location" @click="templateOpen = true">
