@@ -1,7 +1,6 @@
 <script setup>
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { useAuthStore } from '../../stores/auth';
 import { statusColorVar } from '../../utils/colors';
 import BaseIcon from '../common/BaseIcon.vue';
 
@@ -27,7 +26,6 @@ const props = defineProps({
 const emit = defineEmits(['toggle']);
 
 const router = useRouter();
-const auth = useAuthStore();
 
 const open = () => router.push({ name: 'order-detail', params: { id: props.order.id } });
 
@@ -44,11 +42,6 @@ const handleClick = () => {
 
 // 상태별 배지 색상 — 중앙 팔레트(utils/colors.js)에서 참조 (테마 자동 적용)
 const statusColor = computed(() => statusColorVar[props.order.status] ?? 'var(--status-draft)');
-
-// 가져오기 요청(수락 대기) — 요청자가 나인지 여부
-const isMyClaim = computed(() =>
-    props.order.status === 'acceptance_pending' && props.order.claimantUserId === auth.user?.id,
-);
 </script>
 
 <template>
@@ -100,13 +93,6 @@ const isMyClaim = computed(() =>
         </div>
         <div class="order-card__meta">
             <span class="order-card__amount">{{ order.amount }}</span>
-        </div>
-
-        <!-- 가져오기 요청(수락 대기) 상태 — 등록자는 요청자, 요청자는 승인 안내 -->
-        <div v-if="order.status === 'acceptance_pending'" class="order-card__claim">
-            <span class="order-card__claim-dot" />
-            <span v-if="isMyClaim">등록자 승인이 필요합니다</span>
-            <span v-else>{{ order.claimantName }}님이 가져오기를 요청</span>
         </div>
     </article>
 </template>
@@ -262,28 +248,6 @@ const isMyClaim = computed(() =>
     border-top: 1px solid var(--border);
     color: var(--text-muted);
     font-size: 11px;
-}
-
-/* 가져오기 요청(수락 대기) 힌트 바 */
-.order-card__claim {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    margin-top: 12px;
-    padding: 9px 12px;
-    border-radius: 10px;
-    background: color-mix(in srgb, var(--status-acceptance-pending) 12%, transparent);
-    color: var(--text);
-    font-size: 11px;
-    font-weight: 600;
-}
-
-.order-card__claim-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--status-acceptance-pending);
-    flex-shrink: 0;
 }
 
 /* 임박 배지 — 곧 운행 시작 (빨강 펄스) */
