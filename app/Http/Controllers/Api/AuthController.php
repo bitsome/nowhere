@@ -29,7 +29,7 @@ class AuthController extends Controller
             'name' => $data['name'],
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
-            'role' => 'driver', // 신규 가입자는 드라이버로 시작
+            'role' => User::ROLE_DRIVER, // 신규 가입자는 드라이버로 시작
         ]);
 
         return response()->json([

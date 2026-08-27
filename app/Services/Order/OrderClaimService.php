@@ -7,12 +7,18 @@ use App\Models\Driver;
 use App\Models\Order;
 use App\Models\User;
 use App\Notifications\OrderNotification;
+use Illuminate\Support\Facades\DB;
 
 /**
  * 운행 가져오기(claim) 라이프사이클 — 요청/승인/거절의 비즈니스 규칙을 담당한다.
  */
 class OrderClaimService
 {
+    /**
+     * 거절·철회된 드라이버의 재신청 잠금 시간(초) — 같은 운행에 반복 신청을 막는다.
+     */
+    public const CLAIM_LOCK_SECONDS = 30;
+
     public function __construct(
         private readonly OrderOfferService $offerService,
     ) {}
@@ -23,32 +29,55 @@ class OrderClaimService
      */
     public function claim(User $actor, Order $order): void
     {
-        abort_unless(in_array($order->status, [
-            Order::STATUS_PUBLISHED,
-            Order::STATUS_TRADING,
-        ], true), 403, '현재 상태에서는 가져올 수 없습니다.');
+        abort_unless($actor->role === User::ROLE_DRIVER, 403, '기사만 운행을 가져올 수 있습니다.');
 
         abort_unless($order->user_id !== $actor->id, 403, '본인 운행은 가져올 수 없습니다.');
 
-        abort_unless($order->claimant_user_id === null, 403, '이미 다른 드라이버가 가져오기를 요청했습니다.');
+        // 동시에 여러 드라이버가 같은 운행을 가져오는 것을 막기 위해
+        // 행 잠금으로 직렬화한 뒤 상태·요청자를 다시 검사한다 (검사-저장 원자화).
+        DB::transaction(function () use ($actor, $order) {
+            $locked = Order::query()->lockForUpdate()->find($order->id);
 
-        $registrantId = $order->user_id;
+            abort_unless($locked !== null, 404, '운행을 찾을 수 없습니다.');
 
-        // 첫 가져오기라면 원 등록자를 기록 (상호 리뷰 대상 식별)
-        if ($order->original_owner_id === null) {
-            $order->forceFill(['original_owner_id' => $registrantId]);
-        }
+            abort_unless(in_array($locked->status, [
+                Order::STATUS_PUBLISHED,
+                Order::STATUS_TRADING,
+            ], true), 403, '현재 상태에서는 가져올 수 없습니다.');
 
-        $order->forceFill([
-            'status' => Order::STATUS_ACCEPTANCE_PENDING,
-            'claimed_at' => now(),
-            'claimant_user_id' => $actor->id,
-        ])->save();
+            abort_unless($locked->claimant_user_id === null, 403, '이미 다른 드라이버가 가져오기를 요청했습니다.');
+
+            // 재신청 잠금 — 거절·철회된 드라이버는 30초 동안 같은 운행에 다시 신청할 수 없다
+            if ($locked->claim_lock_driver_id === $actor->id
+                && $locked->claim_lock_until !== null
+                && $locked->claim_lock_until->isFuture()) {
+                abort(429, '방금 신청이 처리되었습니다. '.self::CLAIM_LOCK_SECONDS.'초 후 다시 신청할 수 있습니다.');
+            }
+
+            $registrantId = $locked->user_id;
+
+            // 첫 가져오기라면 원 등록자를 기록 (상호 리뷰 대상 식별)
+            if ($locked->original_owner_id === null) {
+                $locked->forceFill(['original_owner_id' => $registrantId]);
+            }
+
+            $locked->forceFill([
+                'status' => Order::STATUS_ACCEPTANCE_PENDING,
+                'claimed_at' => now(),
+                'claimant_user_id' => $actor->id,
+                'claim_lock_driver_id' => null,
+                'claim_lock_until' => null,
+            ])->save();
+        });
+
+        // 컨트롤러 응답이 최신 상태를 반환하도록 원본 인스턴스도 동기화
+        $order->refresh();
 
         // 운행이 마켓에서 벗어났으므로 남아 있는 요금 제안은 모두 정리
         $this->offerService->cancelPendingFor($order);
 
-        // 등록자에게 승인 요청 알림
+        // 등록자에게 승인 요청 알림 (가져오기 요청 후에도 등록자는 user_id에 그대로 남는다)
+        $registrantId = $order->user_id;
         $registrant = User::query()->find($registrantId);
 
         if ($registrant !== null && $registrantId !== $actor->id) {
@@ -156,6 +185,8 @@ class OrderClaimService
             'user_id' => $order->claimant_user_id,
             'claimant_user_id' => null,
             'status' => Order::STATUS_ACCEPTED,
+            'claim_lock_driver_id' => null,
+            'claim_lock_until' => null,
         ])->save();
 
         // 운행이 확정되었으므로 남아 있는 요금 제안은 모두 정리
@@ -194,6 +225,9 @@ class OrderClaimService
             'status' => Order::STATUS_PUBLISHED,
             'claimant_user_id' => null,
             'claimed_at' => null,
+            // 철회한 드라이버도 재신청 잠금 — 반복 철회·신청 악용 방지
+            'claim_lock_driver_id' => $order->claimant_user_id,
+            'claim_lock_until' => now()->addSeconds(self::CLAIM_LOCK_SECONDS),
         ])->save();
     }
 
@@ -212,6 +246,9 @@ class OrderClaimService
             'status' => Order::STATUS_PUBLISHED,
             'claimant_user_id' => null,
             'claimed_at' => null,
+            // 거절당한 드라이버는 30초 동안 같은 운행에 재신청할 수 없다
+            'claim_lock_driver_id' => $claimant?->id,
+            'claim_lock_until' => now()->addSeconds(self::CLAIM_LOCK_SECONDS),
         ])->save();
 
         if ($claimant !== null) {

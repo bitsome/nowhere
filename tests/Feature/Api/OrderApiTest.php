@@ -2,7 +2,9 @@
 
 use App\Models\Order;
 use App\Models\User;
+use App\Models\Vehicle;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Laravel\Sanctum\Sanctum;
 
@@ -11,6 +13,7 @@ uses(RefreshDatabase::class);
 beforeEach(function () {
     $this->driver = User::factory()->create([
         'id' => 2,
+        'role' => User::ROLE_DRIVER,
         'permissions' => ['order.create', 'order.status.update'],
     ]);
 
@@ -403,6 +406,31 @@ test('api order claim requests the market order and notifies the owner', functio
     expect($ownerNotification?->data['order_id'])->toBe($order->id);
 });
 
+test('액션 센터의 가져오기 요청에 기사가 사용하는 차량이 포함된다', function () {
+    Vehicle::create([
+        'user_id' => $this->driver->id,
+        'name' => '내 카니발',
+        'type' => '카니발',
+        'license_plate' => '12가3456',
+        'is_default' => true,
+    ]);
+
+    $order = Order::factory()->create([
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    $this->postJson("/api/orders/{$order->id}/claim")->assertOk();
+
+    Sanctum::actingAs($this->marketUser);
+
+    $this->getJson('/api/actions')
+        ->assertOk()
+        ->assertJsonCount(1, 'data.claims')
+        ->assertJsonPath('data.claims.0.claimant.name', $this->driver->name)
+        ->assertJsonPath('data.claims.0.claimant.vehicle.license_plate', '12가3456');
+});
+
 test('api order claim rejects claiming my own order', function () {
     $order = Order::factory()->create([
         'status' => Order::STATUS_PUBLISHED,
@@ -410,6 +438,81 @@ test('api order claim rejects claiming my own order', function () {
     ]);
 
     $this->postJson("/api/orders/{$order->id}/claim")->assertForbidden();
+});
+
+test('같은 운행에 두 번째 드라이버의 가져오기 요청은 거부된다', function () {
+    $order = Order::factory()->create([
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    // 첫 번째 드라이버가 가져오기 요청
+    $this->postJson("/api/orders/{$order->id}/claim")->assertOk();
+    expect($order->fresh()?->claimant_user_id)->toBe($this->driver->id);
+
+    // 두 번째 드라이버가 같은 운행에 가져오기 요청 → 거부
+    $otherDriver = User::factory()->create(['role' => User::ROLE_DRIVER]);
+    Sanctum::actingAs($otherDriver);
+
+    $this->postJson("/api/orders/{$order->id}/claim")->assertForbidden();
+
+    // 요청자는 첫 번째 드라이버로 유지된다
+    expect($order->fresh()?->claimant_user_id)->toBe($this->driver->id);
+});
+
+test('거절당한 드라이버는 30초 내에 같은 운행에 다시 신청할 수 없다', function () {
+    $order = Order::factory()->create([
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    // 드라이버가 신청 → 등록자가 거절
+    $this->postJson("/api/orders/{$order->id}/claim")->assertOk();
+
+    Sanctum::actingAs($this->marketUser);
+    $this->postJson("/api/orders/{$order->id}/claim/reject")->assertOk();
+
+    // 같은 드라이버가 곧바로 재신청 → 30초 잠금
+    Sanctum::actingAs($this->driver);
+    $this->postJson("/api/orders/{$order->id}/claim")->assertStatus(429);
+
+    // 30초가 지나면 다시 신청 가능
+    Carbon::setTestNow(now()->addSeconds(31));
+    $this->postJson("/api/orders/{$order->id}/claim")->assertOk();
+
+    Carbon::setTestNow();
+});
+
+test('철회한 드라이버도 30초 내에 같은 운행에 다시 신청할 수 없다', function () {
+    $order = Order::factory()->create([
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    // 드라이버가 신청 → 스스로 철회 (published 복귀)
+    $this->postJson("/api/orders/{$order->id}/claim")->assertOk();
+    $this->postJson("/api/orders/{$order->id}/status", ['status' => Order::STATUS_PUBLISHED])->assertOk();
+
+    // 같은 드라이버가 곧바로 재신청 → 30초 잠금
+    $this->postJson("/api/orders/{$order->id}/claim")->assertStatus(429);
+
+    // 30초가 지나면 다시 신청 가능
+    Carbon::setTestNow(now()->addSeconds(31));
+    $this->postJson("/api/orders/{$order->id}/claim")->assertOk();
+
+    Carbon::setTestNow();
+});
+
+test('기사가 아닌 사용자는 가져오기 요청을 보낼 수 없다', function () {
+    $order = Order::factory()->create([
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    $operator = User::factory()->create(['role' => User::ROLE_OPERATOR]);
+    Sanctum::actingAs($operator);
+
+    $this->postJson("/api/orders/{$order->id}/claim")->assertStatus(403);
 });
 
 test('api order transition follows the lifecycle rules', function () {
@@ -789,7 +892,7 @@ test('registered list includes taken-over orders and labels completed as settlem
     ]);
 
     $response = $this->actingAs($registrant)
-        ->getJson('/api/orders?scope=mine&source=registered&tab=완료')
+        ->getJson('/api/orders?scope=mine&source=registered&tab=정산')
         ->assertOk();
 
     $rows = $response->json('data');

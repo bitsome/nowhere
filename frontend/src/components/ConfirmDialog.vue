@@ -55,7 +55,7 @@ const emit = defineEmits(['confirm', 'cancel', 'update:open']);
 .confirm-dialog__message {
     margin: 0;
     color: var(--text);
-    font-size: 14px;
+    font-size: 11px;
     line-height: 1.6;
     white-space: pre-wrap;
 }

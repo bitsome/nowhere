@@ -354,22 +354,22 @@ onMounted(() => {
 .chat-thread__messages{flex:1;overflow-y:auto;padding:12px 14px 16px;display:flex;flex-direction:column;gap:6px;-webkit-overflow-scrolling:touch}
 
 /* 날짜 구분선 — 양쪽 라인 + 가운데 날짜 */
-.chat-day-sep{display:flex;align-items:center;gap:10px;margin:14px 0 8px;color:var(--text-muted);font-size:12px;font-weight:600;flex-shrink:0}
+.chat-day-sep{display:flex;align-items:center;gap:10px;margin:14px 0 8px;color:var(--text-muted);font-size: 11px;font-weight:600;flex-shrink:0}
 .chat-day-sep::before,.chat-day-sep::after{content:'';flex:1;height:1px;background:var(--border)}
 
 /* 채팅 유형 카테고리 — 요청 이벤트 유형별 구분 라벨 */
-.chat-type-sep{align-self:center;margin:6px 0 2px;padding:3px 12px;border-radius:999px;background:color-mix(in srgb,var(--status-accepted) 10%,transparent);border:1px solid color-mix(in srgb,var(--status-accepted) 28%,transparent);color:var(--status-accepted);font-size:10px;font-weight:700;flex-shrink:0}
+.chat-type-sep{align-self:center;margin:6px 0 2px;padding:3px 12px;border-radius:999px;background:color-mix(in srgb,var(--status-accepted) 10%,transparent);border:1px solid color-mix(in srgb,var(--status-accepted) 28%,transparent);color:var(--status-accepted);font-size: 11px;font-weight:700;flex-shrink:0}
 
 /* 연결된 운행 카드 — 대화방 상단 */
 .chat-order-card{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;width:100%;text-align:left;margin-bottom:8px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface);cursor:pointer;box-shadow:0 1px 6px rgba(0,0,0,.05)}
 .chat-order-card:hover{border-color:var(--brand)}
-.chat-order-card__tag{flex-shrink:0;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--brand) 14%,transparent);color:var(--brand);font-size:11px;font-weight:700}
-.chat-order-card__route{flex:1;min-width:120px;font-size:13px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.chat-order-card__meta{width:100%;font-size:12px;color:var(--text-muted)}
+.chat-order-card__tag{flex-shrink:0;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--brand) 14%,transparent);color:var(--brand);font-size: 11px;font-weight:700}
+.chat-order-card__route{flex:1;min-width:120px;font-size: 11px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-order-card__meta{width:100%;font-size: 11px;color:var(--text-muted)}
 /* 운행 상태 색상 태그 — 상태별 팔레트 색상 */
-.chat-order-card__status{display:inline-flex;align-items:center;margin-right:6px;padding:2px 8px;border-radius:999px;color:#fff;font-size:10px;font-weight:700;white-space:nowrap}
+.chat-order-card__status{display:inline-flex;align-items:center;margin-right:6px;padding:2px 8px;border-radius:999px;color:#fff;font-size: 11px;font-weight:700;white-space:nowrap}
 html.dark .chat-order-card__status{color:#101418}
-.chat-order-card__amount{flex-shrink:0;font-size:13px;font-weight:700;color:var(--text)}
+.chat-order-card__amount{flex-shrink:0;font-size: 11px;font-weight:700;color:var(--text)}
 
 /* 입력 영역 — 미리보기 + 입력줄을 함께 감싼다 */
 .chat-thread__composer{border-top:1px solid var(--border);background:var(--surface)}
@@ -378,7 +378,7 @@ html.dark .chat-order-card__status{color:#101418}
 .chat-thread__preview{display:flex;padding:10px 14px 0}
 .chat-thread__preview-thumb{position:relative;width:64px;height:64px}
 .chat-thread__preview-thumb img{width:64px;height:64px;object-fit:cover;border-radius:10px;border:1px solid var(--border)}
-.chat-thread__preview-remove{position:absolute;top:-7px;right:-7px;display:flex;align-items:center;justify-content:center;width:20px;height:20px;border:0;border-radius:50%;background:rgba(0,0,0,.65);color:#fff;font-size:14px;line-height:1;cursor:pointer}
+.chat-thread__preview-remove{position:absolute;top:-7px;right:-7px;display:flex;align-items:center;justify-content:center;width:20px;height:20px;border:0;border-radius:50%;background:rgba(0,0,0,.65);color:#fff;font-size: 11px;line-height:1;cursor:pointer}
 .chat-thread__preview-remove:hover{background:rgba(0,0,0,.85)}
 
 /* 전송 버튼 — 아이콘 우선 (38px 원형) */
@@ -398,10 +398,10 @@ html.dark .chat-order-card__status{color:#101418}
 .chat-thread__attach svg{width:18px;height:18px}
 .chat-thread__attach--active{color:var(--brand);border-color:var(--brand)}
 .chat-thread__attach:disabled{opacity:.5;cursor:not-allowed}
-.chat-thread__input input{flex:1;border:1px solid var(--border);border-radius:20px;padding:10px 16px;font-size:14px;background:var(--bg);color:var(--text);outline:none}
+.chat-thread__input input{flex:1;border:1px solid var(--border);border-radius:20px;padding:10px 16px;font-size: 11px;background:var(--bg);color:var(--text);outline:none}
 .chat-thread__input input:focus{border-color:var(--brand)}
 
 /* 새 메시지 도착 배지 */
-.chat-thread__jump{position:absolute;bottom:calc(64px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:10;display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:0;border-radius:999px;background:var(--brand);color:#fff;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px color-mix(in srgb,var(--brand) 40%,transparent)}
+.chat-thread__jump{position:absolute;bottom:calc(64px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:10;display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:0;border-radius:999px;background:var(--brand);color:#fff;font-size: 11px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px color-mix(in srgb,var(--brand) 40%,transparent)}
 .chat-thread__jump svg{width:16px;height:16px}
 </style>

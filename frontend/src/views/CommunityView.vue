@@ -557,7 +557,7 @@ onMounted(() => {
     border-radius: 999px;
     background: var(--surface);
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
@@ -585,7 +585,7 @@ onMounted(() => {
     border-radius: 999px;
     background: var(--surface);
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
@@ -608,7 +608,7 @@ onMounted(() => {
 }
 
 .community-section__title {
-    font-size: 14px;
+    font-size: 11px;
     font-weight: 800;
     color: var(--text);
 }
@@ -641,7 +641,7 @@ onMounted(() => {
     border-radius: 6px;
     background: color-mix(in srgb, var(--danger) 14%, transparent);
     color: var(--danger);
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
 }
 
@@ -650,14 +650,14 @@ onMounted(() => {
     border-radius: 6px;
     background: color-mix(in srgb, var(--brand) 12%, transparent);
     color: var(--brand);
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
 }
 
 .popular-card__title {
     grid-column: 1 / -1;
     margin: 0;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 700;
     color: var(--text);
     white-space: nowrap;
@@ -708,7 +708,7 @@ onMounted(() => {
     border-radius: 50%;
     background: var(--brand-gradient);
     color: #ffffff;
-    font-size: 15px;
+    font-size: 11px;
     font-weight: 700;
     flex-shrink: 0;
     transition: transform 0.15s ease;
@@ -735,7 +735,7 @@ onMounted(() => {
     display: flex;
     align-items: center;
     gap: 5px;
-    font-size: 14px;
+    font-size: 11px;
     min-width: 0;
 }
 
@@ -747,7 +747,7 @@ onMounted(() => {
 
 .feed-card__time {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
     white-space: nowrap;
     flex-shrink: 0;
 }
@@ -767,7 +767,7 @@ onMounted(() => {
     border-radius: 6px;
     background: color-mix(in srgb, var(--brand) 12%, transparent);
     color: var(--brand);
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
 }
 
@@ -790,7 +790,7 @@ onMounted(() => {
     border-radius: 999px;
     background: linear-gradient(135deg, #f7b731, #f2994a);
     color: #ffffff;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
 }
 
@@ -805,7 +805,7 @@ onMounted(() => {
     justify-content: center;
     background: none;
     color: var(--text-muted);
-    font-size: 18px;
+    font-size: 14px;
     cursor: pointer;
     padding: 0;
     transition: background 0.12s ease;
@@ -819,7 +819,7 @@ onMounted(() => {
     white-space: pre-wrap;
     word-break: break-word;
     line-height: 1.65;
-    font-size: 14px;
+    font-size: 11px;
 }
 
 /* ── 이미지 ── */
@@ -889,7 +889,7 @@ html.dark .feed-card__image { background: rgba(255, 255, 255, 0.08); }
     border-radius: 999px;
     background: rgba(0, 0, 0, 0.6);
     color: #fff;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
 }
 
@@ -903,7 +903,7 @@ html.dark .feed-card__image { background: rgba(255, 255, 255, 0.08); }
     border: 1px solid color-mix(in srgb, var(--brand) 35%, transparent);
     background: color-mix(in srgb, var(--brand) 6%, transparent);
     color: var(--accent);
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
     text-decoration: none;
 }
@@ -930,7 +930,7 @@ html.dark .feed-card__image { background: rgba(255, 255, 255, 0.08); }
     border-radius: 8px;
     background: none;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     cursor: pointer;
     padding: 2px 6px;
     transition: background 0.12s ease;
@@ -959,11 +959,11 @@ html.dark .feed-card__comments { background: rgba(255, 255, 255, 0.03); }
 .comment-row {
     display: flex;
     gap: 8px;
-    font-size: 13px;
+    font-size: 11px;
     align-items: baseline;
 }
 
-.comment-row strong { flex-shrink: 0; color: var(--text); font-size: 13px; }
+.comment-row strong { flex-shrink: 0; color: var(--text); font-size: 11px; }
 .comment-row span { word-break: break-word; color: var(--text); }
 
 .comment-row__time {
@@ -993,7 +993,7 @@ html.dark .feed-card__comments { background: rgba(255, 255, 255, 0.03); }
     border: 0;
     background: none;
     color: var(--brand);
-    font-size: 13px;
+    font-size: 11px;
     cursor: pointer;
     padding: 2px 0;
     text-align: left;
@@ -1017,7 +1017,7 @@ html.dark .feed-card__comments { background: rgba(255, 255, 255, 0.03); }
     padding: 9px 16px;
     background: rgba(0, 0, 0, 0.04);
     color: var(--text);
-    font-size: 13px;
+    font-size: 11px;
     outline: none;
     transition: background 0.15s ease;
 }
@@ -1032,7 +1032,7 @@ html.dark .feed-card__composer input:focus { background: rgba(255, 255, 255, 0.0
     background: none;
     color: var(--brand);
     font-weight: 700;
-    font-size: 14px;
+    font-size: 11px;
     cursor: pointer;
     flex-shrink: 0;
     padding: 6px 4px;
@@ -1059,7 +1059,7 @@ html.dark .feed-card__composer input:focus { background: rgba(255, 255, 255, 0.0
     border-radius: 50%;
     background: var(--brand);
     color: #fff;
-    font-size: 26px;
+    font-size: 22px;
     font-weight: 600;
     line-height: 1;
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
@@ -1087,7 +1087,7 @@ html.dark .feed-card__composer input:focus { background: rgba(255, 255, 255, 0.0
     border-radius: 999px;
     background: var(--bg);
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
@@ -1117,7 +1117,7 @@ html.dark .feed-card__composer input:focus { background: rgba(255, 255, 255, 0.0
     align-items: center;
     gap: 6px;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     cursor: pointer;
 }
 

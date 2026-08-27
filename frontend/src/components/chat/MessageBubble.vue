@@ -66,13 +66,13 @@ const openImage = () => {
 /* 메시지 행 */
 .cb-row{display:flex;align-items:flex-end;gap:8px}
 .cb-row--mine{justify-content:flex-end}
-.cb-avatar{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;font-size:12px;font-weight:700;flex-shrink:0;align-self:flex-start}
+.cb-avatar{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;font-size: 11px;font-weight:700;flex-shrink:0;align-self:flex-start}
 .cb-avatar--mine,.cb-avatar--hidden{visibility:hidden}
 
 /* 말풍선 */
 .cb-col{display:flex;flex-direction:column;max-width:75%}
 .cb-row--mine .cb-col{align-items:flex-end}
-.cb-name{font-size:11px;color:var(--text-muted);margin:0 6px 3px;font-weight:600}
+.cb-name{font-size: 11px;color:var(--text-muted);margin:0 6px 3px;font-weight:600}
 .cb-bubble{padding:10px 14px;border-radius:16px;background:var(--surface);border:1px solid var(--border)}
 .cb-bubble--mine{background:var(--brand);color:#fff;border-color:var(--brand)}
 
@@ -83,10 +83,10 @@ const openImage = () => {
 .cb-row--mine .cb-bubble--tail-top{border-bottom-right-radius:0}
 .cb-row--mine .cb-bubble--tail-bottom{border-top-right-radius:0}
 .cb-row--mine .cb-bubble--mid{border-top-right-radius:0;border-bottom-right-radius:0}
-.cb-bubble__body{font-size:14px;word-break:break-word;line-height:1.5;white-space:pre-wrap}
+.cb-bubble__body{font-size: 11px;word-break:break-word;line-height:1.5;white-space:pre-wrap}
 .cb-bubble__image{display:block;max-width:min(260px,100%);max-height:300px;border-radius:10px;object-fit:cover;cursor:zoom-in;margin-bottom:4px}
 .cb-meta{display:flex;align-items:center;gap:6px;margin-top:2px;padding:0 4px}
 .cb-meta--mine{justify-content:flex-end}
-.cb-meta__read{font-size:10px;color:var(--text-muted)}
-.cb-meta__time{font-size:11px;color:var(--text-muted)}
+.cb-meta__read{font-size: 11px;color:var(--text-muted)}
+.cb-meta__time{font-size: 11px;color:var(--text-muted)}
 </style>

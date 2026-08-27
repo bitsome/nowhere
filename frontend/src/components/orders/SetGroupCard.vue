@@ -47,7 +47,7 @@ const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
                 <span class="status-badge" :class="`status-badge--${set.status}`" :style="{ background: statusColor, borderColor: statusColor }">
                     {{ set.statusLabel }}
                 </span>
-                <span v-if="set.routes[0]?.vehicle || set.routes[0]?.passengerCount" class="set-card__side-line">
+                <span v-if="set.routes[0]?.vehicle || set.routes[0]?.passengerCount || set.routes[0]?.flightNumber" class="set-card__side-line">
                     <span v-if="set.routes[0]?.vehicle" class="side-chip">
                         <BaseIcon class="side-chip__icon" name="car" :size="12" />
                         {{ set.routes[0].vehicle }}
@@ -55,6 +55,10 @@ const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
                     <span v-if="set.routes[0]?.passengerCount" class="side-chip">
                         <BaseIcon class="side-chip__icon" name="people" :size="12" />
                         {{ set.routes[0].passengerCount }}명
+                    </span>
+                    <span v-if="set.routes[0]?.flightNumber" class="side-chip">
+                        <BaseIcon class="side-chip__icon" name="airplane" :size="12" />
+                        {{ set.routes[0].flightNumber }}
                     </span>
                 </span>
             </div>
@@ -69,8 +73,6 @@ const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
                 <span class="set-card__route-time">{{ route.date }} {{ route.time }}</span>
                 <span class="set-card__route-dot">{{ route.serviceLabel }}</span>
                 <strong class="set-card__route-name">{{ route.route }}</strong>
-                <span v-if="index === 0 && set.isToday" class="set-card__today">오늘</span>
-                <span v-else-if="index === 0 && set.isTomorrow" class="set-card__tomorrow">내일</span>
             </div>
         </div>
 
@@ -149,7 +151,7 @@ const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
     border-radius: 10px;
     background: var(--brand-gradient);
     color: #ffffff;
-    font-size: 15px;
+    font-size: 11px;
     font-weight: 700;
     flex-shrink: 0;
 }
@@ -164,12 +166,12 @@ const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 15px;
+    font-size: 11px;
 }
 
 .set-card__count {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
     margin-top: 2px;
 }
 
@@ -205,7 +207,7 @@ const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
     border-radius: 999px;
     background: var(--danger);
     color: #ffffff;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: -0.2px;
     box-shadow: 0 1px 4px rgba(229, 72, 77, 0.4);
@@ -226,16 +228,19 @@ const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
 .status-badge {
     display: inline-flex;
     align-items: center;
-    padding: 4px 12px;
+    padding: 1px 6px;
     border-radius: 999px;
     color: #ffffff;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 10px;
     white-space: nowrap;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
-/* 다크모드 — 밝은 틸(#63e2b7) 배지 위엔 검은 글자 */
+/* 밝은 배경 배지 — 흰 글자 대비가 약하므로 라이트·다크 모두 어두운 글자 (접근성) */
+.status-badge--published,
+.status-badge--driving,
+.status-badge--trading,
+.status-badge--acceptance-pending,
 html.dark .status-badge--published,
 html.dark .status-badge--driving {
     color: #101418;
@@ -254,12 +259,12 @@ html.dark .status-badge--driving {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 14px;
+    font-size: 11px;
 }
 
 .set-card__route-time {
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     flex-shrink: 0;
     min-width: 88px;
 }
@@ -283,7 +288,7 @@ html.dark .set-card__route-dot {
     justify-content: space-between;
     margin-top: 14px;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .set-card__route-name {
@@ -300,8 +305,9 @@ html.dark .set-card__route-dot {
     justify-content: flex-end;
     gap: 10px;
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
     white-space: nowrap;
+    opacity: 0.85;
 }
 
 .side-chip {
@@ -316,27 +322,9 @@ html.dark .set-card__route-dot {
     flex-shrink: 0;
 }
 
-.set-card__today,
-.set-card__tomorrow {
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 700;
-}
-
-.set-card__today {
-    background: color-mix(in srgb, var(--status-completed) 12%, transparent);
-    color: var(--status-completed);
-}
-
-.set-card__tomorrow {
-    background: color-mix(in srgb, var(--warn) 14%, transparent);
-    color: var(--warn);
-}
-
 .set-card__amount {
     color: var(--text);
     font-weight: 700;
-    font-size: 15px;
+    font-size: 11px;
 }
 </style>

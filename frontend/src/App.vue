@@ -218,6 +218,7 @@ let driverTimer = null;
         :theme-overrides="naiveThemeOverrides(theme.isDark)"
     >
         <n-message-provider>
+            <n-dialog-provider>
             <n-notification-provider>
                 <div class="app-shell" :class="{ 'app-shell--ready': initReady || !auth.token }">
 
@@ -286,6 +287,7 @@ let driverTimer = null;
                 <ChatListener v-if="auth.isAuthenticated" />
             </div>
             </n-notification-provider>
+            </n-dialog-provider>
         </n-message-provider>
     </n-config-provider>
 </template>

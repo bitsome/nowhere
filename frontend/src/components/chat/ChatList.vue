@@ -159,7 +159,7 @@ const sections = computed(() => {
 <style scoped>
 /* 대화 목록 — 날짜 카테고리 + 개별 카드형 */
 .chat-list{display:flex;flex-direction:column;gap:10px;padding-top:12px;overflow:visible}
-.chat-list__sep{margin:2px 2px 0;font-size:12px;font-weight:800;color:var(--text-muted)}
+.chat-list__sep{margin:2px 2px 0;font-size: 11px;font-weight:800;color:var(--text-muted)}
 .chat-list__sep:not(:first-child){margin-top:18px}
 .chat-list__item{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:0 1px 3px rgba(0,0,0,.04);cursor:pointer;transition:border-color .12s ease,box-shadow .12s ease}
 .chat-list__item:hover{border-color:color-mix(in srgb,var(--brand) 35%,transparent);box-shadow:0 2px 8px rgba(0,0,0,.06)}
@@ -170,18 +170,18 @@ const sections = computed(() => {
 .chat-list__item--unread .chat-list__row > strong{font-weight:800}
 .chat-list__avatar--unread{box-shadow:0 0 0 2px var(--accent)}
 .chat-list__preview--unread{font-weight:700;color:var(--text)}
-.chat-list__avatar{display:flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:50%;background:var(--accent);color:#fff;font-size:16px;font-weight:700;flex-shrink:0}
+.chat-list__avatar{display:flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:50%;background:var(--accent);color:#fff;font-size: 12px;font-weight:700;flex-shrink:0}
 .chat-list__body{flex:1;min-width:0}
 .chat-list__row{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.chat-list__time{color:var(--text-muted);font-size:12px;flex-shrink:0}
-.chat-list__preview{color:var(--text-muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-list__time{color:var(--text-muted);font-size: 11px;flex-shrink:0}
+.chat-list__preview{color:var(--text-muted);font-size: 11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .chat-list__mine{font-weight:600;color:var(--text)}
-.chat-list__order-chip{flex-shrink:0;padding:1px 6px;border-radius:6px;background:color-mix(in srgb,var(--brand) 12%,transparent);color:var(--brand);font-size:11px;font-weight:700}
+.chat-list__order-chip{flex-shrink:0;padding:1px 6px;border-radius:6px;background:color-mix(in srgb,var(--brand) 12%,transparent);color:var(--brand);font-size: 11px;font-weight:700}
 /* 운행 경로 + 시간 */
 .chat-list__route{display:flex;align-items:center;gap:6px;margin-top:6px;min-width:0}
 .chat-list__route-dot{width:6px;height:6px;flex-shrink:0;border-radius:50%;background:var(--brand)}
-.chat-list__route-text{color:var(--text-muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.chat-list__type-chip{flex-shrink:0;padding:1px 6px;border-radius:6px;font-size:11px;font-weight:700}
+.chat-list__route-text{color:var(--text-muted);font-size: 11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chat-list__type-chip{flex-shrink:0;padding:1px 6px;border-radius:6px;font-size: 11px;font-weight:700}
 .chat-list__type-chip--green{background:rgba(99,226,183,.12);color:var(--brand)}
 .chat-list__type-chip--yellow{background:rgba(242,184,75,.14);color:#ffd071}
 .chat-list__type-chip--red{background:rgba(224,91,91,.12);color:#ff8a8a}

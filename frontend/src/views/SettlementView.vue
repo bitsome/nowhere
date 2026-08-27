@@ -22,14 +22,14 @@ const viewTab = ref('history');
 const isRegistrant = computed(() => auth.user?.role !== 'Driver');
 const pendingRows = ref([]);
 const pendingLoading = ref(false);
-const settle = useBatchSettle({ load: loadPending });
+const settle = useBatchSettle({ load: () => loadPending() });
 const { settling, settleMessage, settleAll } = settle;
 
 const loadPending = async () => {
     pendingLoading.value = true;
 
     try {
-        const { data } = await apiOrders({ scope: 'mine', tab: '완료', per_page: 100 });
+        const { data } = await apiOrders({ scope: 'mine', tab: '정산', per_page: 100 });
         const rows = Array.isArray(data.data) ? data.data : data.data?.data ?? [];
         pendingRows.value = rows.filter((row) => row.status === 'completed');
     } catch (e) {
@@ -322,14 +322,14 @@ onMounted(load);
 }
 
 .settle-pending-head strong {
-    font-size: 15px;
+    font-size: 11px;
     font-weight: 800;
 }
 
 .settle-pending-head__desc {
     margin: 5px 0 0;
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1.5;
 }
 
@@ -339,7 +339,7 @@ onMounted(load);
     border-radius: 10px;
     background: color-mix(in srgb, var(--brand) 8%, transparent);
     color: var(--brand);
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
 }
 
@@ -363,12 +363,12 @@ onMounted(load);
 
 .settle-summary__cell span {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .settle-summary__cell strong {
     color: var(--brand);
-    font-size: 16px;
+    font-size: 12px;
     font-weight: 800;
 }
 
@@ -404,14 +404,14 @@ onMounted(load);
 
 .settle-item__date {
     color: var(--text);
-    font-size: 14px;
+    font-size: 11px;
     font-weight: 700;
 }
 
 .settle-item__date em {
     margin-left: 6px;
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
     font-style: normal;
     font-weight: 500;
 }
@@ -419,7 +419,7 @@ onMounted(load);
 .settle-item__amount {
     flex-shrink: 0;
     color: var(--brand);
-    font-size: 15px;
+    font-size: 11px;
     font-weight: 800;
 }
 
@@ -429,7 +429,7 @@ onMounted(load);
     gap: 6px;
     margin: 6px 0 8px;
     color: var(--text);
-    font-size: 13px;
+    font-size: 11px;
     line-height: 1.5;
 }
 
@@ -449,7 +449,7 @@ onMounted(load);
     align-items: center;
     gap: 8px;
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .settle-item__tag {

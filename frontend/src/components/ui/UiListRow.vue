@@ -47,7 +47,7 @@ defineProps({
     background: transparent;
     color: var(--text);
     font-family: inherit;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
     text-align: left;
     text-decoration: none;
@@ -73,19 +73,19 @@ defineProps({
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 13px;
+    font-size: 11px;
 }
 .ui-row__body {
     flex: 1;
     min-width: 0;
 }
 .ui-row__value {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-muted);
 }
 .ui-row__arrow {
     color: var(--text-muted);
-    font-size: 16px;
+    font-size: 12px;
     font-weight: 300;
 }
 .ui-row__dot {

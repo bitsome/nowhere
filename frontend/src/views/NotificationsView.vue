@@ -211,7 +211,7 @@ const openNotification = async (notification) => {
 
 const formatWon = (v) => `${Number(v ?? 0).toLocaleString('ko-KR')}원`;
 
-// 제안·승인 처리는 액션 센터(처리할 일)에서 — 알림은 안내 역할만 한다
+// 제안·승인 처리는 처리할 일에서 — 알림은 안내 역할만 한다
 const goActions = () => {
     router.push({ name: 'actions' });
 };
@@ -285,14 +285,6 @@ const goActions = () => {
                         </div>
                         <div v-if="!notification.offer_id" class="v8-arrow"><BaseIcon name="arrow-forward" :size="14" /></div>
                     </a>
-
-                    <div class="v8-legend">
-                        <UiChip variant="yellow">요금 · 금액</UiChip>
-                        <UiChip variant="red">취소 · 거절 · 문제</UiChip>
-                        <UiChip variant="green">완료 · 정산 · 정상</UiChip>
-                        <UiChip variant="blue">채팅 · 요청</UiChip>
-                        <UiChip variant="purple">항공편</UiChip>
-                    </div>
 
                     <button type="button" class="v8-priority-go" @click="goActions">
                         처리할 일(운행 승인 · 제안 · 요청)로 이동 →
@@ -427,13 +419,13 @@ const goActions = () => {
 }
 .v8-head__title {
     margin: 0;
-    font-size: 22px;
+    font-size: 18px;
     font-weight: 800;
     letter-spacing: -0.5px;
 }
 .v8-head__sub {
     margin-top: 3px;
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-muted);
 }
 .v8-total {
@@ -462,7 +454,7 @@ html.dark .v8-priority {
     align-items: center;
 }
 .v8-priority-head b {
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 800;
 }
 .v8-priority-head span {
@@ -471,7 +463,7 @@ html.dark .v8-priority {
     background: color-mix(in srgb, var(--brand) 10%, transparent);
     border: 1px solid color-mix(in srgb, var(--brand) 22%, transparent);
     color: var(--brand);
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
 }
 .v8-priority-item {
@@ -548,7 +540,7 @@ html.dark .v8-priority-item.price {
     align-items: center;
     justify-content: center;
     font-weight: 900;
-    font-size: 15px;
+    font-size: 11px;
 }
 .v8-priority-body {
     flex: 1;
@@ -561,7 +553,7 @@ html.dark .v8-priority-item.price {
 .v8-priority-route {
     margin: 4px 0 0;
     color: var(--text-muted);
-    font-size: 10px;
+    font-size: 11px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -577,12 +569,12 @@ html.dark .v8-priority-item.price {
     display: inline-flex;
     padding: 2px 8px;
     border-radius: 999px;
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 800;
     white-space: nowrap;
 }
 .v8-priority-time {
-    font-size: 9px;
+    font-size: 11px;
     color: var(--text-muted);
     opacity: 0.75;
     white-space: nowrap;
@@ -600,15 +592,7 @@ html.dark .v8-priority-status--ride { color: #5de4d2; }
 .v8-priority-status--muted { background: color-mix(in srgb, var(--text-muted) 14%, transparent); color: var(--text-muted); }
 .v8-arrow {
     color: var(--brand);
-    font-size: 16px;
-}
-
-/* 범례 */
-.v8-legend {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    margin-top: 12px;
+    font-size: 12px;
 }
 
 /* 필터 */
@@ -666,7 +650,7 @@ html.dark .v8-priority-status--ride { color: #5de4d2; }
     align-items: center;
     gap: 6px;
     width: 100%;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 800;
     color: var(--text-muted);
     margin: 14px 0 7px;
@@ -685,7 +669,7 @@ html.dark .v8-priority-status--ride { color: #5de4d2; }
     padding: 1px 7px;
     border-radius: 999px;
     background: color-mix(in srgb, var(--text-muted) 14%, transparent);
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 700;
 }
 .v8-day__arrow {
@@ -726,7 +710,7 @@ html.dark .v8-priority-status--ride { color: #5de4d2; }
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
+    font-size: 11px;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
 }
 .v8-icon.req { background: rgba(14, 157, 108, 0.1); color: #0d8a63; border: 1px solid rgba(14, 157, 108, 0.3); }
@@ -753,12 +737,12 @@ html.dark .v8-icon.system { background: rgba(140, 151, 148, 0.1); color: #b6c0bc
     display: flex;
     align-items: center;
     gap: 5px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 800;
     color: var(--text);
 }
 .v8-desc {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-muted);
     line-height: 1.45;
     margin-top: 3px;
@@ -767,7 +751,7 @@ html.dark .v8-icon.system { background: rgba(140, 151, 148, 0.1); color: #b6c0bc
     text-overflow: ellipsis;
 }
 .v8-time {
-    font-size: 9px;
+    font-size: 11px;
     color: var(--text-muted);
     opacity: 0.75;
     margin-top: 4px;
@@ -781,7 +765,7 @@ html.dark .v8-icon.system { background: rgba(140, 151, 148, 0.1); color: #b6c0bc
     margin-top: 8px;
 }
 .v8-offer-actions__amount {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 800;
     color: var(--brand);
 }
@@ -825,7 +809,7 @@ html.dark .v8-icon.system { background: rgba(140, 151, 148, 0.1); color: #b6c0bc
     border-radius: 999px;
     border: 0;
     font-family: inherit;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
     cursor: pointer;
 }

@@ -581,7 +581,7 @@ onBeforeUnmount(() => {
 .admin-user__meta {
     margin: 4px 0 0;
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .admin-user__verify {
@@ -600,7 +600,7 @@ onBeforeUnmount(() => {
 
 .admin-user__verify-label {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .admin-user__verify-label--ok {
@@ -626,7 +626,7 @@ onBeforeUnmount(() => {
 
 .admin-pager__info {
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
 }
 
 /* 자동 운행 등록 설정 카드 */
@@ -648,14 +648,14 @@ onBeforeUnmount(() => {
 }
 
 .auto-card__head strong {
-    font-size: 15px;
+    font-size: 11px;
     font-weight: 800;
 }
 
 .auto-card__desc {
     margin: 6px 0 0;
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1.5;
 }
 
@@ -669,13 +669,13 @@ onBeforeUnmount(() => {
     flex-shrink: 0;
     width: 92px;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
 }
 
 .auto-card__value {
     color: var(--text);
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .auto-card__count {
@@ -687,12 +687,12 @@ onBeforeUnmount(() => {
 
 .auto-card__tilde {
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .auto-card__unit {
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .auto-card__footer {
@@ -719,14 +719,14 @@ onBeforeUnmount(() => {
 }
 
 .auto-history__head strong {
-    font-size: 15px;
+    font-size: 11px;
     font-weight: 800;
 }
 
 .auto-history__desc {
     margin: 6px 0 0;
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1.5;
 }
 
@@ -780,7 +780,7 @@ onBeforeUnmount(() => {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 700;
 }
 
@@ -794,7 +794,7 @@ onBeforeUnmount(() => {
 .auto-history__amount {
     flex-shrink: 0;
     color: var(--brand);
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 800;
     white-space: nowrap;
 }
@@ -830,7 +830,7 @@ onBeforeUnmount(() => {
     border-radius: 10px;
     background: var(--bg);
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
     text-align: center;
 }
 

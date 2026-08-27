@@ -85,7 +85,7 @@ const pwa = usePwaInstall();
     border: 0;
     background: none;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     border-radius: 8px;
@@ -113,11 +113,11 @@ const pwa = usePwaInstall();
 }
 
 .appear-row__text strong {
-    font-size: 15px;
+    font-size: 11px;
 }
 
 .appear-row__text span {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 </style>

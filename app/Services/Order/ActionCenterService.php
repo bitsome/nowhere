@@ -6,6 +6,7 @@ use App\Models\Message;
 use App\Models\Order;
 use App\Models\Review;
 use App\Models\User;
+use App\Models\Vehicle;
 
 /**
  * 처리할 일(액션 센터) — 운행 관련 대기 액션을 한곳에 모아 반환한다.
@@ -162,6 +163,7 @@ class ActionCenterService
             'name' => $user?->name ?? '',
             'rating' => $rating ? round((float) $rating->avg, 1) : 0,
             'review_count' => (int) ($rating->cnt ?? 0),
+            'vehicle' => $userId === null ? null : Vehicle::brief(Vehicle::activeVehicleFor($userId)),
         ];
     }
 }

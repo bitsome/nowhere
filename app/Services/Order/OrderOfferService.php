@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\OrderOffer;
 use App\Models\Review;
 use App\Models\User;
+use App\Models\Vehicle;
 use App\Notifications\OrderNotification;
 
 /**
@@ -20,6 +21,8 @@ class OrderOfferService
      */
     public function propose(User $driver, Order $order, int $amount, ?string $message): OrderOffer
     {
+        abort_unless($driver->role === User::ROLE_DRIVER, 403, '기사만 요금을 제안할 수 있습니다.');
+
         abort_unless(in_array($order->status, [Order::STATUS_PUBLISHED, Order::STATUS_TRADING], true), 403, '현재 상태에서는 제안할 수 없습니다.');
 
         abort_unless($order->claimant_user_id === null, 403, '이미 가져오기 요청이 걸린 운행입니다.');
@@ -280,6 +283,7 @@ class OrderOfferService
                 'name' => $driver?->name ?? '',
                 'rating' => $rating ? round((float) $rating->avg, 1) : 0,
                 'review_count' => (int) ($rating->cnt ?? 0),
+                'vehicle' => Vehicle::brief(Vehicle::activeVehicleFor($offer->driver_id)),
             ],
             'amount' => $offer->amount,
             'message' => $offer->message,

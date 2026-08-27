@@ -21,7 +21,7 @@ defineProps({
     border-radius: 7px;
     background: #edf0f2;
     border: 1px solid #dfe2e5;
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 700;
     color: var(--text-muted);
     white-space: nowrap;

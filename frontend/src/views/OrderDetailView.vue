@@ -42,8 +42,21 @@ const {
 
 onMounted(refresh);
 
-// 승인·제안 처리는 액션 센터(처리할 일)에서
+// 승인·제안 처리는 처리할 일에서
 const goActions = () => router.push({ name: 'actions' });
+
+// 기사 차량 요약 — 등록된 차량이 없으면 '미등록'으로 안내한다
+const vehicleText = (v) => {
+    if (!v) return '미등록';
+
+    const parts = [];
+    if (v.name) parts.push(v.name);
+    if (v.type) parts.push(v.type);
+    if (v.license_plate) parts.push(`[${v.license_plate}]`);
+    if (v.color) parts.push(v.color);
+
+    return parts.length ? parts.join(' ') : '미등록';
+};
 </script>
 
 <template>
@@ -64,8 +77,6 @@ const goActions = () => router.push({ name: 'actions' });
                     <span v-if="isWaitingClaims" class="hero-badge hero-badge--waiting">요청 대기중</span>
                     <span v-if="isPriority" class="hero-badge hero-badge--priority">긴급</span>
                     <span v-if="isUrgent" class="hero-badge hero-badge--urgent">임박</span>
-                    <span v-else-if="isToday" class="hero-badge hero-badge--today">오늘</span>
-                    <span v-else-if="isTomorrow" class="hero-badge hero-badge--tomorrow">내일</span>
                 </div>
                 <p class="detail-hero__meta">{{ serviceDatetimeLabel }}</p>
             </div>
@@ -490,6 +501,9 @@ const goActions = () => router.push({ name: 'actions' });
                                     <span v-if="offer.driver?.rating" class="offer-item__rating">
                                         ★ {{ offer.driver.rating }} ({{ offer.driver.review_count }})
                                     </span>
+                                    <span class="offer-item__vehicle">
+                                        {{ vehicleText(offer.driver?.vehicle) }}
+                                    </span>
                                     <n-tag size="small" round>{{ offer.status_label }}</n-tag>
                                     <span v-if="offer.message" class="offer-item__msg">{{ offer.message }}</span>
                                 </div>
@@ -675,7 +689,7 @@ const goActions = () => router.push({ name: 'actions' });
 .cancel-modal__desc {
     margin: 0 0 12px;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     line-height: 1.6;
 }
 .detail-body {
@@ -741,7 +755,7 @@ const goActions = () => router.push({ name: 'actions' });
 .offer-hint {
     margin: 0 0 12px;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     line-height: 1.6;
 }
 
@@ -785,24 +799,29 @@ const goActions = () => router.push({ name: 'actions' });
 }
 
 .offer-item__info strong {
-    font-size: 15px;
+    font-size: 11px;
 }
 
 .offer-item__driver {
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
 }
 
 .offer-item__rating {
     color: #ffa940;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
+}
+
+.offer-item__vehicle {
+    color: var(--text-muted, #999);
+    font-size: 11px;
 }
 
 .offer-item__msg {
     width: 100%;
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .offer-item__actions {
@@ -851,7 +870,7 @@ const goActions = () => router.push({ name: 'actions' });
     border: 2px solid var(--border);
     background: var(--surface);
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 800;
     z-index: 1;
 }
@@ -882,7 +901,7 @@ const goActions = () => router.push({ name: 'actions' });
 }
 
 .status-flow__label strong {
-    font-size: 14px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--text-muted);
 }
@@ -893,7 +912,7 @@ const goActions = () => router.push({ name: 'actions' });
 }
 
 .status-flow__label small {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
     color: var(--brand);
 }
@@ -903,7 +922,7 @@ const goActions = () => router.push({ name: 'actions' });
     padding-top: 12px;
     border-top: 1px dashed var(--border);
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
     text-align: right;
 }
 
@@ -915,7 +934,7 @@ const goActions = () => router.push({ name: 'actions' });
     background: color-mix(in srgb, var(--brand) 8%, transparent);
     border: 1px solid color-mix(in srgb, var(--brand) 25%, transparent);
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .detail-next-hint strong {
@@ -927,7 +946,7 @@ const goActions = () => router.push({ name: 'actions' });
 /* 운행 정보 그룹 제목 — 서비스/예약/기타 구분 */
 .detail-group-title {
     margin: 16px 0 4px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.02em;
     color: var(--text-muted);
@@ -958,12 +977,12 @@ const goActions = () => router.push({ name: 'actions' });
 .detail-row span {
     flex-shrink: 0;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .detail-row strong {
     text-align: right;
-    font-size: 14px;
+    font-size: 11px;
 }
 
 /* 일정 카드 */
@@ -986,32 +1005,32 @@ const goActions = () => router.push({ name: 'actions' });
 }
 
 .schedule-time {
-    font-size: 15px;
+    font-size: 11px;
 }
 
 .schedule-date {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .schedule-card__route {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 14px;
+    font-size: 11px;
     font-weight: 600;
 }
 
 .schedule-card__arrow {
     color: var(--accent);
-    font-size: 16px;
+    font-size: 12px;
     font-weight: 700;
 }
 
 .schedule-card__meta {
     margin-top: 6px;
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 /* 셋트 그룹 일정 리스트 */
@@ -1036,7 +1055,7 @@ const goActions = () => router.push({ name: 'actions' });
 /* 셋트 일정 금액 */
 .group-schedule-item__amount {
     margin-left: auto;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 700;
     color: var(--text);
 }
@@ -1048,7 +1067,7 @@ const goActions = () => router.push({ name: 'actions' });
 }
 
 .group-schedule-item__head strong {
-    font-size: 15px;
+    font-size: 11px;
 }
 
 .group-schedule-item__detach {
@@ -1057,14 +1076,14 @@ const goActions = () => router.push({ name: 'actions' });
 
 .group-schedule-item__route {
     margin-top: 6px;
-    font-size: 14px;
+    font-size: 11px;
     font-weight: 600;
 }
 
 .group-schedule-item__meta {
     margin-top: 4px;
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 /* ── 히어로 헤더 ── */
@@ -1090,7 +1109,7 @@ const goActions = () => router.push({ name: 'actions' });
 
 .detail-hero__eyebrow {
     margin: 0 0 8px;
-    font-size: 12px;
+    font-size: 11px;
     letter-spacing: 0.3px;
     opacity: 0.85;
 }
@@ -1100,7 +1119,7 @@ const goActions = () => router.push({ name: 'actions' });
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
-    font-size: 19px;
+    font-size: 15px;
     font-weight: 800;
     line-height: 1.3;
 }
@@ -1112,7 +1131,7 @@ const goActions = () => router.push({ name: 'actions' });
 
 .detail-hero__arrow {
     color: rgba(255, 255, 255, 0.75);
-    font-size: 20px;
+    font-size: 16px;
 }
 
 .detail-hero__badges {
@@ -1125,7 +1144,7 @@ const goActions = () => router.push({ name: 'actions' });
 .hero-badge {
     padding: 3px 10px;
     border-radius: 999px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
     color: #ffffff;
 }
@@ -1169,7 +1188,7 @@ const goActions = () => router.push({ name: 'actions' });
 
 .detail-hero__meta {
     margin: 8px 0 0;
-    font-size: 13px;
+    font-size: 11px;
     opacity: 0.9;
 }
 
@@ -1182,7 +1201,7 @@ const goActions = () => router.push({ name: 'actions' });
 }
 
 .detail-hero__amount {
-    font-size: 22px;
+    font-size: 18px;
     font-weight: 900;
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
 }
@@ -1224,7 +1243,7 @@ const goActions = () => router.push({ name: 'actions' });
 }
 
 .detail-map__label {
-    font-size: 14px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--text-muted);
 }
@@ -1233,7 +1252,7 @@ const goActions = () => router.push({ name: 'actions' });
     display: flex;
     align-items: center;
     gap: 12px;
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .detail-map__links a {
@@ -1244,7 +1263,7 @@ const goActions = () => router.push({ name: 'actions' });
 
 .detail-map__hint {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 /* ── 하단 액션 바 ── */

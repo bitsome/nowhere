@@ -44,7 +44,7 @@ const router = useRouter();
 
 .nf-code {
     display: inline-block;
-    font-size: 40px;
+    font-size: 36px;
     font-weight: 800;
     letter-spacing: 2px;
     color: var(--text-muted);
@@ -52,14 +52,14 @@ const router = useRouter();
 
 .nf-title {
     margin: 8px 0 6px;
-    font-size: 16px;
+    font-size: 12px;
     font-weight: 700;
 }
 
 .nf-desc {
     margin: 0 0 20px;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .nf-actions {

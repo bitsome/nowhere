@@ -298,7 +298,7 @@ onMounted(load);
     border-radius: 50%;
     background: var(--brand-gradient);
     color: #ffffff;
-    font-size: 28px;
+    font-size: 24px;
     font-weight: 700;
     flex-shrink: 0;
 }
@@ -314,13 +314,13 @@ onMounted(load);
 }
 
 .user-hero__name-row strong {
-    font-size: 19px;
+    font-size: 15px;
 }
 
 .user-hero__meta {
     display: block;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     margin-top: 2px;
 }
 
@@ -337,14 +337,14 @@ onMounted(load);
 }
 
 .user-rating__score {
-    font-size: 24px;
+    font-size: 20px;
     font-weight: 800;
     color: #ffa940;
 }
 
 .user-rating__count {
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     margin-left: auto;
 }
 
@@ -368,17 +368,17 @@ onMounted(load);
 
 .user-stats__label {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .user-stats__value {
-    font-size: 20px;
+    font-size: 16px;
     font-weight: 800;
     color: var(--text);
 }
 
 .user-stats__value small {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--text-muted);
     margin-left: 2px;
@@ -406,13 +406,13 @@ onMounted(load);
 }
 
 .review-row__author {
-    font-size: 14px;
+    font-size: 11px;
     font-weight: 700;
 }
 
 .review-row__content {
     margin-top: 8px;
-    font-size: 14px;
+    font-size: 11px;
     line-height: 1.55;
     color: var(--text);
     word-break: break-word;
@@ -422,7 +422,7 @@ onMounted(load);
     display: block;
     margin-top: 8px;
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .badge-row {
@@ -438,14 +438,14 @@ onMounted(load);
     gap: 4px;
     padding: 3px 10px;
     border-radius: 999px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     white-space: nowrap;
 }
 
 .user-hero__level-title {
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
 }
 
@@ -496,7 +496,7 @@ html.dark .badge--car {
 }
 
 .user-section__title {
-    font-size: 15px;
+    font-size: 11px;
     margin-bottom: 10px;
 }
 
@@ -521,7 +521,7 @@ html.dark .user-tabs {
     border-radius: 9px;
     background: none;
     color: var(--text-muted);
-    font-size: 14px;
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     transition: background 0.12s ease, color 0.12s ease;
@@ -571,18 +571,18 @@ html.dark .user-tabs {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 14px;
+    font-size: 11px;
 }
 
 .order-row__main span {
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     margin-top: 3px;
 }
 
 .order-row__amount {
     font-weight: 700;
-    font-size: 14px;
+    font-size: 11px;
     white-space: nowrap;
 }
 
@@ -591,7 +591,7 @@ html.dark .user-tabs {
     border-radius: 999px;
     background: var(--brand-soft);
     color: var(--brand);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     white-space: nowrap;
 }
@@ -613,7 +613,7 @@ html.dark .user-tabs {
     white-space: pre-wrap;
     word-break: break-word;
     line-height: 1.7;
-    font-size: 14px;
+    font-size: 11px;
 }
 
 .post-row__image {
@@ -673,7 +673,7 @@ html.dark .post-row__image {
     background: color-mix(in srgb, var(--brand) 8%, transparent);
     border: 1px solid color-mix(in srgb, var(--brand) 30%, transparent);
     color: var(--brand);
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
     text-decoration: none;
 }
@@ -685,6 +685,6 @@ html.dark .post-row__image {
     padding-top: 10px;
     border-top: 1px solid var(--border);
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 </style>

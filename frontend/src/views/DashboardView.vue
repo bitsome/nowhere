@@ -432,17 +432,17 @@ onBeforeUnmount(() => clearInterval(timer));
 
 .dash-upcoming__label {
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .dash-upcoming__value {
-    font-size: 26px;
+    font-size: 22px;
     font-weight: 700;
 }
 
 .dash-upcoming__value small {
     margin-left: 2px;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--text-muted);
 }
@@ -482,7 +482,7 @@ onBeforeUnmount(() => clearInterval(timer));
 
 .mini-list__time {
     font-weight: 700;
-    font-size: 13px;
+    font-size: 11px;
     flex-shrink: 0;
     min-width: 42px;
 }
@@ -493,13 +493,13 @@ onBeforeUnmount(() => clearInterval(timer));
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .mini-list__meta {
     flex-shrink: 0;
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
     white-space: nowrap;
 }
 
@@ -507,7 +507,7 @@ onBeforeUnmount(() => clearInterval(timer));
     margin: 8px 0 0;
     padding: 10px 6px;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     border-radius: 8px;
     background: rgba(0, 0, 0, 0.02);
 }
@@ -543,24 +543,24 @@ html.dark .mini-list__empty {
 }
 
 .dash-card__head strong {
-    font-size: 15px;
+    font-size: 11px;
 }
 
 .dash-card__label {
     display: block;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .dash-card__value {
     display: block;
     margin: 6px 0 4px;
-    font-size: 22px;
+    font-size: 18px;
     font-weight: 700;
 }
 
 .dash-card__unit {
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 500;
     color: var(--text-muted);
 }
@@ -585,24 +585,24 @@ html.dark .mini-list__empty {
 
 .settle-item__label {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
 }
 
 .settle-item__value {
-    font-size: 18px;
+    font-size: 14px;
     font-weight: 700;
 }
 
 .settle-message {
     margin: 10px 0 0;
-    font-size: 13px;
+    font-size: 11px;
     color: var(--text-muted);
 }
 
 .dash-card__hint {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 /* 바 차트 — 값 라벨(막대 위)이 차트 안에 들어오도록 상단 여유를 둔다 */
@@ -652,7 +652,7 @@ html.dark .mini-list__empty {
     transform: translateX(-50%);
     white-space: nowrap;
     color: var(--text-muted);
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 600;
     line-height: 1;
 }
@@ -689,7 +689,7 @@ html.dark .mini-list__empty {
 
 .status-list__label {
     width: 56px;
-    font-size: 13px;
+    font-size: 11px;
     flex-shrink: 0;
 }
 
@@ -716,7 +716,7 @@ html.dark .status-list__bar {
     width: 40px;
     text-align: right;
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 /* 정산 */
@@ -734,11 +734,11 @@ html.dark .status-list__bar {
 
 .settle-item__label {
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .settle-item__value {
-    font-size: 16px;
+    font-size: 12px;
     font-weight: 700;
 }
 
@@ -763,7 +763,7 @@ html.dark .settle-bar {
 
 .settle-hint {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1.5;
 }
 
@@ -786,7 +786,7 @@ html.dark .settle-bar {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
     color: var(--text-muted);
 }
@@ -824,7 +824,7 @@ html.dark .settle-bar {
 }
 
 .dash-driver__cell strong {
-    font-size: 17px;
+    font-size: 13px;
 }
 
 .dash-driver__cell small {

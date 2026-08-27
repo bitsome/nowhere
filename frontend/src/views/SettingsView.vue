@@ -158,7 +158,7 @@ const isDriver = computed(() => auth.user?.role === 'Driver');
 }
 
 .settings-card strong {
-    font-size: 14px;
+    font-size: 11px;
 }
 
 .settings-card small {

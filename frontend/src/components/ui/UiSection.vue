@@ -29,13 +29,13 @@ defineProps({
     margin-bottom: 10px;
 }
 .ui-section__title {
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 800;
 }
 .ui-section__action {
     display: inline-flex;
     align-items: center;
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-muted);
     cursor: pointer;
 }

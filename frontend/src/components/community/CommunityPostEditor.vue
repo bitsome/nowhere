@@ -217,7 +217,7 @@ const submit = async () => {
     border-radius: 999px;
     background: var(--bg);
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
@@ -249,7 +249,7 @@ const submit = async () => {
     align-items: center;
     gap: 6px;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     cursor: pointer;
 }
 

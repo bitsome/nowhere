@@ -606,7 +606,7 @@ onMounted(() => {
     border-radius: 999px;
     background: var(--surface);
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
@@ -658,7 +658,7 @@ onMounted(() => {
 
 .template-chip__meta {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .template-chip__del {
@@ -667,7 +667,7 @@ onMounted(() => {
     background: none;
     color: var(--text-muted);
     cursor: pointer;
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .template-chip__del:hover {
@@ -677,13 +677,13 @@ onMounted(() => {
 .template-empty {
     margin: 0;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .template-modal__desc {
     margin: 0 0 12px;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     line-height: 1.6;
 }
 /* 구조화 결과 요약 */
@@ -710,7 +710,7 @@ onMounted(() => {
 }
 
 .preview-item__value {
-    font-size: 14px;
+    font-size: 11px;
     word-break: break-word;
 }
 
@@ -718,14 +718,14 @@ onMounted(() => {
 .bulk-error {
     margin: 8px 0 0;
     color: var(--badge-red);
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
 }
 
 .bulk-hint {
     margin: 10px 0 0;
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1.6;
 }
 
@@ -761,7 +761,7 @@ onMounted(() => {
 /* 날짜 그룹 열림/펼침 안내 */
 .schedule-mode-hint {
     margin: -4px 0 12px;
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-muted);
     text-align: center;
 }
@@ -794,13 +794,13 @@ onMounted(() => {
 }
 
 .schedule-group__date {
-    font-size: 15px;
+    font-size: 11px;
     font-weight: 800;
     color: var(--text);
 }
 
 .schedule-group__count {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     background: var(--brand-soft);
     color: var(--brand);
@@ -850,7 +850,7 @@ onMounted(() => {
 }
 
 .filter-label {
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--text-muted);
 }
@@ -874,7 +874,7 @@ onMounted(() => {
 
 .filter-amount-sep {
     color: var(--text-muted);
-    font-size: 14px;
+    font-size: 11px;
     flex-shrink: 0;
 }
 
@@ -916,32 +916,32 @@ onMounted(() => {
 }
 
 .schedule-time {
-    font-size: 15px;
+    font-size: 11px;
 }
 
 .schedule-date {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .schedule-card__route {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 14px;
+    font-size: 11px;
     font-weight: 600;
 }
 
 .schedule-card__arrow {
     color: var(--accent);
-    font-size: 16px;
+    font-size: 12px;
     font-weight: 700;
 }
 
 .schedule-card__meta {
     margin-top: 6px;
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .create-tabs {
@@ -995,7 +995,7 @@ onMounted(() => {
     justify-content: space-between;
     align-items: center;
     padding: 6px 2px 12px;
-    font-size: 15px;
+    font-size: 11px;
 }
 .cal__head b {
     font-weight: 800;
@@ -1008,7 +1008,7 @@ onMounted(() => {
     border-radius: 9px;
     background: var(--surface);
     color: var(--brand);
-    font-size: 16px;
+    font-size: 12px;
     line-height: 1;
     cursor: pointer;
     transition: border-color 0.15s ease, color 0.15s ease;
@@ -1039,7 +1039,7 @@ onMounted(() => {
     border-radius: 9px;
     background: var(--surface);
     color: var(--text);
-    font-size: 12px;
+    font-size: 11px;
     cursor: pointer;
 }
 .cal__day--muted {
@@ -1080,7 +1080,7 @@ onMounted(() => {
     margin-bottom: 8px;
 }
 .cal__section-title b {
-    font-size: 14px;
+    font-size: 11px;
     font-weight: 800;
 }
 .cal__count {

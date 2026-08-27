@@ -119,19 +119,19 @@ const levels = computed(() =>
 .level-badge--sm {
     height: 18px;
     padding: 0 6px;
-    font-size: 10px;
+    font-size: 11px;
 }
 
 .level-badge--md {
     height: 24px;
     padding: 0 8px;
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .level-badge--lg {
     height: 30px;
     padding: 0 10px;
-    font-size: 14px;
+    font-size: 11px;
 }
 
 /* 가이드 모달 */
@@ -144,12 +144,12 @@ const levels = computed(() =>
 .guide__intro {
     margin: 0;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .guide__section h3 {
     margin: 0 0 10px;
-    font-size: 14px;
+    font-size: 11px;
 }
 
 .rule-row {
@@ -158,7 +158,7 @@ const levels = computed(() =>
     justify-content: space-between;
     padding: 7px 0;
     border-bottom: 1px solid var(--border);
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .rule-row:last-child {
@@ -216,7 +216,7 @@ const levels = computed(() =>
 }
 
 .level-row__text strong {
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .level-row__text span {

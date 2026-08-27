@@ -1,6 +1,7 @@
 <script setup>
 import { computed, h, onActivated, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useNotification } from 'naive-ui';
+import { useRouter } from 'vue-router';
 import { apiOrders, apiReturnRoutes } from '../api/orders';
 import { getApiErrorMessage } from '../api/client';
 import { useUiStore } from '../stores/ui';
@@ -14,6 +15,7 @@ defineOptions({ name: 'MarketView' });
 
 const ui = useUiStore();
 const notification = useNotification();
+const router = useRouter();
 
 const orders = ref([]);
 const pagination = ref(null);
@@ -373,7 +375,7 @@ const renderCityLabel = (option) => {
     const fav = favoriteCities.value.includes(option.value);
     return h('span', { style: 'display:inline-flex;align-items:center;gap:6px' }, [
         h('span', {
-            style: `cursor:pointer;color:${fav ? '#f0a500' : 'var(--text-muted)'};font-size:14px;line-height:1;`,
+            style: `cursor:pointer;color:${fav ? '#f0a500' : 'var(--text-muted)'};font-size: 11px;line-height:1;`,
             title: fav ? '즐겨찾기 해제' : '즐겨찾기 추가',
             onClick: (e) => {
                 e.stopPropagation();
@@ -731,6 +733,15 @@ watch(
             </button>
             <button
                 type="button"
+                class="market-filters__myorders"
+                aria-label="내가 등록한 운행 관리"
+                title="내가 등록한 운행"
+                @click="router.push({ name: 'my-market' })"
+            >
+                <BaseIcon name="cart" :size="18" />
+            </button>
+            <button
+                type="button"
                 class="market-filters__search"
                 aria-label="노선 검색"
                 :class="{ 'market-filters__search--active': search }"
@@ -947,7 +958,7 @@ watch(
                 <div v-if="returnRoutes.length" class="market-section">
                     <div class="market-section__head">
                         <b>왕복 추천</b>
-                        <span class="market-section__count">하차지 근처 {{ returnRoutes.length }}건 <BaseIcon name="arrow-forward" :size="12" /></span>
+                        <span class="market-section__count">{{ returnRoutes.length }}건 <BaseIcon name="arrow-forward" :size="12" /></span>
                     </div>
                     <div class="order-grid">
                         <OrderCard
@@ -963,7 +974,7 @@ watch(
                 <div v-if="recommended.length" class="market-section">
                     <div class="market-section__head">
                         <b>추천 운행</b>
-                        <span class="market-section__count">전체 {{ recommended.length }}건 <BaseIcon name="arrow-forward" :size="12" /></span>
+                        <span class="market-section__count">{{ recommended.length }}건 <BaseIcon name="arrow-forward" :size="12" /></span>
                     </div>
                     <div class="order-grid">
                         <OrderCard
@@ -1021,7 +1032,7 @@ watch(
 .page-head__desc {
     margin: 0;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
 }
 
 /* 필터 모달 — 빠른 보기 칩 */
@@ -1037,7 +1048,7 @@ watch(
     border-radius: 999px;
     background: var(--surface);
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
@@ -1090,7 +1101,7 @@ watch(
 
 .filter-amount-sep {
     color: var(--text-muted);
-    font-size: 14px;
+    font-size: 11px;
     flex-shrink: 0;
 }
 
@@ -1102,12 +1113,12 @@ watch(
     border-radius: 8px;
     background: var(--surface);
     color: var(--text);
-    font-size: 14px;
+    font-size: 11px;
     outline: none;
 }
 
 .filter-label {
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--text-muted);
 }
@@ -1142,13 +1153,9 @@ watch(
 /* ── 필터 칩 행 ── */
 .market-filters {
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
-    overflow-x: auto;
-    scrollbar-width: none;
     margin-bottom: 10px;
-}
-.market-filters::-webkit-scrollbar {
-    display: none;
 }
 .market-filters__chip {
     flex-shrink: 0;
@@ -1172,12 +1179,31 @@ watch(
     border-color: var(--danger);
 }
 
+.market-filters__myorders {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-left: auto;
+    padding: 7px 11px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--surface);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.market-filters__myorders:hover {
+    border-color: var(--brand);
+    color: var(--brand);
+}
+
 .market-filters__search {
     display: inline-flex;
     align-items: center;
     gap: 6px;
     flex-shrink: 0;
-    margin-left: auto;
     padding: 7px 11px;
     border: 1px solid var(--border);
     border-radius: 9px;
@@ -1265,7 +1291,7 @@ watch(
     margin-bottom: 8px;
 }
 .market-section__head b {
-    font-size: 14px;
+    font-size: 11px;
     font-weight: 800;
 }
 .market-section__count {

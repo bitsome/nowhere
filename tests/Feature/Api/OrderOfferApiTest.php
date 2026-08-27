@@ -4,6 +4,7 @@ use App\Models\Driver;
 use App\Models\Order;
 use App\Models\OrderOffer;
 use App\Models\User;
+use App\Models\Vehicle;
 use App\Notifications\OrderNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -61,6 +62,13 @@ test('본인 운행에는 제안할 수 없다', function () {
     $this->postJson("/api/orders/{$this->order->id}/offers", ['amount' => 140000])->assertStatus(403);
 });
 
+test('기사가 아닌 사용자는 요금 제안을 보낼 수 없다', function () {
+    $operator = User::factory()->create(['role' => User::ROLE_OPERATOR]);
+    Sanctum::actingAs($operator);
+
+    $this->postJson("/api/orders/{$this->order->id}/offers", ['amount' => 140000])->assertStatus(403);
+});
+
 test('등록자는 제안 목록에서 기사 이름과 금액을 보고 연락처는 노출되지 않는다', function () {
     $this->postJson("/api/orders/{$this->order->id}/offers", [
         'amount' => 140000,
@@ -74,8 +82,31 @@ test('등록자는 제안 목록에서 기사 이름과 금액을 보고 연락�
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.driver.name', $this->driver->name)
         ->assertJsonPath('data.0.amount', 140000)
+        ->assertJsonPath('data.0.driver.vehicle', null)
         ->assertJsonMissingPath('data.0.driver.phone')
         ->assertJsonMissingPath('data.0.driver.email');
+});
+
+test('제안 목록과 받은 편지함에 기사가 등록한 차량이 포함된다', function () {
+    Vehicle::create([
+        'user_id' => $this->driver->id,
+        'name' => '내 카니발',
+        'type' => '카니발',
+        'license_plate' => '12가3456',
+        'is_default' => true,
+    ]);
+
+    $this->postJson("/api/orders/{$this->order->id}/offers", ['amount' => 140000])->assertCreated();
+
+    Sanctum::actingAs($this->owner);
+
+    $this->getJson("/api/orders/{$this->order->id}/offers")
+        ->assertOk()
+        ->assertJsonPath('data.0.driver.vehicle.license_plate', '12가3456');
+
+    $this->getJson('/api/offers/inbox')
+        ->assertOk()
+        ->assertJsonPath('data.0.offers.0.driver.vehicle.name', '내 카니발');
 });
 
 test('등록자가 제안을 수락하면 운행이 기사에게 넘어가고 다른 제안은 거절된다', function () {
@@ -212,7 +243,7 @@ test('내 등록 운행 목록에 대기 제안 건수 배지가 포함된다', 
 
     Sanctum::actingAs($this->owner);
 
-    $this->getJson('/api/orders?scope=mine&source=registered&tab='.urlencode('진행중'))
+    $this->getJson('/api/orders?scope=mine&source=registered&tab='.urlencode('공개'))
         ->assertOk()
         ->assertJsonPath('data.0.pendingOffers', 2);
 });

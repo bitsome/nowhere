@@ -194,12 +194,12 @@ onMounted(load);
 
 .history-hero__cell span {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .history-hero__cell strong {
     color: var(--brand);
-    font-size: 16px;
+    font-size: 12px;
     font-weight: 800;
 }
 

@@ -25,6 +25,10 @@ const chatRequests = ref([]);
 const loading = ref(true);
 const actingId = ref(null);
 
+// 카드 펼치기 — 운행정보 + 기사정보
+const expandedClaimId = ref(null);
+const expandedOfferOrderId = ref(null);
+
 const offerPendingTotal = computed(() => offers.value.reduce((sum, item) => sum + (item.pending_count || 0), 0));
 const totalPending = computed(() => claims.value.length + offerPendingTotal.value + chatRequests.value.length);
 
@@ -46,7 +50,31 @@ const load = async () => {
 const formatWon = (v) => `${Number(v ?? 0).toLocaleString('ko-KR')}원`;
 const formatWhen = (item) => `${item.service_date ?? ''} ${item.service_time ?? ''}`.trim() || '-';
 
+// 기사 차량 요약 — 등록된 차량이 없으면 '미등록'으로 안내한다
+const vehicleText = (v) => {
+    if (!v) return '미등록';
+
+    const parts = [];
+    if (v.name) parts.push(v.name);
+    if (v.type) parts.push(v.type);
+    if (v.license_plate) parts.push(`[${v.license_plate}]`);
+    if (v.color) parts.push(v.color);
+
+    return parts.length ? parts.join(' ') : '미등록';
+};
+
 const goDetail = (orderId) => router.push({ name: 'order-detail', params: { id: orderId } });
+const goUser = (id) => router.push({ name: 'user-page', params: { id } });
+
+const toggleClaim = (claim) => {
+    expandedClaimId.value = expandedClaimId.value === claim.id ? null : claim.id;
+    expandedOfferOrderId.value = null;
+};
+
+const toggleOfferOrder = (order) => {
+    expandedOfferOrderId.value = expandedOfferOrderId.value === order.id ? null : order.id;
+    expandedClaimId.value = null;
+};
 
 // ── 가져오기 승인/거절 ──
 const approveClaim = (claim) => {
@@ -214,20 +242,64 @@ onActivated(() => {
                 <div class="actions-sub">
                     <span class="actions-sub__badge">{{ claims.length }}건</span>
                 </div>
-                <article v-for="claim in claims" :key="claim.id" class="actions-card">
-                    <button type="button" class="actions-card__head" @click="goDetail(claim.id)">
+                <article
+                    v-for="claim in claims"
+                    :key="claim.id"
+                    class="actions-card"
+                    :class="{ 'actions-card--open': expandedClaimId === claim.id }"
+                >
+                    <button type="button" class="actions-card__head" @click="toggleClaim(claim)">
                         <div class="actions-card__route">
                             <strong>{{ claim.route }}</strong>
-                            <span class="actions-card__meta">{{ formatWhen(claim) }} · {{ claim.order_number }}</span>
+                            <span class="actions-card__meta">{{ formatWhen(claim) }}</span>
                         </div>
-                        <BaseIcon name="arrow-forward" :size="14" class="actions-card__arrow" />
+                        <span class="actions-card__indicator">승인 요청</span>
+                        <BaseIcon
+                            name="chevron-down"
+                            :size="14"
+                            class="actions-card__arrow"
+                            :class="{ 'actions-card__arrow--open': expandedClaimId === claim.id }"
+                        />
                     </button>
-                    <div class="claim-item">
+
+                    <!-- 펼침 — 운행정보 + 기사정보 -->
+                    <div v-if="expandedClaimId === claim.id" class="actions-detail">
+                        <div class="actions-detail__section">
+                            <div class="actions-detail__label">운행정보</div>
+                            <dl class="actions-detail__rows">
+                                <div><dt>노선</dt><dd>{{ claim.route }}</dd></div>
+                                <div><dt>일시</dt><dd>{{ formatWhen(claim) }}</dd></div>
+                            </dl>
+                            <button type="button" class="actions-detail__link" @click="goDetail(claim.id)">
+                                운행 상세 보기
+                            </button>
+                        </div>
+                        <div class="actions-detail__section">
+                            <div class="actions-detail__label">기사정보</div>
+                            <dl class="actions-detail__rows">
+                                <div><dt>기사</dt><dd>{{ claim.claimant?.name || '기사' }}</dd></div>
+                                <div v-if="claim.claimant?.rating">
+                                    <dt>평점</dt>
+                                    <dd>★ {{ claim.claimant.rating }} ({{ claim.claimant.review_count }}리뷰)</dd>
+                                </div>
+                                <div>
+                                    <dt>차량</dt>
+                                    <dd>{{ vehicleText(claim.claimant?.vehicle) }}</dd>
+                                </div>
+                            </dl>
+                            <button
+                                v-if="claim.claimant?.id"
+                                type="button"
+                                class="actions-detail__link"
+                                @click="goUser(claim.claimant.id)"
+                            >
+                                기사 프로필 보기
+                            </button>
+                        </div>
+                    </div>
+
+                    <div v-if="expandedClaimId === claim.id" class="claim-item">
                         <div class="claim-item__info">
-                            <span class="claim-item__name">{{ claim.claimant?.name || '기사' }}</span>
-                            <span v-if="claim.claimant?.rating" class="claim-item__rating">
-                                ★ {{ claim.claimant.rating }} ({{ claim.claimant.review_count }})
-                            </span>
                             <span class="claim-item__text">운행 시작 승인을 요청했습니다</span>
                         </div>
                         <div class="claim-item__actions">
@@ -257,8 +329,13 @@ onActivated(() => {
                 <div class="actions-sub">
                     <span class="actions-sub__badge">{{ offerPendingTotal }}건</span>
                 </div>
-                <article v-for="order in offers" :key="order.id" class="actions-card">
-                    <button type="button" class="actions-card__head" @click="goDetail(order.id)">
+                <article
+                    v-for="order in offers"
+                    :key="order.id"
+                    class="actions-card"
+                    :class="{ 'actions-card--open': expandedOfferOrderId === order.id }"
+                >
+                    <button type="button" class="actions-card__head" @click="toggleOfferOrder(order)">
                         <div class="actions-card__route">
                             <strong>{{ order.route }}</strong>
                             <span class="actions-card__meta">
@@ -266,39 +343,73 @@ onActivated(() => {
                             </span>
                         </div>
                         <span class="actions-card__count">{{ order.pending_count }}건</span>
+                        <BaseIcon
+                            name="chevron-down"
+                            :size="14"
+                            class="actions-card__arrow"
+                            :class="{ 'actions-card__arrow--open': expandedOfferOrderId === order.id }"
+                        />
                     </button>
 
-                    <div v-for="offer in order.offers" :key="offer.id" class="offer-item">
-                        <div class="offer-item__info">
-                            <div class="offer-item__row">
-                                <strong class="offer-item__amount">{{ formatWon(offer.amount) }}</strong>
-                                <span class="offer-item__diff">{{ diffLabel(offer, order) }}</span>
-                            </div>
-                            <div class="offer-item__driver">
-                                <span class="offer-item__name">{{ offer.driver?.name || '기사' }}</span>
-                                <span v-if="offer.driver?.rating" class="offer-item__rating">
-                                    ★ {{ offer.driver.rating }} ({{ offer.driver.review_count }})
-                                </span>
-                            </div>
-                            <p v-if="offer.message" class="offer-item__msg">{{ offer.message }}</p>
+                    <!-- 펼침 — 운행정보 + 기사정보(제안) -->
+                    <div v-if="expandedOfferOrderId === order.id" class="actions-detail">
+                        <div class="actions-detail__section">
+                            <div class="actions-detail__label">운행정보</div>
+                            <dl class="actions-detail__rows">
+                                <div><dt>노선</dt><dd>{{ order.route }}</dd></div>
+                                <div><dt>일시</dt><dd>{{ formatWhen(order) }}</dd></div>
+                                <div><dt>등록가</dt><dd>{{ formatWon(order.expected_revenue) }}</dd></div>
+                            </dl>
+                            <button type="button" class="actions-detail__link" @click="goDetail(order.id)">
+                                운행 상세 보기
+                            </button>
                         </div>
-                        <div class="offer-item__actions">
-                            <button
-                                type="button"
-                                class="actions-btn actions-btn--no"
-                                :disabled="actingId"
-                                @click="rejectOffer(order, offer)"
-                            >
-                                거절
-                            </button>
-                            <button
-                                type="button"
-                                class="actions-btn actions-btn--ok"
-                                :disabled="actingId"
-                                @click="acceptOffer(order, offer)"
-                            >
-                                수락
-                            </button>
+                        <div class="actions-detail__section">
+                            <div class="actions-detail__label">기사정보 · 제안</div>
+                            <div v-for="offer in order.offers" :key="offer.id" class="offer-item">
+                                <div class="offer-item__info">
+                                    <div class="offer-item__row">
+                                        <strong class="offer-item__amount">{{ formatWon(offer.amount) }}</strong>
+                                        <span class="offer-item__diff">{{ diffLabel(offer, order) }}</span>
+                                    </div>
+                                    <div class="offer-item__driver">
+                                        <span class="offer-item__name">{{ offer.driver?.name || '기사' }}</span>
+                                        <span v-if="offer.driver?.rating" class="offer-item__rating">
+                                            ★ {{ offer.driver.rating }} ({{ offer.driver.review_count }})
+                                        </span>
+                                        <button
+                                            v-if="offer.driver?.id"
+                                            type="button"
+                                            class="actions-detail__link"
+                                            @click="goUser(offer.driver.id)"
+                                        >
+                                            프로필
+                                        </button>
+                                    </div>
+                                    <p class="offer-item__vehicle">
+                                        차량 {{ vehicleText(offer.driver?.vehicle) }}
+                                    </p>
+                                    <p v-if="offer.message" class="offer-item__msg">{{ offer.message }}</p>
+                                </div>
+                                <div class="offer-item__actions">
+                                    <button
+                                        type="button"
+                                        class="actions-btn actions-btn--no"
+                                        :disabled="actingId"
+                                        @click="rejectOffer(order, offer)"
+                                    >
+                                        거절
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="actions-btn actions-btn--ok"
+                                        :disabled="actingId"
+                                        @click="acceptOffer(order, offer)"
+                                    >
+                                        수락
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </article>
@@ -358,14 +469,14 @@ onActivated(() => {
 
 .actions-head__title {
     margin: 0;
-    font-size: 22px;
+    font-size: 18px;
     font-weight: 800;
     letter-spacing: -0.5px;
 }
 
 .actions-head__desc {
     margin: 3px 0 0;
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-muted);
 }
 
@@ -417,7 +528,7 @@ onActivated(() => {
     border-radius: 999px;
     background: color-mix(in srgb, var(--text-muted) 12%, transparent);
     color: var(--text-muted);
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
 }
 
@@ -435,6 +546,10 @@ onActivated(() => {
     flex-direction: column;
     gap: 10px;
     min-height: 90px;
+}
+
+.actions-card--open {
+    border-color: color-mix(in srgb, var(--brand) 40%, transparent);
 }
 
 .actions-card__head {
@@ -459,7 +574,7 @@ onActivated(() => {
 
 .actions-card__route strong {
     display: block;
-    font-size: 15px;
+    font-size: 11px;
     font-weight: 800;
     letter-spacing: -0.2px;
     overflow: hidden;
@@ -470,7 +585,7 @@ onActivated(() => {
 .actions-card__meta {
     display: block;
     margin-top: 4px;
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-muted);
 }
 
@@ -484,9 +599,84 @@ onActivated(() => {
     font-weight: 700;
 }
 
+.actions-card__indicator {
+    flex-shrink: 0;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--status-acceptance-pending) 12%, transparent);
+    color: var(--status-acceptance-pending);
+    font-size: 10px;
+    font-weight: 700;
+}
+
 .actions-card__arrow {
     flex-shrink: 0;
     color: var(--text-muted);
+    transition: transform 0.15s ease;
+}
+
+.actions-card__arrow--open {
+    transform: rotate(180deg);
+}
+
+/* 펼침 — 운행정보 + 기사정보 */
+.actions-detail {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.actions-detail__section {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+}
+
+.actions-detail__label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+}
+
+.actions-detail__rows {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.actions-detail__rows > div {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+
+.actions-detail__rows dt {
+    flex-shrink: 0;
+    min-width: 52px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.actions-detail__rows dd {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.actions-detail__link {
+    margin-top: 8px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--brand);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
 }
 
 /* 가져오기 승인 */
@@ -504,16 +694,6 @@ onActivated(() => {
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
-}
-
-.claim-item__name {
-    font-size: 13px;
-    font-weight: 700;
-}
-
-.claim-item__rating {
-    font-size: 11px;
-    color: var(--text-muted);
 }
 
 .claim-item__text {
@@ -534,7 +714,12 @@ onActivated(() => {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 12px 2px 2px;
+    padding: 12px 0 2px;
+}
+
+.offer-item + .offer-item {
+    border-top: 1px solid var(--border);
+    margin-top: 12px;
 }
 
 .offer-item__info {
@@ -550,14 +735,14 @@ onActivated(() => {
 }
 
 .offer-item__amount {
-    font-size: 16px;
+    font-size: 12px;
     font-weight: 800;
     letter-spacing: -0.3px;
     color: var(--brand);
 }
 
 .offer-item__diff {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
     color: var(--text-muted);
 }
@@ -570,7 +755,7 @@ onActivated(() => {
 }
 
 .offer-item__name {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
 }
 
@@ -584,9 +769,13 @@ onActivated(() => {
     font-size: 11px;
     color: var(--text-muted);
     line-height: 1.45;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+}
+
+.offer-item__vehicle {
+    margin: 6px 0 0;
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.45;
 }
 
 .offer-item__actions {
@@ -602,7 +791,7 @@ onActivated(() => {
     border-radius: 999px;
     border: 0;
     font-family: inherit;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
     cursor: pointer;
     transition: opacity 0.12s ease, transform 0.1s ease;
@@ -645,7 +834,7 @@ onActivated(() => {
     flex-shrink: 0;
     padding: 3px 10px;
     border-radius: 999px;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
     background: color-mix(in srgb, var(--brand) 14%, transparent);
     color: var(--brand);
@@ -663,7 +852,7 @@ onActivated(() => {
 
 .chat-item__title {
     display: block;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 700;
 }
 

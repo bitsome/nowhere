@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useMessage } from 'naive-ui';
 import { apiOrders } from '../api/orders';
 import { getApiErrorMessage } from '../api/client';
+import { useBatchSettle } from '../composables/useBatchSettle';
 import OrderCard from '../components/orders/OrderCard.vue';
 import OrderCardSkeleton from '../components/orders/OrderCardSkeleton.vue';
 import SetGroupCard from '../components/orders/SetGroupCard.vue';
@@ -14,13 +15,12 @@ const router = useRouter();
 const route = useRoute();
 const message = useMessage();
 
-// 내가 직접 등록한 운행만 관리 — 탭은 상태 단계
+// 내가 등록하거나 가져온 운행 관리 — 탭은 상태 단계
 // 대시보드 등에서 ?tab=진행중 형태로 진입하면 해당 탭을 먼저 연다
 const STATUS_TABS = [
+    { label: '공개', value: '공개' },
     { label: '진행중', value: '진행중' },
-    { label: '초안', value: '초안' },
-    { label: '완료', value: '완료' },
-    { label: '취소', value: '취소' },
+    { label: '정산', value: '정산' },
 ];
 
 const listTab = ref(STATUS_TABS.some((t) => t.value === route.query.tab) ? route.query.tab : '진행중');
@@ -41,8 +41,8 @@ const SORT_OPTIONS = [
 const setRows = computed(() => orders.value.filter((o) => o.kind === 'set'));
 const singleRows = computed(() => orders.value.filter((o) => o.kind !== 'set'));
 
-// 승인 대기 중인 가져오기 요청 건수 (상단 정렬되므로 첫 페이지에서 확인 가능)
-const pendingClaims = computed(() => orders.value.filter((o) => o.status === 'acceptance_pending'));
+// 정산 탭 — 완료(정산 대기) 운행 일괄 정산 확인
+const pendingSettleCount = computed(() => orders.value.filter((o) => o.status === 'completed').length);
 
 const load = async () => {
     loading.value = true;
@@ -50,7 +50,7 @@ const load = async () => {
     try {
         const params = {
             scope: 'mine',
-            source: 'registered',
+            source: 'all',
             tab: listTab.value,
             per_page: 30,
             page: page.value,
@@ -96,6 +96,10 @@ const changeSort = (value) => {
     loadFirstPage();
 };
 
+// 정산 탭 — 완료(정산 대기) 운행 일괄 정산 확인
+const settle = useBatchSettle({ load });
+const { settling, settleMessage, settleAll } = settle;
+
 // 운행 등록 폼 열기 — /orders/create 에서 폼 화면으로 시작
 const goCreate = () => {
     router.push({ name: 'order-create', query: { form: '1' } });
@@ -105,7 +109,7 @@ const goMarket = () => router.push({ name: 'market' });
 
 onMounted(load);
 
-// keep-alive로 캐시된 화면 재진입 시 최신 요청 상태를 반영
+// keep-alive로 캐시된 화면 재진입 시 최신 상태를 반영
 onActivated(() => {
     if (!loading.value) {
         load();
@@ -117,7 +121,7 @@ onActivated(() => {
     <div class="market-page">
         <div class="page-head">
             <div>
-                <p class="page-head__desc">내가 직접 등록한 운행을 관리합니다. 가져오기 요청이 들어오면 상단에 표시됩니다.</p>
+                <p class="page-head__desc">내가 등록하거나 가져온 운행을 관리합니다.</p>
             </div>
             <div class="page-head__actions">
                 <n-tag v-if="pagination" size="large" round>{{ pagination.total ?? 0 }}건</n-tag>
@@ -135,20 +139,6 @@ onActivated(() => {
                 </n-radio-button>
             </n-radio-group>
         </div>
-
-        <!-- 가져오기 요청 대기 배너 -->
-        <button
-            v-if="listTab === '진행중' && !loading && pendingClaims.length"
-            type="button"
-            class="claim-banner"
-            @click="router.push({ name: 'order-detail', params: { id: pendingClaims[0].id } })"
-        >
-            <span class="claim-banner__dot" />
-            <span>
-                가져오기 요청 <strong>{{ pendingClaims.length }}건</strong> — 승인 대기 중입니다
-            </span>
-            <BaseIcon name="arrow-forward" :size="14" class="claim-banner__arrow" />
-        </button>
 
         <!-- 검색 -->
         <n-input
@@ -183,6 +173,20 @@ onActivated(() => {
             >
                 {{ opt.label }}
             </button>
+        </div>
+
+        <!-- 정산 탭 — 완료 운행 확인·일괄 정산 -->
+        <div v-if="listTab === '정산' && !loading" class="settle-cta">
+            <button
+                v-if="pendingSettleCount"
+                type="button"
+                class="settle-cta__btn"
+                :disabled="settling"
+                @click="settleAll"
+            >
+                {{ settling ? '정산 처리 중...' : `정산 대기 ${pendingSettleCount}건 확인·정산` }}
+            </button>
+            <p v-if="settleMessage" class="settle-cta__msg">{{ settleMessage }}</p>
         </div>
 
         <div v-if="loading" class="my-order-list">
@@ -243,49 +247,6 @@ onActivated(() => {
     margin-bottom: 10px;
 }
 
-/* 가져오기 요청 대기 배너 — 진행중 탭 최상단 */
-.claim-banner {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    margin-bottom: 10px;
-    padding: 11px 14px;
-    border: 1px solid color-mix(in srgb, var(--status-acceptance-pending) 45%, transparent);
-    border-radius: 12px;
-    background: color-mix(in srgb, var(--status-acceptance-pending) 10%, transparent);
-    color: var(--text);
-    font-family: inherit;
-    font-size: 13px;
-    font-weight: 600;
-    text-align: left;
-    cursor: pointer;
-    transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.claim-banner:hover {
-    border-color: var(--status-acceptance-pending);
-    background: color-mix(in srgb, var(--status-acceptance-pending) 16%, transparent);
-}
-
-.claim-banner__dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--status-acceptance-pending);
-    flex-shrink: 0;
-}
-
-.claim-banner strong {
-    color: var(--status-acceptance-pending);
-}
-
-.claim-banner__arrow {
-    margin-left: auto;
-    flex-shrink: 0;
-    color: var(--text-muted);
-}
-
 .create-search {
     margin-bottom: 10px;
 }
@@ -303,7 +264,7 @@ onActivated(() => {
     border-radius: 999px;
     background: var(--surface);
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
@@ -319,6 +280,39 @@ onActivated(() => {
     display: flex;
     flex-direction: column;
     gap: 12px;
+}
+
+/* 정산 탭 — 완료 운행 확인·일괄 정산 */
+.settle-cta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.settle-cta__btn {
+    padding: 9px 18px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--brand);
+    color: #07120e;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity 0.12s ease;
+}
+
+.settle-cta__btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.settle-cta__msg {
+    margin: 0;
+    font-size: 11px;
+    color: var(--text-muted);
 }
 
 .create-pagination {

@@ -2,12 +2,10 @@
 import { computed, onActivated, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { useMessage } from 'naive-ui';
-import { apiOrders } from '../api/orders';
 import { apiMyDriver, apiMyVehicles, apiSetDriverMatchEnabled } from '../api/driver';
 import { apiMatchPreferences } from '../api/match';
 import { getApiErrorMessage } from '../api/client';
 import BaseIcon from '../components/common/BaseIcon.vue';
-import EmptyState from '../components/common/EmptyState.vue';
 import UiCard from '../components/ui/UiCard.vue';
 import UiSection from '../components/ui/UiSection.vue';
 import UiChip from '../components/ui/UiChip.vue';
@@ -21,24 +19,9 @@ const message = useMessage();
 const driver = ref(null);
 const vehicle = ref(null);
 const preference = ref(null);
-const myOrders = ref([]);
 const loading = ref(true);
 
-// 오늘 날짜 키 (YYYY-MM-DD)
-const now = new Date();
-const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-
-// 오늘 예정 운행 (받은 운행 중 오늘 서비스)
-const todayRides = computed(() => myOrders.value.filter((o) => o.sortDate === todayKey));
-
 const matchEnabled = computed(() => Boolean(driver.value?.match_enabled));
-
-const isDriving = (ride) => ride.status === 'driving';
-
-const metaText = (ride) =>
-    [ride.passengerCount ? `${ride.passengerCount}명` : '', ride.vehicle ? ride.vehicle : '', ride.serviceLabel || '']
-        .filter(Boolean)
-        .join(' · ');
 
 // silent=true면 기존 내용을 유지한 채 조용히 갱신한다 (탭 복귀 시 깜빡임 방지).
 const load = async (silent = false) => {
@@ -46,27 +29,13 @@ const load = async (silent = false) => {
         loading.value = true;
     }
 
-    // 운행·드라이버·차량·매칭설정을 병렬로 호출해 대기 시간을 줄인다.
-    // (순차 4회 왕복 → 최대 1회 왕복) 실패한 항목만 조용히 건너뛴다.
-    const [orders, me, vehicles, prefs] = await Promise.allSettled([
-        apiOrders({
-            scope: 'mine',
-            source: 'received',
-            tab: '진행중',
-            sort: 'date',
-            date: todayKey, // 오늘 예정 운행만 내려받아 응답을 가볍게
-            per_page: 100,
-        }),
+    // 드라이버·차량·매칭설정을 병렬로 호출해 대기 시간을 줄인다.
+    // (실패한 항목만 조용히 건너뛴다)
+    const [me, vehicles, prefs] = await Promise.allSettled([
         apiMyDriver(),
         apiMyVehicles(),
         apiMatchPreferences(),
     ]);
-
-    if (orders.status === 'fulfilled') {
-        myOrders.value = orders.value.data.data ?? [];
-    } else {
-        message.error(getApiErrorMessage(orders.reason, '내 운행을 불러오지 못했습니다.'));
-    }
 
     if (me.status === 'fulfilled') {
         driver.value = me.value.data.data;
@@ -107,7 +76,7 @@ const toggleMatch = async (enabled) => {
 const quickMenus = [
     { name: 'market', icon: 'market', label: '마켓' },
     { name: 'match', icon: 'match', label: '매칭 찾기' },
-    { name: 'order-create', icon: 'order-create', label: '내 운행' },
+    { name: 'my-market', icon: 'my-market', label: '내 마켓' },
     { name: 'community', icon: 'community', label: '커뮤니티' },
     { name: 'notifications', icon: 'notifications', label: '알림' },
     { name: 'profile', icon: 'profile', label: '프로필' },
@@ -137,21 +106,6 @@ onActivated(() => {
                         <div class="sk-chip" />
                     </div>
                     <div class="sk-line sk-line--cta" />
-                </div>
-            </div>
-
-            <div class="home-skeleton__section">
-                <div class="sk-line sk-line--title" />
-                <div class="home-rides__grid">
-                    <div v-for="n in 3" :key="`ride-${n}`" class="sk-card home-skeleton__ride">
-                        <div class="home-skeleton__ride-top">
-                            <div class="sk-chip" />
-                            <div class="sk-line sk-line--sm" style="width: 46px;" />
-                        </div>
-                        <div class="sk-line sk-line--md" />
-                        <div class="sk-line sk-line--sm" style="width: 70%;" />
-                        <div class="sk-line sk-line--sm" style="width: 40%;" />
-                    </div>
                 </div>
             </div>
 
@@ -204,47 +158,6 @@ onActivated(() => {
                     </button>
                 </UiCard>
             </div>
-
-            <!-- 내 운행 -->
-            <UiSection title="내 운행">
-                <template #action>
-                    <a class="home-rides__all" @click.prevent="router.push({ name: 'order-create' })">전체 보기 <BaseIcon name="arrow-forward" :size="13" /></a>
-                </template>
-
-                <div v-if="todayRides.length === 0" class="home-rides__empty">
-                    <EmptyState icon="car" title="오늘 예정된 운행이 없습니다" hint="마켓에서 운행을 찾아보세요" />
-                </div>
-
-                <div class="home-rides__grid">
-                    <UiCard
-                        v-for="ride in todayRides.slice(0, 3)"
-                        :key="ride.id"
-                        tag="a"
-                        hover
-                        :tone="isDriving(ride) ? 'accent' : 'surface'"
-                        class="home-ride"
-                        @click.prevent="router.push({ name: 'order-detail', params: { id: ride.id } })"
-                    >
-                        <div class="home-ride__top">
-                            <UiChip :variant="isDriving(ride) ? 'green' : 'yellow'">
-                                <template v-if="isDriving(ride)"><BaseIcon name="ellipse" :size="8" /> 운행중</template>
-                                <template v-else>예정</template>
-                            </UiChip>
-                            <span class="home-ride__time">{{ ride.time || ride.service_time || '' }}</span>
-                        </div>
-                        <div class="home-ride__route">{{ ride.route }}</div>
-                        <div v-if="metaText(ride)" class="home-ride__meta">{{ metaText(ride) }}</div>
-                        <div class="home-ride__bottom">
-                            <span class="home-ride__when">오늘</span>
-                            <span class="home-ride__price">{{ ride.amount }}</span>
-                        </div>
-                    </UiCard>
-                </div>
-
-                <div v-if="todayRides.length > 0" class="home-rides__more" @click="router.push({ name: 'order-create' })">
-                    내 운행 전체 보기 <BaseIcon name="arrow-forward" :size="13" />
-                </div>
-            </UiSection>
 
             <!-- 빠른 메뉴 -->
             <UiSection title="빠른 메뉴">
@@ -349,18 +262,6 @@ onActivated(() => {
     gap: 12px;
 }
 
-.home-skeleton__ride {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.home-skeleton__ride-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
 .home-skeleton__menu {
     display: flex;
     flex-direction: column;
@@ -395,7 +296,7 @@ onActivated(() => {
     display: flex;
     align-items: center;
     gap: 5px;
-    font-size: 14px;
+    font-size: 11px;
     font-weight: 800;
 }
 
@@ -404,7 +305,7 @@ onActivated(() => {
 }
 .home-match__sub {
     margin-top: 3px;
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-muted);
 }
 .home-switch {
@@ -470,7 +371,7 @@ html.dark .home-switch--on span {
     background: var(--brand);
     color: #ffffff;
     font-family: inherit;
-    font-size: 14px;
+    font-size: 11px;
     font-weight: 800;
     cursor: pointer;
     box-shadow: 0 8px 22px color-mix(in srgb, var(--brand) 35%, transparent);
@@ -487,74 +388,9 @@ html.dark .home-match__cta {
     transform: translateY(0);
 }
 .home-match__cta-arrow {
-    font-size: 20px;
+    font-size: 16px;
     font-weight: 400;
     line-height: 1;
-}
-
-/* 내 운행 */
-.home-rides__all {
-    font-size: 10px;
-    color: var(--text-muted);
-    text-decoration: none;
-    cursor: pointer;
-}
-.home-rides__grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 10px;
-}
-.home-ride {
-    display: flex;
-    flex-direction: column;
-    padding: 12px 13px;
-}
-.home-ride__top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-}
-.home-ride__time {
-    font-size: 11px;
-    color: var(--text-muted);
-    font-weight: 700;
-}
-.home-ride__route {
-    margin-top: 6px;
-    font-size: 14px;
-    font-weight: 800;
-}
-.home-ride__meta {
-    margin-top: 3px;
-    font-size: 11px;
-    color: var(--text-muted);
-}
-.home-ride__bottom {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-top: 8px;
-}
-.home-ride__when {
-    font-size: 11px;
-    color: var(--text-muted);
-}
-.home-ride__price {
-    font-size: 14px;
-    font-weight: 800;
-    color: var(--brand);
-}
-.home-rides__more {
-    padding: 10px 0;
-    text-align: center;
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--brand);
-    cursor: pointer;
-}
-.home-rides__empty {
-    padding: 8px 0 4px;
 }
 
 /* 빠른 메뉴 */
@@ -572,10 +408,10 @@ html.dark .home-match__cta {
 }
 .home-menu__item b {
     color: var(--brand);
-    font-size: 16px;
+    font-size: 12px;
 }
 .home-menu__item span {
-    font-size: 10px;
+    font-size: 11px;
     margin-top: 5px;
     color: var(--text-muted);
 }

@@ -55,7 +55,7 @@ class OrderController extends Controller
      */
     public function show(Request $request, Order $order): JsonResponse
     {
-        $order->load(['user', 'claimant', 'lineItems', 'group.orders.lineItems', 'group.orders.user']);
+        $order->load(['user', 'claimant.vehicles', 'lineItems', 'group.orders.lineItems', 'group.orders.user']);
 
         // 내가 이 운행에 남긴 리뷰 — 프론트에서 작성 여부를 알기 위해 함께 내려준다
         $myReview = Review::query()

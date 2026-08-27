@@ -254,7 +254,7 @@ watch(
     border-radius: 9px;
     background: transparent;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     transition: background 0.15s, color 0.15s;
@@ -310,14 +310,14 @@ watch(
 }
 
 .review-summary__score strong {
-    font-size: 34px;
+    font-size: 30px;
     font-weight: 900;
     color: var(--brand);
 }
 
 .review-summary__score span {
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .review-summary__count {
@@ -341,7 +341,7 @@ watch(
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .review-dist__star {
@@ -409,7 +409,7 @@ watch(
     border-radius: 50%;
     background: var(--accent);
     color: #fff;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 700;
 }
 
@@ -424,7 +424,7 @@ watch(
     align-items: center;
     gap: 1px;
     color: #ffa940;
-    font-size: 12px;
+    font-size: 11px;
     flex-shrink: 0;
 }
 
@@ -434,14 +434,14 @@ watch(
 
 .review-item__time {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
     flex-shrink: 0;
 }
 
 .review-item__content {
     margin: 8px 0 0;
     color: var(--text);
-    font-size: 14px;
+    font-size: 11px;
     line-height: 1.6;
 }
 
@@ -457,7 +457,7 @@ watch(
     background: transparent;
     color: var(--text-muted);
     font-family: inherit;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;

@@ -109,7 +109,7 @@ const { error, success, requesting, requestVerification } = settings;
     border: 0;
     background: none;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     border-radius: 8px;

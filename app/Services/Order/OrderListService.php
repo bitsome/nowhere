@@ -101,6 +101,13 @@ class OrderListService
                     })
                     ->orWhere('original_owner_id', $user->id);
             });
+        } elseif ($source === 'all') {
+            // 등록 + 받은 운행 모두 — 내가 등록했거나(original_owner 포함), 가져왔거나(claimant 포함) 한 운행
+            $query->where(function ($q) use ($user) {
+                $q->where('user_id', $user->id)
+                    ->orWhere('original_owner_id', $user->id)
+                    ->orWhere('claimant_user_id', $user->id);
+            });
         } else {
             // 받은 운행 = 내가 소유한 가져온 운행 + 내가 요청한 승인 대기
             $query->where(function ($q) use ($user) {
@@ -111,20 +118,24 @@ class OrderListService
             });
         }
 
-        if ($tab === '초안') {
-            $query->where('status', Order::STATUS_DRAFT);
-        } else {
-            match ($tab) {
-                '완료' => $query->whereIn('status', [Order::STATUS_COMPLETED, Order::STATUS_SETTLED]),
-                '취소' => $query->where('status', Order::STATUS_CANCELLED),
-                default => $query->whereNotIn('status', [
-                    Order::STATUS_DRAFT,
-                    Order::STATUS_COMPLETED,
-                    Order::STATUS_SETTLED,
-                    Order::STATUS_CANCELLED,
-                ]),
-            };
-        }
+        // 탭별 상태 그룹 — 등록자 기준: 공개(등록·거래) / 진행중(배차~운행) / 정산(완료·정산)
+        match ($tab) {
+            '공개' => $query->whereIn('status', [Order::STATUS_PUBLISHED, Order::STATUS_TRADING]),
+            '진행중' => $query->whereIn('status', [
+                Order::STATUS_ACCEPTANCE_PENDING,
+                Order::STATUS_ACCEPTED,
+                Order::STATUS_DRIVING,
+            ]),
+            '정산' => $query->whereIn('status', [Order::STATUS_COMPLETED, Order::STATUS_SETTLED]),
+            '초안' => $query->where('status', Order::STATUS_DRAFT),
+            '취소' => $query->where('status', Order::STATUS_CANCELLED),
+            default => $query->whereNotIn('status', [
+                Order::STATUS_DRAFT,
+                Order::STATUS_COMPLETED,
+                Order::STATUS_SETTLED,
+                Order::STATUS_CANCELLED,
+            ]),
+        };
 
         // 요청자(claimant) 이름을 함께 내려 주고, 승인 대기 운행은 항상 맨 위에 노출
         $query->with('claimant')

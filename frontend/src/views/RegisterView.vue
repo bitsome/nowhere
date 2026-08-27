@@ -170,21 +170,21 @@ const submit = async () => {
     border-radius: 16px;
     background: var(--brand-gradient);
     color: #ffffff;
-    font-size: 24px;
+    font-size: 20px;
     font-weight: 700;
     box-shadow: 0 6px 18px color-mix(in srgb, var(--brand) 35%, transparent);
 }
 
 .login-title {
     margin: 16px 0 0;
-    font-size: 24px;
+    font-size: 20px;
     font-weight: 700;
 }
 
 .login-desc {
     margin: 6px 0 0;
     color: var(--text-muted);
-    font-size: 14px;
+    font-size: 11px;
 }
 
 .login-alert {
@@ -199,7 +199,7 @@ const submit = async () => {
     margin-top: 8px;
     height: 44px;
     border-radius: 12px;
-    font-size: 15px;
+    font-size: 11px;
     font-weight: 600;
 }
 
@@ -209,7 +209,7 @@ const submit = async () => {
     border-top: 1px solid var(--border);
     text-align: center;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .login-link {

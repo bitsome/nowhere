@@ -400,7 +400,7 @@ watch(
     border-radius: 50%;
     background: var(--brand-gradient);
     color: #ffffff;
-    font-size: 24px;
+    font-size: 20px;
     font-weight: 700;
     flex-shrink: 0;
     box-shadow: 0 4px 12px color-mix(in srgb, var(--brand) 30%, transparent);
@@ -414,7 +414,7 @@ watch(
 }
 
 .profile-hero__name {
-    font-size: 18px;
+    font-size: 14px;
     font-weight: 700;
 }
 
@@ -435,7 +435,7 @@ watch(
     align-items: center;
     gap: 6px;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -506,7 +506,7 @@ watch(
 
 .verify-hint {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 /* 내 실적 카드 */
@@ -572,7 +572,7 @@ watch(
 }
 
 .profile-stats__value {
-    font-size: 17px;
+    font-size: 13px;
     font-weight: 800;
     color: var(--text);
     white-space: nowrap;
@@ -605,12 +605,12 @@ watch(
 }
 
 .level-head__text strong {
-    font-size: 16px;
+    font-size: 12px;
 }
 
 .level-head__text span {
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     margin-top: 2px;
 }
 
@@ -632,7 +632,7 @@ watch(
 .level-hint {
     margin: 10px 0 0;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .level-hint strong {
@@ -652,7 +652,7 @@ watch(
     border-radius: 999px;
     background: var(--brand-soft);
     color: var(--brand);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
 }
 
@@ -674,7 +674,7 @@ html.dark .xp-events {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .xp-event span {
@@ -683,7 +683,7 @@ html.dark .xp-events {
 
 .xp-event strong {
     color: var(--status-accepted);
-    font-size: 14px;
+    font-size: 11px;
 }
 
 /* ── 바로가기 ── */
@@ -738,18 +738,18 @@ html.dark .xp-events {
 }
 
 .community-entry__text strong {
-    font-size: 15px;
+    font-size: 11px;
 }
 
 .community-entry__text small {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
     margin-top: 2px;
 }
 
 .community-entry__arrow {
     color: var(--text-muted);
-    font-size: 24px;
+    font-size: 20px;
     font-weight: 300;
 }
 
@@ -773,7 +773,7 @@ html.dark .xp-events {
     display: inline-flex;
     align-items: center;
     gap: 7px;
-    font-size: 14px;
+    font-size: 11px;
     font-weight: 700;
 }
 
@@ -804,6 +804,6 @@ html.dark .xp-events {
 
 .driver-status__meta {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 </style>

@@ -17,7 +17,7 @@ export function useBatchSettle({ load }) {
         settleMessage.value = '';
 
         try {
-            const { data } = await apiOrders({ scope: 'mine', tab: '완료', per_page: 100 });
+            const { data } = await apiOrders({ scope: 'mine', tab: '정산', per_page: 100 });
             const rows = Array.isArray(data.data) ? data.data : data.data?.data ?? [];
             const ids = rows.filter((row) => row.status === 'completed').map((row) => row.id);
 

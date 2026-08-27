@@ -63,14 +63,10 @@ const isMyClaim = computed(() =>
         <div class="order-card__head">
             <div class="order-card__route">
                 <div class="order-card__route-top">
-                    <span v-if="order.isNew" class="order-card__new" title="새로 등록된 운행">N</span>
-                    <span v-if="order.is_matched_to_me" class="order-card__matched" title="내 매칭 조건에 맞는 운행">매칭</span>
-                    <span v-if="order.pendingOffers > 0" class="order-card__offer" title="대기 중인 요금 제안">제안 {{ order.pendingOffers }}</span>
+                    <span v-if="order.is_matched_to_me" class="order-card__matched" title="내 매칭 조건에 맞는 운행">추천</span>
                     <span v-if="order.isPriority" class="order-card__priority" title="긴급 운행">긴급</span>
                     <strong>{{ order.route }}</strong>
                     <span v-if="order.isUrgent" class="order-card__urgent" title="곧 운행 시작">임박</span>
-                    <span v-else-if="order.isToday" class="order-card__today">오늘</span>
-                    <span v-else-if="order.isTomorrow" class="order-card__tomorrow">내일</span>
                 </div>
                 <div class="order-card__route-bottom">
                     <span class="order-card__datetime">
@@ -103,17 +99,7 @@ const isMyClaim = computed(() =>
             </div>
         </div>
         <div class="order-card__meta">
-            <span v-if="order.serviceLabel" class="order-card__meta-item">{{ order.serviceLabel }}</span>
-            <span v-if="order.flightNumber" class="order-card__meta-item">{{ order.flightNumber }}</span>
             <span class="order-card__amount">{{ order.amount }}</span>
-        </div>
-        <div
-            v-if="order.owner && (order.owner.review_count > 0 || order.owner.completed_count > 0)"
-            class="order-card__owner"
-        >
-            <span class="order-card__owner-name">{{ order.owner.name }}</span>
-            <span v-if="order.owner.review_count > 0" class="order-card__owner-trust">{{ order.owner.rating }}점 · 리뷰 {{ order.owner.review_count }}</span>
-            <span v-if="order.owner.completed_count > 0" class="order-card__owner-trust">완료 {{ order.owner.completed_count }}건</span>
         </div>
 
         <!-- 가져오기 요청(수락 대기) 상태 — 등록자는 요청자, 요청자는 승인 안내 -->
@@ -209,7 +195,7 @@ const isMyClaim = computed(() =>
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 16px;
+    font-size: 12px;
     font-weight: 800;
     letter-spacing: -0.2px;
 }
@@ -225,7 +211,7 @@ const isMyClaim = computed(() =>
     align-items: center;
     gap: 5px;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 500;
 }
 
@@ -250,8 +236,9 @@ const isMyClaim = computed(() =>
     justify-content: flex-end;
     gap: 10px;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     white-space: nowrap;
+    opacity: 0.85;
 }
 
 .side-chip {
@@ -269,32 +256,12 @@ const isMyClaim = computed(() =>
 .order-card__meta {
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 10px;
-    margin-top: 14px;
-    padding-top: 12px;
+    justify-content: flex-end;
+    margin-top: 10px;
+    padding-top: 9px;
     border-top: 1px solid var(--border);
     color: var(--text-muted);
-    font-size: 13px;
-}
-
-/* 등록자 신뢰 정보 — 마켓 카드에 표시 */
-.order-card__owner {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 4px 10px;
-    margin-top: 8px;
-    font-size: 12px;
-}
-
-.order-card__owner-name {
-    font-weight: 700;
-    color: var(--text);
-}
-
-.order-card__owner-trust {
-    color: var(--text-muted);
+    font-size: 11px;
 }
 
 /* 가져오기 요청(수락 대기) 힌트 바 */
@@ -307,7 +274,7 @@ const isMyClaim = computed(() =>
     border-radius: 10px;
     background: color-mix(in srgb, var(--status-acceptance-pending) 12%, transparent);
     color: var(--text);
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
 }
 
@@ -319,45 +286,12 @@ const isMyClaim = computed(() =>
     flex-shrink: 0;
 }
 
-/* 신규 운행 배지 */
-.order-card__new {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: #e5484d;
-    color: #ffffff;
-    font-size: 11px;
-    font-weight: 700;
-    line-height: 1;
-    flex-shrink: 0;
-    box-shadow: 0 2px 6px rgba(229, 72, 77, 0.3);
-}
-
-/* 오늘/내일 배지 — 도착지(route) 뒤에 표시 */
-.order-card__today,
-.order-card__tomorrow {
-    flex-shrink: 0;
-    padding: 3px 10px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: -0.2px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-}
-
-.order-card__today {
-    background: var(--status-completed);
-    color: #ffffff;
-}
-
+/* 임박 배지 — 곧 운행 시작 (빨강 펄스) */
 .order-card__urgent {
     flex-shrink: 0;
     padding: 3px 10px;
     border-radius: 999px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: -0.2px;
     background: var(--danger);
@@ -376,17 +310,11 @@ const isMyClaim = computed(() =>
     }
 }
 
-.order-card__tomorrow {
-    background: #ffa940;
-    color: #ffffff;
-}
-
-/* 긴급 배지 — 임박(빨강 펄스)과 구분되는 보라 */
 .order-card__priority {
     flex-shrink: 0;
     padding: 3px 10px;
     border-radius: 999px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: -0.2px;
     background: var(--status-settled);
@@ -399,7 +327,7 @@ const isMyClaim = computed(() =>
     flex-shrink: 0;
     padding: 3px 10px;
     border-radius: 999px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: -0.2px;
     background: var(--brand);
@@ -407,35 +335,11 @@ const isMyClaim = computed(() =>
     box-shadow: 0 1px 4px color-mix(in srgb, var(--brand) 40%, transparent);
 }
 
-/* 요금 제안 배지 — 대기 중인 제안이 있는 운행 */
-.order-card__offer {
-    flex-shrink: 0;
-    padding: 3px 10px;
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: -0.2px;
-    background: var(--status-trading);
-    color: #ffffff;
-    box-shadow: 0 1px 4px color-mix(in srgb, var(--status-trading) 45%, transparent);
-    animation: offer-pulse 2s ease-in-out infinite;
-}
-
-@keyframes offer-pulse {
-    0%,
-    100% {
-        box-shadow: 0 1px 4px color-mix(in srgb, var(--status-trading) 45%, transparent);
-    }
-    50% {
-        box-shadow: 0 1px 9px color-mix(in srgb, var(--status-trading) 85%, transparent);
-    }
-}
-
 .order-card__amount {
     margin-left: auto;
     color: var(--brand);
     font-weight: 800;
-    font-size: 16.5px;
+    font-size: 14px;
     letter-spacing: -0.3px;
     white-space: nowrap;
 }
@@ -444,17 +348,20 @@ const isMyClaim = computed(() =>
 .status-badge {
     display: inline-flex;
     align-items: center;
-    padding: 4px 12px;
+    padding: 1px 6px;
     border-radius: 999px;
     color: #ffffff;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 10px;
     white-space: nowrap;
     flex-shrink: 0;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
-/* 다크모드 — 밝은 틸(#63e2b7) 배지 위엔 검은 글자 (흰 글자는 대비가 약함) */
+/* 밝은 배경 배지 — 흰 글자 대비가 약하므로 라이트·다크 모두 어두운 글자 (접근성) */
+.status-badge--published,
+.status-badge--driving,
+.status-badge--trading,
+.status-badge--acceptance-pending,
 html.dark .status-badge--published,
 html.dark .status-badge--driving,
 html.dark .order-card__matched {

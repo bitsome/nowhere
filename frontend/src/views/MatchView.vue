@@ -370,12 +370,12 @@ html.dark .calling-bar--off {
 }
 
 .calling-bar__text strong {
-    font-size: 15px;
+    font-size: 11px;
 }
 
 .calling-bar__text small {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .match-page__section {
@@ -391,12 +391,12 @@ html.dark .calling-bar--off {
 }
 
 .match-page__head strong {
-    font-size: 16px;
+    font-size: 12px;
 }
 
 .match-page__hint {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
     flex: 1;
     min-width: 0;
 }
@@ -444,7 +444,7 @@ html.dark .calling-bar--off {
 
 .match-item__meta {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .match-item__actions {
@@ -469,7 +469,7 @@ html.dark .calling-bar--off {
 }
 
 .match-form__presets-label {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-muted);
 }
 
@@ -483,7 +483,7 @@ html.dark .calling-bar--off {
 
 .match-form__chip-remove {
     font-style: normal;
-    font-size: 14px;
+    font-size: 11px;
     line-height: 1;
     opacity: 0.55;
     cursor: pointer;
@@ -513,7 +513,7 @@ html.dark .calling-bar--off {
     border-radius: 999px;
     background: transparent;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     cursor: pointer;
     transition: all 0.15s ease;
 }

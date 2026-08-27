@@ -13,6 +13,7 @@ beforeEach(function () {
     // claim(can:create)·상태 전환(can:transition) 권한 필요
     $this->performer = User::factory()->create([
         'id' => 99,
+        'role' => User::ROLE_DRIVER,
         'permissions' => ['order.create', 'order.status.update'],
     ]);
 

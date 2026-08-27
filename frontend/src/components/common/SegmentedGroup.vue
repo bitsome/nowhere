@@ -46,17 +46,17 @@ const props = defineProps({
 
 /* 크기 프리셋 — 용도별 */
 .segmented-group--small :deep(.n-radio-button) {
-    font-size: 12px;
+    font-size: 11px;
     min-width: 52px;
 }
 
 .segmented-group--medium :deep(.n-radio-button) {
-    font-size: 13px;
+    font-size: 11px;
     min-width: 64px;
 }
 
 .segmented-group--large :deep(.n-radio-button) {
-    font-size: 15px;
+    font-size: 11px;
     min-width: 96px;
     font-weight: 700;
     padding: 0 24px;

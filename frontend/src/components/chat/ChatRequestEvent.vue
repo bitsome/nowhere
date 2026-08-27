@@ -77,7 +77,7 @@ const timeLabel = computed(() => {
     return formatClock(ts);
 });
 
-// 승인 처리는 액션 센터(처리할 일)에서 — 채팅 카드는 안내·기록 역할만 한다
+// 승인 처리는 처리할 일에서 — 채팅 카드는 안내·기록 역할만 한다
 const goActions = () => router.push({ name: 'actions' });
 </script>
 
@@ -126,16 +126,16 @@ const goActions = () => router.push({ name: 'actions' });
 .rq-card__label--approval { background: color-mix(in srgb, var(--status-accepted) 14%, transparent); color: var(--status-accepted); }
 .rq-card__label--cancel { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
 
-.rq-card__title { font-size: 14px; font-weight: 700; color: var(--text); line-height: 1.45; }
+.rq-card__title { font-size: 11px; font-weight: 700; color: var(--text); line-height: 1.45; }
 .rq-card__lines { margin-top: 8px; display: flex; flex-direction: column; gap: 3px; }
-.rq-card__lines p { margin: 0; font-size: 12px; color: var(--text-muted); line-height: 1.5; word-break: break-word; }
+.rq-card__lines p { margin: 0; font-size: 11px; color: var(--text-muted); line-height: 1.5; word-break: break-word; }
 
 .rq-card__actions { display: flex; gap: 8px; margin-top: 12px; }
-.rq-card__btn { flex: 1; padding: 10px 0; border: 0; border-radius: 12px; font-size: 14px; font-weight: 700; cursor: pointer; }
+.rq-card__btn { flex: 1; padding: 10px 0; border: 0; border-radius: 12px; font-size: 11px; font-weight: 700; cursor: pointer; }
 .rq-card__btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .rq-card__btn--primary { background: var(--brand); color: #fff; }
 
-.rq-card__waiting { margin-top: 12px; padding: 9px 0; border-radius: 12px; background: var(--bg); color: var(--text-muted); font-size: 12px; text-align: center; }
+.rq-card__waiting { margin-top: 12px; padding: 9px 0; border-radius: 12px; background: var(--bg); color: var(--text-muted); font-size: 11px; text-align: center; }
 
 .rq-card__meta { margin-top: 10px; font-size: 11px; color: var(--text-muted); }
 </style>

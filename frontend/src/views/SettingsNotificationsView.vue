@@ -80,7 +80,7 @@ const { error, success, notifyEnabled, toggleNotify } = settings;
     border: 0;
     background: none;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
     cursor: pointer;
     border-radius: 8px;
@@ -108,11 +108,11 @@ const { error, success, notifyEnabled, toggleNotify } = settings;
 }
 
 .notify-row__text strong {
-    font-size: 15px;
+    font-size: 11px;
 }
 
 .notify-row__text span {
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: 11px;
 }
 </style>

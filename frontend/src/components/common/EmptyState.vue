@@ -80,14 +80,14 @@ html.dark .empty-state__icon {
 
 .empty-state__title {
     margin: 0;
-    font-size: 15px;
+    font-size: 11px;
     font-weight: 600;
 }
 
 .empty-state__hint {
     margin: 0;
     color: var(--text-muted);
-    font-size: 13px;
+    font-size: 11px;
     line-height: 1.5;
 }
 

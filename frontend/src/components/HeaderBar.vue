@@ -310,7 +310,7 @@ html.dark .hb--scrolled {
 }
 
 .hb__label {
-    font-size: 15px;
+    font-size: 11px;
     font-weight: 700;
     white-space: nowrap;
     overflow: hidden;
@@ -366,7 +366,7 @@ html.dark .hb__label {
     border-radius: 999px;
     background: var(--badge-red);
     color: #fff;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
     line-height: 16px;
     text-align: center;
@@ -531,12 +531,12 @@ html.dark .status-option:hover:not(:disabled) {
 }
 
 .status-option__label {
-    font-size: 14px;
+    font-size: 11px;
     font-weight: 700;
 }
 
 .status-option__hint {
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-muted);
 }
 

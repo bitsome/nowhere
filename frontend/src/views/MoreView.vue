@@ -117,7 +117,7 @@ const logout = async () => {
         <UiSection title="내 운행">
             <UiCard :padded="false" class="more-list">
                 <UiListRow tag="button" icon="dashboard" arrow @click="go('dashboard')">대시보드</UiListRow>
-                <UiListRow tag="button" icon="my-market" arrow @click="go('my-market')">내가 등록한 운행</UiListRow>
+                <UiListRow tag="button" icon="my-market" arrow @click="go('my-market')">내 마켓</UiListRow>
                 <UiListRow tag="button" icon="cash" arrow @click="go('actions')">처리할 일</UiListRow>
                 <UiListRow tag="button" icon="history" arrow @click="go('history')">운행 기록</UiListRow>
                 <UiListRow tag="button" icon="settlements" arrow @click="go('settlements')">정산 내역</UiListRow>
@@ -201,7 +201,7 @@ const logout = async () => {
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 20px;
+    font-size: 16px;
     font-weight: 900;
     box-shadow: 0 4px 12px color-mix(in srgb, var(--brand) 30%, transparent);
 }
@@ -215,7 +215,7 @@ const logout = async () => {
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 16px;
+    font-size: 12px;
     min-width: 0;
 }
 
@@ -231,13 +231,13 @@ const logout = async () => {
     border-radius: 999px;
     background: linear-gradient(135deg, #f7b731, #f2994a);
     color: #fff;
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 800;
 }
 
 .more-hero__role {
     margin-top: 3px;
-    font-size: 12px;
+    font-size: 11px;
     color: var(--text-muted);
 }
 
@@ -248,7 +248,7 @@ const logout = async () => {
     padding: 7px 13px;
     background: color-mix(in srgb, var(--brand) 12%, transparent);
     color: var(--brand);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 700;
     cursor: pointer;
     transition: background 0.15s ease;
@@ -312,7 +312,7 @@ const logout = async () => {
 }
 
 .more-stats__value {
-    font-size: 19px;
+    font-size: 15px;
     font-weight: 900;
     color: var(--text);
     line-height: 1.2;
