@@ -163,7 +163,6 @@ const send = async () => {
         :close-on-esc="true"
         :auto-focus="false"
         display-directive="if"
-        class="rq-modal"
     >
         <div class="rq-sheet">
             <!-- 뒤로가기 헤더 -->
@@ -284,16 +283,13 @@ const send = async () => {
 </template>
 
 <style scoped>
-.rq-modal {
-    display: flex;
-    align-items: flex-end;
-}
-
 .rq-sheet {
     width: 100%;
     max-width: 480px;
     max-height: 82vh;
     margin: 0 auto;
+    /* 바텀시트 — 스크롤 컨테이너(행 flex)에서 아래쪽에 고정 */
+    align-self: flex-end;
     display: flex;
     flex-direction: column;
     background: var(--surface);
@@ -329,6 +325,13 @@ const send = async () => {
 .rq-label { font-size: 11px; font-weight: 600; color: var(--text-muted); margin-top: 4px; }
 .rq-input { width: 100%; border: 1px solid var(--border); border-radius: 12px; padding: 11px 14px; font-size: 11px; background: var(--bg); color: var(--text); outline: none; }
 .rq-input:focus { border-color: var(--brand); }
+/* 네이티브 time input — 모바일 브라우저의 고정 최소폭으로 폼 밖 삐져나감 방지 */
+.rq-input[type='time'] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+    max-width: 100%;
+}
 .rq-textarea { width: 100%; border: 1px solid var(--border); border-radius: 12px; padding: 11px 14px; font-size: 11px; background: var(--bg); color: var(--text); outline: none; resize: none; font-family: inherit; }
 .rq-textarea:focus { border-color: var(--brand); }
 
