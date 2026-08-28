@@ -2,12 +2,14 @@
 
 namespace App\Services\Chat;
 
+use App\Models\ChatImageUpload;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\Order;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -115,17 +117,35 @@ class ChatService
     }
 
     /**
-     * 대화에 메시지를 보낸다.
+     * 대화에 메시지를 보낸다. 여러 장 이미지를 하나의 말풍선(image_paths)으로 묶어 전송한다.
+     * - image(새 업로드): 내용 지문(해시)으로 중복 저장 없이 보관한다.
+     * - image_path / image_paths(보관함 재사용): 내가 이전에 보낸 이미지만 허용하고 그대로 재사용한다.
+     *
+     * @param  array<int, string>  $imagePaths
      */
-    public function send(User $user, Conversation $conversation, ?string $body, ?UploadedFile $image): Message
+    public function send(User $user, Conversation $conversation, ?string $body, ?UploadedFile $image = null, ?string $imagePath = null, array $imagePaths = []): Message
     {
         abort_unless($conversation->users()->where('users.id', $user->id)->exists(), 403);
 
-        $imagePath = $image instanceof UploadedFile
-            ? $image->store('chat', 'public')
-            : null;
+        $paths = [];
 
-        if (trim((string) ($body ?? '')) === '' && $imagePath === null) {
+        if ($image instanceof UploadedFile) {
+            $paths[] = $this->storeImage($user, $image);
+        }
+
+        if ($imagePath !== null && trim($imagePath) !== '') {
+            $this->assertOwnsImage($user, $imagePath);
+            $paths[] = $imagePath;
+        }
+
+        foreach ($imagePaths as $candidate) {
+            $this->assertOwnsImage($user, $candidate);
+            $paths[] = $candidate;
+        }
+
+        $paths = array_values(array_unique($paths));
+
+        if (trim((string) ($body ?? '')) === '' && count($paths) === 0) {
             throw ValidationException::withMessages([
                 'body' => ['메시지 또는 이미지를 입력해주세요.'],
             ]);
@@ -134,12 +154,119 @@ class ChatService
         $message = $conversation->messages()->create([
             'user_id' => $user->id,
             'body' => $body ?? '',
-            'image_path' => $imagePath,
+            'image_paths' => count($paths) ? $paths : null,
+            'image_path' => $paths[0] ?? null,
         ]);
+
+        // 전송이 끝난 지문은 메시지가 참조하므로 업로드 소유권 기록은 정리한다 (중복 누적 방지)
+        if (count($paths)) {
+            ChatImageUpload::where('user_id', $user->id)
+                ->whereIn('image_path', $paths)
+                ->delete();
+        }
 
         $conversation->forceFill(['last_message_at' => now()])->save();
 
         return $message;
+    }
+
+    /**
+     * 첨부 이미지를 저장하고 저장 경로를 반환한다.
+     * 파일 내용 해시(지문)를 파일명으로 사용해 같은 이미지를 다시 올려도 중복 저장하지 않는다.
+     * 아직 메시지로 저장되지 않은 상태이므로, 곧바로 묶음 전송할 수 있도록 소유권을 기록한다.
+     */
+    public function storeImage(User $user, UploadedFile $image): string
+    {
+        $hash = hash_file('sha256', (string) $image->getRealPath());
+        $extension = $image->extension() ?: 'jpg';
+        $path = 'chat/'.$hash.'.'.$extension;
+
+        if (! Storage::disk('public')->exists($path)) {
+            Storage::disk('public')->putFileAs('chat', $image, $hash.'.'.$extension);
+        }
+
+        ChatImageUpload::firstOrCreate([
+            'user_id' => $user->id,
+            'image_path' => $path,
+        ]);
+
+        return $path;
+    }
+
+    /**
+     * 보관함 재사용 경로가 내가 이전에 보낸 이미지인지 검증한다 (단일·다중 참조 모두 허용).
+     * 전송 전에 업로드한 새 사진(chat_image_uploads 소유권)도 허용한다.
+     */
+    private function assertOwnsImage(User $user, string $imagePath): void
+    {
+        $referenced = Message::query()
+            ->where('user_id', $user->id)
+            ->where(function ($query) use ($imagePath) {
+                $query->where('image_path', $imagePath)
+                    ->orWhereJsonContains('image_paths', $imagePath);
+            })
+            ->exists();
+        $uploaded = ChatImageUpload::where('user_id', $user->id)
+            ->where('image_path', $imagePath)
+            ->exists();
+
+        abort_unless($referenced || $uploaded, 422, '이미지를 찾을 수 없습니다.');
+        abort_unless(Storage::disk('public')->exists($imagePath), 422, '이미지를 찾을 수 없습니다.');
+    }
+
+    /**
+     * 보관함 이미지를 삭제한다.
+     * 내가 보낸 해당 이미지(지문)의 참조를 내 모든 메시지에서 제거하고, 더 이상 어느 메시지에서도
+     * 쓰이지 않게 되면 저장 파일도 함께 정리한다.
+     */
+    public function deleteImage(User $user, Message $message, ?string $imagePath = null): void
+    {
+        abort_unless($message->user_id === $user->id, 403);
+
+        // 다중 이미지 말풍선에서는 어떤 지문을 지울지 명시한다. 없으면 첫 이미지를 대상으로 한다.
+        $paths = $message->image_paths ?? ($message->image_path ? [$message->image_path] : []);
+        $target = $imagePath !== null && trim($imagePath) !== ''
+            ? $imagePath
+            : ($paths[0] ?? null);
+
+        if ($target === null) {
+            return;
+        }
+
+        // 같은 지문(해시) 이미지를 참조하는 내 모든 메시지에서 참조를 제거한다 (단일·다중 공통)
+        Message::query()
+            ->where('user_id', $user->id)
+            ->where(function ($query) use ($target) {
+                $query->where('image_path', $target)
+                    ->orWhereJsonContains('image_paths', $target);
+            })
+            ->get()
+            ->each(function (Message $ownMessage) use ($target): void {
+                $ownPaths = array_values(array_filter(
+                    $ownMessage->image_paths ?? ($ownMessage->image_path ? [$ownMessage->image_path] : []),
+                    fn (string $path) => $path !== $target,
+                ));
+
+                $ownMessage->update([
+                    'image_path' => $ownPaths[0] ?? null,
+                    'image_paths' => count($ownPaths) ? $ownPaths : null,
+                ]);
+            });
+
+        // 전송 전 업로드 소유권(아직 메시지가 아닌 지문) 기록도 함께 정리한다
+        ChatImageUpload::where('user_id', $user->id)
+            ->where('image_path', $target)
+            ->delete();
+
+        // 다른 사용자의 메시지에서도 더 이상 참조되지 않을 때만 파일을 정리한다
+        if (! Message::query()
+            ->where(function ($query) use ($target) {
+                $query->where('image_path', $target)
+                    ->orWhereJsonContains('image_paths', $target);
+            })
+            ->exists()) {
+            Storage::disk('public')->delete($target);
+        }
     }
 
     /**
@@ -186,6 +313,8 @@ class ChatService
      */
     public function serializeMessage(Message $message): array
     {
+        $paths = $message->image_paths ?? ($message->image_path ? [$message->image_path] : []);
+
         return [
             'id' => $message->id,
             'user_id' => $message->user_id,
@@ -193,9 +322,12 @@ class ChatService
             'body' => $message->body,
             'type' => $message->type ?? 'text',
             'payload' => $message->payload ?: (object) [],
-            'image_url' => $message->image_path
-                ? url('/api/chat/images/'.basename($message->image_path))
-                : null,
+            'image_url' => count($paths) ? '/api/chat/images/'.basename($paths[0]) : null,
+            // 한 개 말풍선에 여러 장 — 순서 유지
+            'images' => array_values(array_map(
+                fn (string $path) => '/api/chat/images/'.basename($path),
+                $paths,
+            )),
             'created_at' => $message->created_at?->diffForHumans(),
             'created_at_iso' => $message->created_at?->toISOString(),
             'read' => $message->read_at !== null,

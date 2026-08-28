@@ -45,12 +45,13 @@ export const useChatsStore = defineStore('chats', {
                 this.messages = [...this.messages, ...fresh];
             }
         },
-        async send(body, image = null) {
+        // 여러 장 이미지는 image_paths(지문) 배열로 한 개 말풍선에 묶어 전송한다
+        async send(body, imagePaths = []) {
             if (!this.activeId) {
                 return;
             }
 
-            await apiSendChatMessage(this.activeId, body, image);
+            await apiSendChatMessage(this.activeId, body, imagePaths);
             await this.reloadMessages();
             await this.loadConversations();
         },

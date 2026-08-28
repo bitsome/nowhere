@@ -8,6 +8,7 @@ import { getApiErrorMessage } from '../../api/client';
 import MessageBubble from './MessageBubble.vue';
 import ChatRequestEvent from './ChatRequestEvent.vue';
 import ChatRequestSheet from './ChatRequestSheet.vue';
+import ChatImageSheet from './ChatImageSheet.vue';
 import { getChatTimestamp, isSameDay, formatDayLabel } from '../../utils/chatTime';
 import { statusColorVar } from '../../utils/colors';
 import BaseIcon from '../common/BaseIcon.vue';
@@ -20,30 +21,8 @@ const message = useMessage();
 const draft = ref('');
 const threadEl = ref(null);
 const sending = ref(false);
-const pendingImage = ref(null);
-const pendingPreview = ref('');
-const imageInput = ref(null);
 const requestOpen = ref(false);
-
-const clearPendingImage = () => {
-    if (pendingPreview.value) {
-        URL.revokeObjectURL(pendingPreview.value);
-    }
-    pendingImage.value = null;
-    pendingPreview.value = '';
-};
-
-const pickImage = (event) => {
-    const file = event.target.files?.[0];
-
-    if (file) {
-        clearPendingImage();
-        pendingImage.value = file;
-        pendingPreview.value = URL.createObjectURL(file);
-    }
-
-    event.target.value = '';
-};
+const imageOpen = ref(false);
 
 const activeConversation = computed(() => store.activeConversation);
 
@@ -157,22 +136,16 @@ const onRequestSent = async () => {
 
 const send = async () => {
     const body = draft.value.trim();
-    if ((!body && !pendingImage.value) || sending.value) return;
+    if (!body || sending.value) return;
     sending.value = true;
-    const image = pendingImage.value;
-    clearPendingImage();
     draft.value = '';
     try {
-        await store.send(body, image);
+        await store.send(body);
         isNearBottom.value = true;
         newMessages.value = 0;
     } catch (e) {
         // 전송 실패 시 입력값 복원 — 메시지 유실 방지
-        if (body) draft.value = body;
-        if (image) {
-            pendingImage.value = image;
-            pendingPreview.value = URL.createObjectURL(image);
-        }
+        draft.value = body;
         message.error(getApiErrorMessage(e, '메시지 전송에 실패했습니다.'));
     } finally {
         sending.value = false;
@@ -277,21 +250,6 @@ onMounted(() => {
         </button>
 
         <form class="chat-thread__composer" @submit.prevent="send">
-            <!-- 첨부 이미지 미리보기 — 사진 선택 후 썸네일 + 취소 -->
-            <div v-if="pendingImage" class="chat-thread__preview">
-                <div class="chat-thread__preview-thumb">
-                    <img :src="pendingPreview" alt="첨부 이미지 미리보기" />
-                    <button
-                        type="button"
-                        class="chat-thread__preview-remove"
-                        aria-label="첨부 취소"
-                        @click="clearPendingImage"
-                    >
-                        <BaseIcon name="close" :size="12" />
-                    </button>
-                </div>
-            </div>
-
             <div class="chat-thread__input">
                 <!-- 운행 요청 메뉴 -->
                 <button
@@ -304,15 +262,13 @@ onMounted(() => {
                     <BaseIcon name="my-posts" :size="20" />
                 </button>
 
-                <!-- 이미지 첨부 -->
-                <input ref="imageInput" type="file" accept="image/*" hidden @change="pickImage" />
+                <!-- 이미지 첨부 — 모달에서 사진 선택·관리 -->
                 <button
                     type="button"
                     class="chat-thread__attach"
-                    :class="{ 'chat-thread__attach--active': pendingImage }"
                     :disabled="sending"
                     title="이미지 첨부"
-                    @click="imageInput?.click()"
+                    @click="imageOpen = true"
                 >
                     <BaseIcon name="image" :size="20" />
                 </button>
@@ -320,7 +276,7 @@ onMounted(() => {
                 <input
                     v-model="draft"
                     type="text"
-                    :placeholder="pendingImage ? '사진과 함께 보낼 메시지 (선택)' : '메시지를 입력하세요...'"
+                    placeholder="메시지를 입력하세요..."
                     :disabled="sending"
                 />
                 <n-button
@@ -329,7 +285,7 @@ onMounted(() => {
                     circle
                     class="chat-thread__send"
                     :loading="sending"
-                    :disabled="!draft.trim() && !pendingImage"
+                    :disabled="!draft.trim()"
                     title="보내기"
                 >
                     <BaseIcon name="send" :size="18" />
@@ -341,6 +297,12 @@ onMounted(() => {
         <ChatRequestSheet
             v-model:show="requestOpen"
             :order="activeConversation?.order"
+            @sent="onRequestSent"
+        />
+
+        <!-- 이미지 첨부 — 모달에서 사진 선택·관리·전송 -->
+        <ChatImageSheet
+            v-model:show="imageOpen"
             @sent="onRequestSent"
         />
     </div>
@@ -371,15 +333,8 @@ onMounted(() => {
 html.dark .chat-order-card__status{color:#101418}
 .chat-order-card__amount{flex-shrink:0;font-size: 11px;font-weight:700;color:var(--text)}
 
-/* 입력 영역 — 미리보기 + 입력줄을 함께 감싼다 */
+/* 입력 영역 — 입력줄을 감싼다 */
 .chat-thread__composer{border-top:1px solid var(--border);background:var(--surface)}
-
-/* 첨부 이미지 미리보기 — 썸네일 + 취소 버튼 */
-.chat-thread__preview{display:flex;padding:10px 14px 0}
-.chat-thread__preview-thumb{position:relative;width:64px;height:64px}
-.chat-thread__preview-thumb img{width:64px;height:64px;object-fit:cover;border-radius:10px;border:1px solid var(--border)}
-.chat-thread__preview-remove{position:absolute;top:-7px;right:-7px;display:flex;align-items:center;justify-content:center;width:20px;height:20px;border:0;border-radius:50%;background:rgba(0,0,0,.65);color:#fff;font-size: 11px;line-height:1;cursor:pointer}
-.chat-thread__preview-remove:hover{background:rgba(0,0,0,.85)}
 
 /* 전송 버튼 — 아이콘 우선 (38px 원형) */
 .chat-thread__send{width:38px;height:38px;flex-shrink:0}
@@ -396,7 +351,6 @@ html.dark .chat-order-card__status{color:#101418}
 
 .chat-thread__attach{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border:1px solid var(--border);border-radius:50%;background:var(--bg);color:var(--text-muted);cursor:pointer;flex-shrink:0;transition:color .15s ease,border-color .15s ease}
 .chat-thread__attach svg{width:18px;height:18px}
-.chat-thread__attach--active{color:var(--brand);border-color:var(--brand)}
 .chat-thread__attach:disabled{opacity:.5;cursor:not-allowed}
 .chat-thread__input input{flex:1;border:1px solid var(--border);border-radius:20px;padding:10px 16px;font-size: 11px;background:var(--bg);color:var(--text);outline:none}
 .chat-thread__input input:focus{border-color:var(--brand)}

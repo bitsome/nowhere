@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['conversation_id', 'user_id', 'body', 'image_path', 'type', 'payload', 'read_at'])]
+#[Fillable(['conversation_id', 'user_id', 'body', 'image_path', 'image_paths', 'type', 'payload', 'read_at'])]
 class Message extends Model
 {
     use HasFactory;
@@ -19,6 +19,7 @@ class Message extends Model
     {
         return [
             'payload' => 'array',
+            'image_paths' => 'array',
         ];
     }
 

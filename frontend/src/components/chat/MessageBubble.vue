@@ -1,6 +1,7 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { getChatTimestamp, formatClock } from '../../utils/chatTime';
+import ImageGallery from '../common/ImageGallery.vue';
 
 const props = defineProps({
     msg: { type: Object, required: true },
@@ -23,11 +24,22 @@ const bubbleCornerClass = computed(() => {
     return 'cb-bubble--mid';
 });
 
-// 첨부 이미지 새 탭에서 열기
-const openImage = () => {
-    if (props.msg.image_url) {
-        window.open(props.msg.image_url, '_blank', 'noopener');
+// 한 개 말풍선에 담긴 이미지들 — 서버가 images(순서 유지)를 내려주고, 구 메시지는 image_url로 보정한다
+const images = computed(() => {
+    if (Array.isArray(props.msg.images) && props.msg.images.length) {
+        return props.msg.images;
     }
+
+    return props.msg.image_url ? [props.msg.image_url] : [];
+});
+
+// 전체 화면 갤러리 — 공용 ImageGallery(스와이프 슬라이더) 사용
+const galleryOpen = ref(false);
+const galleryIndex = ref(0);
+
+const openGallery = (index) => {
+    galleryIndex.value = index;
+    galleryOpen.value = true;
 };
 </script>
 
@@ -44,14 +56,22 @@ const openImage = () => {
                 class="cb-bubble"
                 :class="[{ 'cb-bubble--mine': isMine }, bubbleCornerClass]"
             >
-                <img
-                    v-if="msg.image_url"
-                    :src="msg.image_url"
-                    alt="첨부 이미지"
-                    class="cb-bubble__image"
-                    loading="lazy"
-                    @click="openImage"
-                />
+                <!-- 여러 장은 한 말풍선 안에서 그리드로 — 클릭하면 전체 화면 슬라이더로 넘겨본다 -->
+                <div
+                    v-if="images.length"
+                    class="cb-bubble__media"
+                    :class="{ 'cb-bubble__media--multi': images.length > 1 }"
+                >
+                    <img
+                        v-for="(url, idx) in images"
+                        :key="`${url}-${idx}`"
+                        :src="url"
+                        :alt="`첨부 이미지 ${idx + 1}`"
+                        class="cb-bubble__image"
+                        loading="lazy"
+                        @click="openGallery(idx)"
+                    />
+                </div>
                 <div v-if="msg.body" class="cb-bubble__body">{{ msg.body }}</div>
             </div>
             <div v-if="isLast" class="cb-meta" :class="{ 'cb-meta--mine': isMine }">
@@ -60,6 +80,14 @@ const openImage = () => {
             </div>
         </div>
     </div>
+
+    <!-- 전체 화면 이미지 갤러리 — 공용 컴포넌트 (옆으로 넘기는 슬라이더 + 닫기 버튼) -->
+    <ImageGallery
+        :show="galleryOpen"
+        :images="images"
+        :start-index="galleryIndex"
+        @update:show="galleryOpen = $event"
+    />
 </template>
 
 <style scoped>
@@ -84,7 +112,13 @@ const openImage = () => {
 .cb-row--mine .cb-bubble--tail-bottom{border-top-right-radius:0}
 .cb-row--mine .cb-bubble--mid{border-top-right-radius:0;border-bottom-right-radius:0}
 .cb-bubble__body{font-size: 11px;word-break:break-word;line-height:1.5;white-space:pre-wrap}
-.cb-bubble__image{display:block;max-width:min(260px,100%);max-height:300px;border-radius:10px;object-fit:cover;cursor:zoom-in;margin-bottom:4px}
+
+/* 이미지 — 1장은 큰 미리보기, 여러 장은 2열 그리드 */
+.cb-bubble__media{display:flex;flex-direction:column;gap:3px;margin-bottom:4px}
+.cb-bubble__media--multi{display:grid;grid-template-columns:repeat(2,1fr);gap:3px}
+.cb-bubble__image{display:block;max-width:min(260px,100%);max-height:300px;border-radius:10px;object-fit:cover;cursor:zoom-in}
+.cb-bubble__media--multi .cb-bubble__image{width:100%;max-width:none;max-height:none;aspect-ratio:1}
+
 .cb-meta{display:flex;align-items:center;gap:6px;margin-top:2px;padding:0 4px}
 .cb-meta--mine{justify-content:flex-end}
 .cb-meta__read{font-size: 11px;color:var(--text-muted)}
