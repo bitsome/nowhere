@@ -35,3 +35,25 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# ── 개발용 임시/검증 파일 (커밋 대상 아님) ──
+/0
+/3278
+/askpass*.bat
+/check_server_db.sh
+/deploy.sh
+/cleanup_*.php
+/douyin_parser.py
+/fill_vehicle_data.php
+/gen_vapid.php
+/inspect_*.php
+/nw-migcheck.php
+/veh_probe.php
+/lark-config-qr.png
+/pptr_check.*
+/public/wechat-test.html
+/*.tar.gz
+/frontend/api_*.cjs
+/frontend/verify_*.cjs
+/frontend/vite.config.deploy.js
+/frontend/*.tar.gz
