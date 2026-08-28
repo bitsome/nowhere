@@ -3,6 +3,7 @@
 use App\Models\Order;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Laravel\Sanctum\Sanctum;
 
 uses(RefreshDatabase::class);
@@ -146,6 +147,118 @@ test('맡은 운행이 없으면 왕복 추천도 비어 있다', function () {
     $this->getJson('/api/orders/return-routes')
         ->assertOk()
         ->assertJsonCount(0, 'data');
+});
+
+test('서비스 시각이 지난 맡은 운행은 왕복 추천 근거에서 제외된다', function () {
+    $this->travelTo(Carbon::parse('today 08:00 Asia/Seoul'));
+
+    // 어제 서비스 시각이 지난 운행 — 근거로 쓰지 않는다
+    Order::factory()->create([
+        'user_id' => $this->driver->id,
+        'status' => Order::STATUS_ACCEPTED,
+        'pickup_location' => '인천공항',
+        'dropoff_location' => '서울 강남',
+        'service_date' => now('Asia/Seoul')->subDay()->format('Y-m-d'),
+        'service_time' => '09:00',
+    ]);
+
+    // 하차지 근처에서 출발하는 마켓 운행이 있어도 추천되지 않는다
+    Order::factory()->create([
+        'user_id' => $this->owner->id,
+        'status' => Order::STATUS_PUBLISHED,
+        'pickup_location' => '서울 강남',
+        'dropoff_location' => '인천공항',
+        'service_date' => now('Asia/Seoul')->addDays(1)->format('Y-m-d'),
+        'service_time' => '11:00',
+    ]);
+
+    $this->getJson('/api/orders/return-routes')
+        ->assertOk()
+        ->assertJsonCount(0, 'data');
+});
+
+test('하차 예정 시각이 지나야 왕복 추천된다', function () {
+    $this->travelTo(Carbon::parse('today 08:00 Asia/Seoul'));
+
+    // 오늘 09:00 하차 예정, 소요 60분 → 하차 이후 10:30부터 복귀 가능
+    Order::factory()->create([
+        'user_id' => $this->driver->id,
+        'status' => Order::STATUS_ACCEPTED,
+        'pickup_location' => '인천공항',
+        'dropoff_location' => '서울 강남',
+        'service_date' => now('Asia/Seoul')->format('Y-m-d'),
+        'service_time' => '09:00',
+        'estimated_duration_minutes' => 60,
+    ]);
+
+    // 09:30 출발 — 하차 전이라 추천 제외
+    Order::factory()->create([
+        'user_id' => $this->owner->id,
+        'status' => Order::STATUS_PUBLISHED,
+        'pickup_location' => '서울 강남',
+        'dropoff_location' => '인천공항',
+        'service_date' => now('Asia/Seoul')->format('Y-m-d'),
+        'service_time' => '09:30',
+    ]);
+
+    // 11:00 출발 — 하차(10:30) 이후라 추천
+    Order::factory()->create([
+        'user_id' => $this->owner->id,
+        'status' => Order::STATUS_PUBLISHED,
+        'pickup_location' => '서울 강남',
+        'dropoff_location' => '인천공항',
+        'service_date' => now('Asia/Seoul')->format('Y-m-d'),
+        'service_time' => '11:00',
+    ]);
+
+    $this->getJson('/api/orders/return-routes')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.route', '서울 강남 → 인천공항');
+});
+
+test('왕복 추천도 현재 마켓 필터를 반영한다', function () {
+    $this->travelTo(Carbon::parse('today 08:00 Asia/Seoul'));
+
+    Order::factory()->create([
+        'user_id' => $this->driver->id,
+        'status' => Order::STATUS_ACCEPTED,
+        'pickup_location' => '인천공항',
+        'dropoff_location' => '서울 강남',
+        'service_date' => now('Asia/Seoul')->format('Y-m-d'),
+        'service_time' => '09:00',
+    ]);
+
+    $tomorrow = now('Asia/Seoul')->addDays(1)->format('Y-m-d');
+
+    Order::factory()->create([
+        'user_id' => $this->owner->id,
+        'status' => Order::STATUS_PUBLISHED,
+        'pickup_location' => '서울 강남',
+        'dropoff_location' => '인천공항',
+        'service_date' => $tomorrow,
+        'service_time' => '11:00',
+    ]);
+
+    Order::factory()->create([
+        'user_id' => $this->owner->id,
+        'status' => Order::STATUS_PUBLISHED,
+        'pickup_location' => '서울 강남',
+        'dropoff_location' => '김포공항',
+        'service_date' => now('Asia/Seoul')->format('Y-m-d'),
+        'service_time' => '11:00',
+    ]);
+
+    // 날짜 필터(내일)를 걸면 내일 운행만 추천된다
+    $this->getJson('/api/orders/return-routes?date='.$tomorrow)
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.route', '서울 강남 → 인천공항');
+
+    // 시간대 필터(오전)를 걸면 오전 출발 운행만 남는다
+    $this->getJson('/api/orders/return-routes?time_range=morning')
+        ->assertOk()
+        ->assertJsonCount(2, 'data');
 });
 
 test('이미 가져오기 요청이 걸린 운행과 내가 등록한 운행은 왕복 추천에서 제외된다', function () {

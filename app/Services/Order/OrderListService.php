@@ -7,6 +7,7 @@ use App\Models\Review;
 use App\Models\User;
 use App\Services\MatchService;
 use App\Support\Orders\OrderWorkspaceListBuilder;
+use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -201,6 +202,7 @@ class OrderListService
         $maxAmount = $request->integer('max_amount', 0);
         $minPassengers = $request->integer('min_passengers', 0);
         $search = trim($request->string('search')->toString());
+        $timeRange = $request->string('time_range')->toString();
 
         if (in_array($serviceType, ['pickup', 'sending', 'landing'], true)) {
             $query->where('service_type', $serviceType);
@@ -250,6 +252,17 @@ class OrderListService
 
         if ($minPassengers > 0) {
             $query->where('passenger_count', '>=', $minPassengers);
+        }
+
+        // 시간대 필터 — 오전(00:00~12:00)/오후(12:00~18:00)/야간(18:00~) (0패딩 HH:MM 문자열 비교로 SQLite/MySQL 공용)
+        if (in_array($timeRange, ['morning', 'afternoon', 'night'], true)) {
+            $query->whereNotNull('service_time')
+                ->where('service_time', '!=', '')
+                ->where(match ($timeRange) {
+                    'morning' => fn ($q) => $q->where('service_time', '>=', '00:00')->where('service_time', '<', '12:00'),
+                    'afternoon' => fn ($q) => $q->where('service_time', '>=', '12:00')->where('service_time', '<', '18:00'),
+                    'night' => fn ($q) => $q->where('service_time', '>=', '18:00'),
+                });
         }
 
         $this->applyQuickFilter($request, $query);
@@ -349,24 +362,33 @@ class OrderListService
      * 왕복 노선 추천 — 내가 맡은 운행(수락/운행중)의 하차지 근처에서 시작하는 마켓 운행을 찾는다.
      * (CJ 더운반/uber Freight의 리턴 로드 개념 — 하차 후 공차 이동을 줄이기 위한 우선 노출)
      *
+     * 정합성 보완:
+     * - 서비스 시각이 이미 충분히 지난 운행은 추천 근거에서 제외 (최근·예정 운행만 사용)
+     * - 복귀 운행은 하차 예정 시각(소요시간+버퍼) 이후에 시작하는 것만 추천
+     * - 현재 마켓 필터(시간대·날짜·노선·차량 등)를 함께 반영해 목록과 일관성 유지
+     *
      * @return array<int, array<string, mixed>>
      */
     public function returnRoutes(Request $request): array
     {
         $user = $request->user();
 
-        // 내가 맡은 운행의 하차지 — 복귀 노선의 시작점이 될 지역 토큰
-        $dropoffs = Order::query()
+        // 내가 맡은 운행의 하차지 + 하차 이후 가능 시각 — 복귀 노선의 시작점 후보
+        $tripSignals = Order::query()
             ->where('user_id', $user->id)
             ->whereIn('status', [Order::STATUS_ACCEPTED, Order::STATUS_DRIVING])
             ->whereNotNull('dropoff_location')
             ->where('dropoff_location', '!=', '')
-            ->pluck('dropoff_location')
-            ->map(fn (string $location) => $this->locationTokens($location))
-            ->filter(fn (array $tokens) => $tokens !== [])
+            ->get()
+            ->filter(fn (Order $trip) => $this->isRelevantTrip($trip))
+            ->map(fn (Order $trip) => [
+                'tokens' => $this->locationTokens($trip->dropoff_location),
+                'availableAfter' => $this->availableAfter($trip),
+            ])
+            ->filter(fn (array $signal) => $signal['tokens'] !== [])
             ->values();
 
-        if ($dropoffs->isEmpty()) {
+        if ($tripSignals->isEmpty()) {
             return [];
         }
 
@@ -374,7 +396,7 @@ class OrderListService
         $cutoff = now('Asia/Seoul')->subHours(2);
         [$cutoffDate, $cutoffTime] = explode(' ', $cutoff->format('Y-m-d H:i'));
 
-        $candidates = Order::query()
+        $candidatesQuery = Order::query()
             ->whereIn('status', [Order::STATUS_PUBLISHED, Order::STATUS_TRADING])
             ->whereNull('claimed_at')
             ->where('user_id', '!=', $user->id)
@@ -399,16 +421,22 @@ class OrderListService
                         ->orWhereNull('service_time')
                         ->orWhere('service_time', '');
                 });
-            })
+            });
+
+        // 현재 마켓 필터를 함께 적용 — 검색 중인 노선·날짜·시간대·차량에 맞는 복귀 운행만 추천
+        $this->applyFilters($request, $candidatesQuery);
+
+        $candidates = $candidatesQuery
             ->orderBy('service_date')
             ->orderBy('service_time')
-            ->limit(50)
+            ->limit(100)
             ->get();
 
-        // 출발지가 내 하차지와 지역(토큰)이 겹치는 운행만 추천
+        // 출발지가 내 하차지와 지역(토큰)이 겹치고, 하차 이후 가능한 시각에 시작하는 운행만 추천
         $matched = $candidates
-            ->filter(fn (Order $order) => $dropoffs->contains(
-                fn (array $dropTokens) => array_intersect($this->locationTokens($order->pickup_location), $dropTokens) !== [],
+            ->filter(fn (Order $order) => $tripSignals->contains(
+                fn (array $signal) => array_intersect($this->locationTokens($order->pickup_location), $signal['tokens']) !== []
+                    && $this->isTimeFeasible($signal['availableAfter'], $order),
             ))
             ->take(10);
 
@@ -419,6 +447,56 @@ class OrderListService
         $rows = app(OrderWorkspaceListBuilder::class)->build($matched, null, 'date');
 
         return $this->withOwnerTrust($rows, $matched->all());
+    }
+
+    /**
+     * 왕복 추천 근거로 쓸 수 있는 운행인지 — 서비스 시각이 아직 지나지 않았는지 확인한다.
+     * 일시 미정(날짜 없음) 운행은 근거로 유지하고, 시간 미정이면 날짜만으로 판단한다.
+     */
+    private function isRelevantTrip(Order $trip): bool
+    {
+        if (blank($trip->service_date)) {
+            return true;
+        }
+
+        $today = now('Asia/Seoul')->format('Y-m-d');
+
+        if (blank($trip->service_time)) {
+            return $trip->service_date >= $today;
+        }
+
+        return Carbon::parse($trip->service_date.' '.$trip->service_time, 'Asia/Seoul')
+            >= now('Asia/Seoul')->subHours(3);
+    }
+
+    /**
+     * 해당 운행을 마친 뒤 복귀 운행을 시작할 수 있는 시각 (소요시간 + 30분 버퍼).
+     * 시간 미정 운행은 시간 제약 없음(null)으로 처리한다.
+     */
+    private function availableAfter(Order $trip): ?Carbon
+    {
+        if (blank($trip->service_time)) {
+            return null;
+        }
+
+        return Carbon::parse($trip->service_date.' '.$trip->service_time, 'Asia/Seoul')
+            ->addMinutes(($trip->estimated_duration_minutes ?? 60) + 30);
+    }
+
+    /**
+     * 후보 운행이 내 하차 이후 시각에 시작하는지 — 일시 불완전 운행은 시간 검증을 건너뛴다.
+     */
+    private function isTimeFeasible(?Carbon $availableAfter, Order $order): bool
+    {
+        if ($availableAfter === null) {
+            return true;
+        }
+
+        if (blank($order->service_date) || blank($order->service_time)) {
+            return true;
+        }
+
+        return Carbon::parse($order->service_date.' '.$order->service_time, 'Asia/Seoul') >= $availableAfter;
     }
 
     /**

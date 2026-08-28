@@ -289,6 +289,52 @@ test('api order index filters by vehicle capacity', function () {
     expect($sevenRows->first()['route'])->toBe('서울 마포구 → 인천공항');
 });
 
+test('api order index filters by time range', function () {
+    $tomorrow = now('Asia/Seoul')->addDay()->format('Y-m-d');
+
+    Order::factory()->create([
+        'service_date' => $tomorrow,
+        'service_time' => '09:30',
+        'pickup_location' => '서울 강남구',
+        'dropoff_location' => '인천공항',
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    Order::factory()->create([
+        'service_date' => $tomorrow,
+        'service_time' => '14:00',
+        'pickup_location' => '서울 마포구',
+        'dropoff_location' => '인천공항',
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    Order::factory()->create([
+        'service_date' => $tomorrow,
+        'service_time' => '20:30',
+        'pickup_location' => '서울 중구',
+        'dropoff_location' => '인천공항',
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    // 오전 — 12:00 전 운행만
+    $morning = $this->getJson('/api/orders?scope=market&time_range=morning')->assertOk();
+    expect(collect($morning->json('data'))->pluck('route'))->toHaveCount(1);
+    expect($morning->json('data.0.route'))->toBe('서울 강남구 → 인천공항');
+
+    // 오후 — 12:00 ~ 18:00 사이 운행만
+    $afternoon = $this->getJson('/api/orders?scope=market&time_range=afternoon')->assertOk();
+    expect(collect($afternoon->json('data'))->pluck('route'))->toHaveCount(1);
+    expect($afternoon->json('data.0.route'))->toBe('서울 마포구 → 인천공항');
+
+    // 야간 — 18:00 이후 운행만
+    $night = $this->getJson('/api/orders?scope=market&time_range=night')->assertOk();
+    expect(collect($night->json('data'))->pluck('route'))->toHaveCount(1);
+    expect($night->json('data.0.route'))->toBe('서울 중구 → 인천공항');
+});
+
 test('api order index market search matches route only, not customer name', function () {
     $tomorrow = now('Asia/Seoul')->addDay()->format('Y-m-d');
 

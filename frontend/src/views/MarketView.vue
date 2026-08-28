@@ -61,6 +61,7 @@ const arrivalDistrict = ref('');
 const arrivalDetail = ref('');
 const vehicleType = ref('');
 const vehicleCapacity = ref('');
+const timeRange = ref('');
 const minAmount = ref(null);
 const maxAmount = ref(null);
 const minPassengers = ref(null);
@@ -89,6 +90,7 @@ arrivalDistrict.value = savedState.arrivalDistrict ?? '';
 arrivalDetail.value = savedState.arrivalDetail ?? '';
 vehicleType.value = savedState.vehicleType ?? '';
 vehicleCapacity.value = savedState.vehicleCapacity ?? '';
+timeRange.value = savedState.timeRange ?? '';
 minAmount.value = savedState.minAmount ?? null;
 maxAmount.value = savedState.maxAmount ?? null;
 minPassengers.value = savedState.minPassengers ?? null;
@@ -109,6 +111,7 @@ const persistState = () => {
             arrivalDetail: arrivalDetail.value,
             vehicleType: vehicleType.value,
             vehicleCapacity: vehicleCapacity.value,
+            timeRange: timeRange.value,
             minAmount: minAmount.value,
             maxAmount: maxAmount.value,
             minPassengers: minPassengers.value,
@@ -133,6 +136,7 @@ const resetFilters = () => {
     arrivalDetail.value = '';
     vehicleType.value = '';
     vehicleCapacity.value = '';
+    timeRange.value = '';
     minAmount.value = null;
     maxAmount.value = null;
     minPassengers.value = null;
@@ -246,13 +250,13 @@ const toggleServiceType = (value) => {
 
 // 필터 모달에만 있는 필터(서비스 유형 제외)가 활성화됐는지 — '필터' 칩 하이라이트용
 const hasModalFilters = computed(() =>
-    [date.value, departureCity.value, departureDistrict.value, departureDetail.value, arrivalCity.value, arrivalDistrict.value, arrivalDetail.value, vehicleType.value, vehicleCapacity.value, minAmount.value, maxAmount.value, minPassengers.value, quick.value !== '' ? quick.value : '', search.value]
+    [date.value, departureCity.value, departureDistrict.value, departureDetail.value, arrivalCity.value, arrivalDistrict.value, arrivalDetail.value, vehicleType.value, vehicleCapacity.value, timeRange.value, minAmount.value, maxAmount.value, minPassengers.value, quick.value !== '' ? quick.value : '', search.value]
         .filter(Boolean).length > 0,
 );
 
 // 활성 필터 개수 (초기화 버튼 표시용)
 const activeFilterCount = computed(() =>
-    [serviceType.value, date.value, departureCity.value, departureDistrict.value, departureDetail.value, arrivalCity.value, arrivalDistrict.value, arrivalDetail.value, vehicleType.value, vehicleCapacity.value, minAmount.value, maxAmount.value, minPassengers.value, sort.value !== 'latest' ? sort.value : '', quick.value !== '' ? quick.value : '', search.value]
+    [serviceType.value, date.value, departureCity.value, departureDistrict.value, departureDetail.value, arrivalCity.value, arrivalDistrict.value, arrivalDetail.value, vehicleType.value, vehicleCapacity.value, timeRange.value, minAmount.value, maxAmount.value, minPassengers.value, sort.value !== 'latest' ? sort.value : '', quick.value !== '' ? quick.value : '', search.value]
         .filter(Boolean).length,
 );
 
@@ -313,6 +317,14 @@ const VEHICLE_CAPACITY_OPTIONS = [
     { label: '7인승', value: '7인승' },
     { label: '9인승', value: '9인승' },
     { label: '11인승', value: '11인승' },
+];
+
+// 시간대 필터 — 오전/오후/야간 (서버 time_range 파라미터와 1:1)
+const TIME_RANGE_OPTIONS = [
+    { label: '전체', value: '' },
+    { label: '오전', value: 'morning' },
+    { label: '오후', value: 'afternoon' },
+    { label: '야간', value: 'night' },
 ];
 
 const PASSENGER_OPTIONS = [
@@ -468,6 +480,9 @@ const load = async (silent = false) => {
         if (vehicleCapacity.value) {
             params.vehicle_capacity = vehicleCapacity.value;
         }
+        if (timeRange.value) {
+            params.time_range = timeRange.value;
+        }
         if (minAmount.value) {
             params.min_amount = minAmount.value;
         }
@@ -493,8 +508,9 @@ const load = async (silent = false) => {
         pagination.value = data.meta.pagination;
 
         // 왕복 추천 — 내가 맡은 운행의 하차지 근처에서 시작하는 운행 (실패해도 마켓 목록에는 영향 없음)
+        // 현재 적용 중인 필터를 함께 넘겨 목록과 일관된 추천을 받는다
         try {
-            const rr = await apiReturnRoutes();
+            const rr = await apiReturnRoutes(params);
             returnRoutes.value = rr.data.data ?? [];
         } catch {
             returnRoutes.value = [];
@@ -610,6 +626,12 @@ const activeFilterChips = computed(() => {
     if (vehicleCapacity.value) {
         push(vehicleCapacity.value, () => {
             vehicleCapacity.value = '';
+            handleFilterChange();
+        });
+    }
+    if (timeRange.value) {
+        push(TIME_RANGE_OPTIONS.find((o) => o.value === timeRange.value)?.label ?? timeRange.value, () => {
+            timeRange.value = '';
             handleFilterChange();
         });
     }
@@ -793,6 +815,19 @@ watch(
                 <label class="filter-label">날짜시간</label>
                 <div class="filter-date-row">
                     <input v-model="date" type="datetime-local" class="filter-date" />
+                </div>
+                <label class="filter-label">시간대</label>
+                <div class="filter-quick">
+                    <button
+                        v-for="opt in TIME_RANGE_OPTIONS"
+                        :key="opt.value || 'all'"
+                        type="button"
+                        class="filter-quick__chip"
+                        :class="{ 'filter-quick__chip--active': timeRange === opt.value }"
+                        @click="timeRange = opt.value"
+                    >
+                        {{ opt.label }}
+                    </button>
                 </div>
                 <label class="filter-label">빠른 보기</label>
                 <div class="filter-quick">
