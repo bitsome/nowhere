@@ -52,13 +52,15 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        $identifier = $credentials['login'] ?? $credentials['email'];
+        $identifier = trim((string) ($credentials['login'] ?? $credentials['email']));
 
-        // 이메일 또는 전화번호로 사용자 검색 (전화번호는 하이픈 무시하고 비교)
+        // 이메일 또는 전화번호로 사용자 검색 (전화번호는 하이픈·공백·점 무시하고 비교)
         // 같은 번호를 여러 계정이 쓰는 테스트 계정의 경우 관리자(Admin)를 우선 매칭한다
+        $normalized = str_replace([' ', '-', '.'], '', $identifier);
+
         $user = User::query()
             ->where('email', $identifier)
-            ->orWhereRaw("REPLACE(phone, '-', '') = ?", [str_replace('-', '', $identifier)])
+            ->orWhereRaw("REPLACE(REPLACE(REPLACE(phone, '-', ''), ' ', ''), '.', '') = ?", [$normalized])
             ->orderByRaw("CASE WHEN role IN ('Admin', 'Super Admin') THEN 0 ELSE 1 END")
             ->first();
 

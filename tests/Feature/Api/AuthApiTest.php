@@ -36,6 +36,53 @@ test('api login rejects invalid credentials', function () {
         ->assertJsonValidationErrors(['login']);
 });
 
+test('api login supports phone number', function () {
+    User::factory()->create([
+        'email' => 'driver@example.com',
+        'phone' => '010-1234-5678',
+        'password' => Hash::make('secret123'),
+    ]);
+
+    // 하이픈 있는 그대로 입력
+    $this->postJson('/api/auth/login', [
+        'login' => '010-1234-5678',
+        'password' => 'secret123',
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.user.email', 'driver@example.com');
+
+    // 하이픈·공백 제거한 입력도 동일 매칭
+    $this->postJson('/api/auth/login', [
+        'login' => '010 1234 5678',
+        'password' => 'secret123',
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.user.email', 'driver@example.com');
+
+    // 아무 표기 없이 숫자만 입력
+    $this->postJson('/api/auth/login', [
+        'login' => '01012345678',
+        'password' => 'secret123',
+    ])
+        ->assertOk()
+        ->assertJsonPath('data.user.email', 'driver@example.com');
+});
+
+test('api login fails when phone does not match any account', function () {
+    User::factory()->create([
+        'email' => 'driver@example.com',
+        'phone' => '010-1234-5678',
+        'password' => Hash::make('secret123'),
+    ]);
+
+    $this->postJson('/api/auth/login', [
+        'login' => '010-9999-9999',
+        'password' => 'secret123',
+    ])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['login']);
+});
+
 test('api me returns the authenticated user', function () {
     $user = User::factory()->create([
         'id' => 2,

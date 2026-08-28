@@ -12,8 +12,10 @@
 ### POST /auth/login
 | 파라미터 | 타입 | 필수 |
 |---|---|---|
-| `email` | string | ✅ |
+| `login` | string | ✅ |
 | `password` | string | ✅ |
+
+`login`에는 **이메일 또는 전화번호**를 넣는다. 전화번호는 하이픈·공백·점 유무와 무관하게 매칭된다.
 
 응답: `{ "data": { "token": "...", "user": {...} } }`
 

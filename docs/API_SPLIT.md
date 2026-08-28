@@ -55,7 +55,7 @@ nowhere/
 
 | Method | URI | 설명 | 응답 |
 |---|---|---|---|
-| POST | `/api/auth/login` | 이메일·비밀번호 로그인 | `{ token, user }` |
+| POST | `/api/auth/login` | 이메일·전화번호·비밀번호 로그인 | `{ token, user }` |
 | POST | `/api/auth/logout` | 토큰 폐기 | `204` |
 | GET | `/api/auth/me` | 현재 사용자 + 권한 | `{ data: user }` |
 
