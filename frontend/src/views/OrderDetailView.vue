@@ -8,6 +8,7 @@ import { useOrderDetail } from '../composables/useOrderDetail';
 import { useOrderMap } from '../composables/useOrderMap';
 import BaseIcon from '../components/common/BaseIcon.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
+import VerifiedBadge from '../components/common/VerifiedBadge.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -503,6 +504,7 @@ const vehicleText = (v) => {
                                     </span>
                                     <span class="offer-item__vehicle">
                                         {{ vehicleText(offer.driver?.vehicle) }}
+                                        <VerifiedBadge :show="offer.driver?.vehicle?.is_verified" />
                                     </span>
                                     <n-tag size="small" round>{{ offer.status_label }}</n-tag>
                                     <span v-if="offer.message" class="offer-item__msg">{{ offer.message }}</span>
@@ -816,6 +818,9 @@ const vehicleText = (v) => {
 .offer-item__vehicle {
     color: var(--text-muted, #999);
     font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
 }
 
 .offer-item__msg {

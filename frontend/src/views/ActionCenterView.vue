@@ -10,6 +10,7 @@ import { getApiErrorMessage } from '../api/client';
 import BaseIcon from '../components/common/BaseIcon.vue';
 import EmptyState from '../components/common/EmptyState.vue';
 import UiSection from '../components/ui/UiSection.vue';
+import VerifiedBadge from '../components/common/VerifiedBadge.vue';
 
 // keep-alive 캐시 매칭용 이름
 defineOptions({ name: 'ActionCenterView' });
@@ -284,7 +285,10 @@ onActivated(() => {
                                 </div>
                                 <div>
                                     <dt>차량</dt>
-                                    <dd>{{ vehicleText(claim.claimant?.vehicle) }}</dd>
+                                    <dd class="actions-detail__vehicle">
+                                        {{ vehicleText(claim.claimant?.vehicle) }}
+                                        <VerifiedBadge :show="claim.claimant?.vehicle?.is_verified" />
+                                    </dd>
                                 </div>
                             </dl>
                             <button
@@ -388,6 +392,7 @@ onActivated(() => {
                                     </div>
                                     <p class="offer-item__vehicle">
                                         차량 {{ vehicleText(offer.driver?.vehicle) }}
+                                        <VerifiedBadge :show="offer.driver?.vehicle?.is_verified" />
                                     </p>
                                     <p v-if="offer.message" class="offer-item__msg">{{ offer.message }}</p>
                                 </div>
@@ -665,6 +670,14 @@ onActivated(() => {
     font-size: 11px;
     font-weight: 600;
     color: var(--text);
+}
+
+/* 차량 행 — 텍스트 + 검증 배지 수직 정렬 */
+.actions-detail__vehicle {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
 }
 
 .actions-detail__link {
