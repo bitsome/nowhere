@@ -134,6 +134,15 @@ const onRequestSent = async () => {
     await scrollToBottom();
 };
 
+// 메시지 삭제 — 실패하면 토스트로 알리고 목록은 그대로 둔다
+const onDeleteMessage = async (messageId) => {
+    try {
+        await store.deleteMessage(messageId);
+    } catch (e) {
+        message.error(getApiErrorMessage(e, '메시지 삭제에 실패했습니다.'));
+    }
+};
+
 const send = async () => {
     const body = draft.value.trim();
     if (!body || sending.value) return;
@@ -234,6 +243,7 @@ onMounted(() => {
                     :is-first="row.isFirst"
                     :is-last="row.isLast"
                     :counterpart-name="activeConversation?.counterpart?.name"
+                    @delete="onDeleteMessage"
                 />
             </template>
         </div>

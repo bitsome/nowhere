@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { apiChatMessages, apiChats, apiCreateChat, apiSendChatMessage, apiSendChatRequest } from '../api/chats';
+import { apiChatMessages, apiChats, apiCreateChat, apiDeleteChatMessage, apiSendChatMessage, apiSendChatRequest } from '../api/chats';
 
 export const useChatsStore = defineStore('chats', {
     state: () => ({
@@ -53,6 +53,17 @@ export const useChatsStore = defineStore('chats', {
 
             await apiSendChatMessage(this.activeId, body, imagePaths);
             await this.reloadMessages();
+            await this.loadConversations();
+        },
+
+        // 내가 보낸 메시지 삭제 — 목록에서 제거하고 대화 목록도 갱신한다
+        async deleteMessage(messageId) {
+            if (!this.activeId) {
+                return;
+            }
+
+            await apiDeleteChatMessage(this.activeId, messageId);
+            this.messages = this.messages.filter((m) => m.id !== messageId);
             await this.loadConversations();
         },
 

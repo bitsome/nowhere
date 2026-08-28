@@ -181,6 +181,18 @@ class ChatController extends Controller
     }
 
     /**
+     * 내가 보낸 메시지를 삭제한다 — 이미지 메시지면 더 이상 참조되지 않는 파일도 함께 정리한다.
+     *
+     * @return JsonResponse{data: bool}
+     */
+    public function destroy(Request $request, Conversation $conversation, Message $message, ChatService $chatService): JsonResponse
+    {
+        $chatService->deleteMessage($request->user(), $message);
+
+        return response()->json(['data' => true]);
+    }
+
+    /**
      * 구조화된 운행 요청을 대화에 보낸다 (승인·시간 변경·경로 변경·요금 협의·취소).
      *
      * @return JsonResponse{data: array<string, mixed>}

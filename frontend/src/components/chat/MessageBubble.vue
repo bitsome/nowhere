@@ -1,7 +1,10 @@
 <script setup>
 import { computed, ref } from 'vue';
+import { useDialog } from 'naive-ui';
 import { getChatTimestamp, formatClock } from '../../utils/chatTime';
+import { useImageStatus } from '../../utils/useImageStatus';
 import ImageGallery from '../common/ImageGallery.vue';
+import BaseIcon from '../common/BaseIcon.vue';
 
 const props = defineProps({
     msg: { type: Object, required: true },
@@ -11,6 +14,10 @@ const props = defineProps({
     isLast: { type: Boolean, default: true },
     counterpartName: { type: String, default: '' },
 });
+
+const emit = defineEmits(['delete']);
+
+const dialog = useDialog();
 
 // 정확한 시각 (서버 배포 전엔 상대시간으로 추정)
 const ts = computed(() => getChatTimestamp(props.msg.created_at_iso ?? props.msg.created_at));
@@ -37,9 +44,59 @@ const images = computed(() => {
 const galleryOpen = ref(false);
 const galleryIndex = ref(0);
 
+// 이미지 로딩 상태 — 로딩 스켈레톤/실패 플레이스홀더 표시
+const { statusOf, markLoaded, markError } = useImageStatus();
+
 const openGallery = (index) => {
+    if (suppressGalleryClick) {
+        suppressGalleryClick = false; // 길게 눌러 삭제 직후의 클릭으로 갤러리가 열리지 않게 한다
+        return;
+    }
     galleryIndex.value = index;
     galleryOpen.value = true;
+};
+
+// ── 길게 눌러 삭제 (내가 보낸 메시지) — 누른 채 550ms 유지하면 확인창이 뜬다 ──
+let pressTimer = null;
+let suppressGalleryClick = false;
+let pressStartX = 0;
+let pressStartY = 0;
+
+const cancelPress = () => {
+    if (pressTimer) {
+        clearTimeout(pressTimer);
+        pressTimer = null;
+    }
+};
+
+const onPressStart = (e) => {
+    if (!props.isMine) {
+        return;
+    }
+    pressStartX = e.clientX;
+    pressStartY = e.clientY;
+    cancelPress();
+    pressTimer = setTimeout(() => {
+        pressTimer = null;
+        suppressGalleryClick = true;
+        dialog.warning({
+            title: '메시지 삭제',
+            content: '이 메시지를 삭제할까요?',
+            positiveText: '삭제',
+            negativeText: '취소',
+            onPositiveClick: () => emit('delete', props.msg.id),
+        });
+    }, 550);
+};
+
+// 스크롤 등으로 손가락이 10px 이상 움직이면 길게 누르기로 보지 않는다
+const onPressMove = (e) => {
+    if (!pressTimer) {
+        return;
+    }
+    if (Math.abs(e.clientX - pressStartX) > 10 || Math.abs(e.clientY - pressStartY) > 10) {
+        cancelPress();
+    }
 };
 </script>
 
@@ -55,6 +112,11 @@ const openGallery = (index) => {
             <div
                 class="cb-bubble"
                 :class="[{ 'cb-bubble--mine': isMine }, bubbleCornerClass]"
+                @pointerdown="onPressStart"
+                @pointermove="onPressMove"
+                @pointerup="cancelPress"
+                @pointercancel="cancelPress"
+                @pointerleave="cancelPress"
             >
                 <!-- 여러 장은 한 말풍선 안에서 그리드로 — 클릭하면 전체 화면 슬라이더로 넘겨본다 -->
                 <div
@@ -62,15 +124,31 @@ const openGallery = (index) => {
                     class="cb-bubble__media"
                     :class="{ 'cb-bubble__media--multi': images.length > 1 }"
                 >
-                    <img
+                    <div
                         v-for="(url, idx) in images"
                         :key="`${url}-${idx}`"
-                        :src="url"
-                        :alt="`첨부 이미지 ${idx + 1}`"
-                        class="cb-bubble__image"
-                        loading="lazy"
-                        @click="openGallery(idx)"
-                    />
+                        class="cb-bubble__media-item"
+                        :class="{ 'is-error': statusOf(url) === 'error' }"
+                    >
+                        <img
+                            :src="url"
+                            :alt="`첨부 이미지 ${idx + 1}`"
+                            class="cb-bubble__image"
+                            loading="lazy"
+                            v-show="statusOf(url) !== 'error'"
+                            @load="markLoaded(url)"
+                            @error="markError(url)"
+                            @click="openGallery(idx)"
+                        />
+                        <!-- 로딩 중 — 스피너 -->
+                        <span v-if="statusOf(url) === 'loading'" class="cb-bubble__media-state">
+                            <span class="cb-bubble__spin"></span>
+                        </span>
+                        <!-- 로딩 실패 — 플레이스홀더 -->
+                        <span v-else-if="statusOf(url) === 'error'" class="cb-bubble__media-state">
+                            <BaseIcon name="image" :size="18" />
+                        </span>
+                    </div>
                 </div>
                 <div v-if="msg.body" class="cb-bubble__body">{{ msg.body }}</div>
             </div>
@@ -116,8 +194,14 @@ const openGallery = (index) => {
 /* 이미지 — 1장은 큰 미리보기, 여러 장은 2열 그리드 */
 .cb-bubble__media{display:flex;flex-direction:column;gap:3px;margin-bottom:4px}
 .cb-bubble__media--multi{display:grid;grid-template-columns:repeat(2,1fr);gap:3px}
-.cb-bubble__image{display:block;max-width:min(260px,100%);max-height:300px;border-radius:10px;object-fit:cover;cursor:zoom-in}
-.cb-bubble__media--multi .cb-bubble__image{width:100%;max-width:none;max-height:none;aspect-ratio:1}
+.cb-bubble__media-item{position:relative;max-width:min(260px,100%);max-height:300px;border-radius:10px;overflow:hidden;background:var(--bg);border:1px solid var(--border)}
+.cb-bubble__media--multi .cb-bubble__media-item{width:100%;max-width:none;max-height:none;aspect-ratio:1}
+.cb-bubble__image{display:block;width:100%;height:100%;object-fit:cover;cursor:zoom-in}
+/* 로딩/실패 상태 — 이미지 위 중앙 표시 */
+.cb-bubble__media-state{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted)}
+.cb-bubble__media-item.is-error{border-style:dashed;border-color:var(--border)}
+.cb-bubble__spin{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--brand);border-radius:50%;animation:cb-spin .8s linear infinite}
+@keyframes cb-spin{to{transform:rotate(360deg)}}
 
 .cb-meta{display:flex;align-items:center;gap:6px;margin-top:2px;padding:0 4px}
 .cb-meta--mine{justify-content:flex-end}

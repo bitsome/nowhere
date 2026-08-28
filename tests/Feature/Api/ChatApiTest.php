@@ -261,6 +261,62 @@ test('api chat send allows freshly uploaded images before any message references
     expect(ChatImageUpload::query()->count())->toBe(0);
 });
 
+test('api chat deletes my own message and cleans unreferenced image file', function () {
+    Storage::fake('public');
+
+    $conversation = Conversation::create();
+    $conversation->users()->attach([$this->driver->id, $this->partner->id]);
+    Storage::disk('public')->put('chat/only.jpg', 'only');
+    $message = $conversation->messages()->create([
+        'user_id' => $this->driver->id,
+        'body' => '지울 사진',
+        'image_path' => 'chat/only.jpg',
+        'image_paths' => ['chat/only.jpg'],
+    ]);
+
+    $this->deleteJson("/api/chats/{$conversation->id}/messages/{$message->id}")
+        ->assertOk()
+        ->assertJsonPath('data', true);
+
+    expect(Message::find($message->id))->toBeNull();
+    expect(Storage::disk('public')->exists('chat/only.jpg'))->toBeFalse();
+});
+
+test('api chat keeps image file when another message still references it', function () {
+    Storage::fake('public');
+
+    $conversation = Conversation::create();
+    $conversation->users()->attach([$this->driver->id, $this->partner->id]);
+    Storage::disk('public')->put('chat/shared.jpg', 'shared');
+    $first = $conversation->messages()->create([
+        'user_id' => $this->driver->id,
+        'body' => '첫 메시지',
+        'image_path' => 'chat/shared.jpg',
+    ]);
+    $conversation->messages()->create([
+        'user_id' => $this->driver->id,
+        'body' => '둘째 메시지',
+        'image_path' => 'chat/shared.jpg',
+    ]);
+
+    $this->deleteJson("/api/chats/{$conversation->id}/messages/{$first->id}")->assertOk();
+
+    expect(Storage::disk('public')->exists('chat/shared.jpg'))->toBeTrue();
+});
+
+test('api chat cannot delete another users message', function () {
+    $conversation = Conversation::create();
+    $conversation->users()->attach([$this->driver->id, $this->partner->id]);
+    $message = $conversation->messages()->create([
+        'user_id' => $this->partner->id,
+        'body' => '상대 메시지',
+    ]);
+
+    $this->deleteJson("/api/chats/{$conversation->id}/messages/{$message->id}")->assertForbidden();
+
+    expect(Message::find($message->id))->not->toBeNull();
+});
+
 test('api chat send reuses my previous image via image_path', function () {
     Storage::fake('public');
 

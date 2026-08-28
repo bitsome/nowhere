@@ -11,6 +11,9 @@ export const apiSendChatMessage = (id, body, imagePaths = []) =>
 
 export const apiCreateChat = (payload) => apiClient.post('/chats', payload);
 
+// 내가 보낸 메시지 삭제 — 이미지 메시지면 더 이상 참조되지 않는 파일도 함께 정리된다
+export const apiDeleteChatMessage = (id, messageId) => apiClient.delete(`/chats/${id}/messages/${messageId}`);
+
 // 채팅 첨부 이미지 업로드 — 전송 전 단계. 지문(image_path)을 반환해 묶음 전송에 재사용한다.
 export const apiChatImageUpload = (file) => {
     const form = new FormData();

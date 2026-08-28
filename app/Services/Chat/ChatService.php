@@ -270,6 +270,37 @@ class ChatService
     }
 
     /**
+     * 내가 보낸 메시지를 삭제한다.
+     * 이미지 메시지면 포함된 각 지문의 파일을 정리한다 — 다른 메시지(다른 사용자 포함)가
+     * 아직 참조하거나 전송 전 업로드 기록이 남아 있으면 파일은 유지한다.
+     */
+    public function deleteMessage(User $user, Message $message): void
+    {
+        abort_unless($message->user_id === $user->id, 403);
+
+        $paths = $message->image_paths ?? ($message->image_path ? [$message->image_path] : []);
+
+        $message->delete();
+
+        foreach ($paths as $path) {
+            ChatImageUpload::where('user_id', $user->id)
+                ->where('image_path', $path)
+                ->delete();
+
+            $stillReferenced = Message::query()
+                ->where(function ($query) use ($path) {
+                    $query->where('image_path', $path)
+                        ->orWhereJsonContains('image_paths', $path);
+                })
+                ->exists();
+
+            if (! $stillReferenced) {
+                Storage::disk('public')->delete($path);
+            }
+        }
+    }
+
+    /**
      * 구조화된 운행 요청을 대화에 전송한다 (승인·시간·경로·요금·취소).
      * 요청 종류에 맞는 요약 문구를 body로 남겨 대화 목록 미리보기에도 보이게 한다.
      *

@@ -78,6 +78,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/chats/images/archive/{message}', [ChatController::class, 'destroyArchiveImage']);
     Route::get('/chats/{conversation}', [ChatController::class, 'show']);
     Route::post('/chats/{conversation}/messages', [ChatController::class, 'send']);
+    Route::delete('/chats/{conversation}/messages/{message}', [ChatController::class, 'destroy']);
     Route::post('/chats/{conversation}/requests', [ChatController::class, 'request']);
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/return-routes', [OrderController::class, 'returnRoutes']);
