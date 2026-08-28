@@ -11,4 +11,6 @@ if (import.meta.env.PROD && 'serviceWorker' in navigator) {
     });
 }
 
-createApp(App).use(createPinia()).use(router).mount('#app');
+const app = createApp(App);
+
+app.use(createPinia()).use(router).mount('#app');

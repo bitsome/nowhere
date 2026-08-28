@@ -1,7 +1,8 @@
 /* NoWhere PWA 서비스 워커 — 설치 가능 + 방문한 앱 셸 오프라인 캐시.
  * 주의: /api(동적 데이터)와 외부 오리진은 절대 캐시하지 않는다.
- * 내비게이션은 네트워크 우선 — 배포(새 index.html/해시 assets)가 캐시에 가려지지 않는다. */
-const CACHE = 'nowhere-v3';
+ * 내비게이션/정적 자산 모두 네트워크 우선 — 배포(새 index.html/해시 assets)가
+ * 캐시에 가려지지 않도록 항상 최신 빌드를 먼저 사용하고 오프라인일 때만 캐시로 폴백한다. */
+const CACHE = 'nowhere-v4';
 
 self.addEventListener('install', () => {
     self.skipWaiting();
@@ -29,39 +30,18 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // 페이지 이동(앱 셸) — 네트워크 우선. 성공 시 캐시를 갱신해 항상 최신 버전을 보여준다.
-    if (request.mode === 'navigate') {
-        event.respondWith(
-            fetch(request)
-                .then((response) => {
-                    if (response.ok) {
-                        const copy = response.clone();
-                        caches.open(CACHE).then((cache) => cache.put(request, copy));
-                    }
-
-                    return response;
-                })
-                .catch(() => caches.match(request).then((shell) => shell || Response.error())),
-        );
-        return;
-    }
-
-    // 정적 자산(해시 파일명) — 캐시 우선, 미스 시 네트워크 후 저장
+    // 앱 셸(내비게이션)·정적 자산 — 네트워크 우선. 성공 시 캐시를 갱신해 항상 최신 빌드를 보여준다.
     event.respondWith(
-        caches.match(request).then((hit) => {
-            if (hit) {
-                return hit;
-            }
-
-            return fetch(request).then((response) => {
-                if (response.ok && url.pathname.includes('/assets/')) {
+        fetch(request)
+            .then((response) => {
+                if (response.ok) {
                     const copy = response.clone();
                     caches.open(CACHE).then((cache) => cache.put(request, copy));
                 }
 
                 return response;
-            });
-        }),
+            })
+            .catch(() => caches.match(request).then((hit) => hit || Response.error())),
     );
 });
 
