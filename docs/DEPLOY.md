@@ -1,9 +1,9 @@
 # DEPLOY — 배포 절차
 
-NoWhere는 **Laravel API(8000) + 독립 SPA 프론트엔드(dist)** 두 부분으로 구성된다.
+NoWhere는 **Laravel API(8080) + 독립 SPA 프론트엔드(dist)** 두 부분으로 구성된다.
 
 ```
-브라우저 ──▶ SPA (dist, 정적) ──/api──▶ Laravel API (8000)
+브라우저 ──▶ SPA (dist, 정적) ──/api──▶ Laravel API (8080)
                   │                       ├─ 알림 (notifications)
                   │                       ├─ 채팅 (conversations/messages)
                   │                       └─ SSE 푸시 (/api/events)
@@ -46,14 +46,14 @@ npm run build                     # dist/ 생성
 server {
     listen 80;
     server_name market.example.com;
-    root /var/www/nowhere/frontend/dist;
+    root /var/www/frontend/dist;
 
     location / {
         try_files $uri $uri/ /index.html;   # SPA 라우팅
     }
 
     location /api {
-        proxy_pass http://127.0.0.1:8000;
+        proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_buffering off;                 # SSE 스트리밍용
@@ -84,22 +84,21 @@ curl -s https://market.example.com/          # SPA index.html (200)
 - 로그인: `test@example.com / password` (데모 계정, 시드 후)
 - 알림/채팅 실시간 확인: 다른 계정에서 메시지/알림 전송 → 수신 화면 확인
 
-## 6. 외부 접속 (개발용 Quick Tunnel)
+## 6. 외부 접속 (임시 Quick Tunnel)
 
-개발 중 외부 확인은 Cloudflare Quick Tunnel 2개를 띄운다 (백엔드 + 오더마켓).
+### 개발 중 (로컬)
+로컬 vite dev 서버를 그대로 노출한다. `/api`는 vite proxy가 서버 API(114.132.240.52)로 연결되고 DB는 서버 SQLite를 사용한다.
 
-```bash
-# 오더마켓(SPA 빌드본) 터널 — /api는 프론트 프록시로 백엔드까지 연결됨
-cd frontend && npm run preview        # :4173
-cloudflared tunnel --url http://localhost:4173
-
-# 기존 백엔드(Laravel) 터널
-php artisan serve --host=127.0.0.1 --port=8000
-cloudflared tunnel --url http://127.0.0.1:8000
+```powershell
+cloudflared.exe tunnel --url http://localhost:5174 --no-autoupdate
 ```
 
-- 실행 시 출력된 `https://*.trycloudflare.com` URL을 안내하고 `/up`으로 검증한다.
+- 실행 시 출력된 `https://*.trycloudflare.com` URL을 안내하고 `/up`·루트 200으로 검증한다.
 - Quick Tunnel URL은 실행마다 새로 발급되며 재사용할 수 없다.
+
+### 상용 서버 (임시 검증)
+서버에 systemd 서비스 `cloudflared-quick`가 등록되어 있어 `http://127.0.0.1:80`을 노출한다. 재시작 시 URL이 바뀐다. 상세 절차는 `.cursor/skills/nowhere-deployment/SKILL.md` 섹션 5를 참조한다.
+
 - **실시간 구조 (기본: SSE once 모드)**:
   - 프론트는 `/api/events?once=1`로 **상태 스냅샷을 받고 즉시 연결을 닫은 뒤 5초 후 재연결**한다.
   - `once=1`은 단일 워커(`php artisan serve`)에서 SSE가 워커를 점유해 다른 요청을 막는 문제를 피하기 위한 기본값이다 (Windows의 PHP 내장 서버는 멀티 워커 미지원).

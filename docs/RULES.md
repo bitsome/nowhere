@@ -118,6 +118,7 @@
 - `Tailwind CSS`, `Bootstrap`, `Bulma` 같은 외부 CSS 라이브러리/프레임워크는 사용하지 않는다.
 - 새 화면이나 컴포넌트에 필요한 스타일은 공통 CSS 또는 모듈 전용 CSS로 직접 정의한다.
 - 외부 CSS 유틸리티 라이브러리를 추가하지 않는다.
+- 단, 위 외부 CSS 금지 규칙은 **관리자 대시보드/Blade 프론트에 적용**되며, SPA(`frontend/`)에는 [SPA 규칙](#spa-규칙)의 예외 조항이 우선한다.
 - 공통 CSS 클래스 이름은 시각 표현보다 역할 중심의 semantic naming을 우선한다.
 - 공통 UI는 `Shared` 계층에 둔다.
 - 새 공통 컴포넌트는 대시보드에 미리보기 모듈 페이지를 함께 만든다. 등록 절차는 [DASHBOARD.md](./DASHBOARD.md)를 따른다.
@@ -133,24 +134,14 @@
 - 도메인 전용 프론트 기능이라도 이후 다른 화면에서 다시 쓸 가능성이 있으면 처음부터 분리 가능한 형태로 만든다.
 
 ## SPA 규칙
-- 모든 SPA 기능(데이터 공급, 라우팅, 상태 관리, 비즈니스 로직)은 기본 관리자 대시보드에서 만들어진다.
-- SPA 개발 대화창에서는 오로지 SPA UI 프론트엔드(화면, 컴포넌트, 스타일)만 만든다.
-- SPA 작업 시 백엔드(PHP 컨트롤러, 라우트, Blade 데이터 내장, API 엔드포인트)는 수정하거나 새로 만들지 않는다.
-- SPA가 필요한 데이터는 기본 관리자 대시보드가 Blade에 내장한 JSON을 그대로 소비한다.
-- SPA 화면에서 백엔드 데이터 구조를 임의로 변경하지 않으며, 내장된 JSON 계약을 기준으로 UI만 구성한다.
-- SPA에서 새 API를 호출하거나 새 데이터 가공 규칙을 만들기 전에, 이미 내장된 데이터로 표현 가능한지 먼저 검토한다.
-- SPA 규칙과 기본 관리자 대시보드 규칙이 충돌하면 관리자 대시보드 규칙을 우선한다.
-- SPA 싱글 페이지의 프론트엔드는 기존 대시보드나 기존 Blade 앱과 무관한 완전히 독립적인 프론트엔드다.
-- SPA 프론트엔드의 CSS는 기존 대시보드/Blade의 공통 CSS를 재사용하지 않고, SPA 전용 CSS를 새로 만들어 SPA 내부에서만 사용한다.
-- SPA 화면·컴포넌트·스타일·아이콘·유틸리티 등 SPA 프론트엔드 요소는 전부 SPA 전용으로 새로 만들며, 기존 대시보드 공통 리소스를 그대로 끌어 쓰지 않는다.
-- SPA 전용 CSS와 리소스는 `resources/js/business/spa/` 내부에서 관리한다.
-- SPA에서는 대시보드 공용 CSS 클래스(`page-panel`, `status-badge`, `meta-badge`, `input-field`, `btn-primary` 등)를 사용하지 않는다.
-- SPA에서 공용 클래스를 쓰고 싶어도 사용하지 않으며, 동일한 시각적 결과가 필요하면 SPA 전용 CSS 클래스로 새로 만들어 사용한다.
-- SPA에서는 외부 CSS 라이브러리 사용을 허용한다. 대시보드/Blade의 `외부 CSS 라이브러리 금지` 규칙은 SPA에 적용하지 않는다.
-- SPA 전용 CSS 라이브러리(예: Tailwind CSS)는 `resources/js/business/spa/` 내부의 SPA 전용 CSS에서만 사용하고, 대시보드 공통 CSS에는 적용하지 않는다.
+- SPA는 `frontend/` 디렉터리의 **독립 Vite 프로젝트**다 (Vue 3 + 자체 번들러 설정). 관리자 대시보드/Blade와 분리되어 있다.
+- SPA가 필요한 데이터는 Laravel `routes/api.php`의 API 엔드포인트로 공급한다. SPA 기능 개발에 필요한 API 추가·수정은 프론트와 함께 진행한다.
+- SPA 프론트엔드의 CSS·컴포넌트·아이콘·유틸리티 등 SPA 프론트엔드 요소는 전부 `frontend/src/` 내부에서 관리하며, 기존 대시보드/Blade 공통 리소스를 그대로 끌어 쓰지 않는다.
+- SPA에서는 대시보드 공용 CSS 클래스(`page-panel`, `status-badge`, `meta-badge`, `input-field`, `btn-primary` 등)를 사용하지 않는다. 동일한 시각적 결과가 필요하면 SPA 전용 CSS 클래스로 새로 만들어 사용한다.
 - SPA UI 추구 방향은 `유저가 사용하기 쉽게, 편하게, 최대한 미니멀하고 심플하게`다.
 - SPA UI에서 장황한 설명 문구, 불필요한 안내 텍스트, 과도한 장식 요소는 넣지 않는다.
 - SPA UI는 필수 정보와 핵심 동작만 노출하고, 화면 밀도를 낮추며 군더더기 없는 구성을 유지한다.
+- SPA 규칙이 대시보드 규칙과 충돌할 때는 **SPA 전용 예외 조항(외부 CSS 허용, SPA 전용 리소스 등)이 SPA 범위에서 우선한다.** SPA 범위 밖(대시보드/Blade)에는 적용되지 않는다.
 
 ## Database 규칙
 - 데이터베이스 구조는 [DATABASE.md](./DATABASE.md)를 기준으로 유지한다.
@@ -217,7 +208,7 @@
 - 모든 버튼과 아이콘 버튼은 `title` 또는 `aria-label`을 반드시 제공한다.
 - 접근성 속성은 특별한 이유가 없는 한 생략하지 않는다.
 - 프로젝트의 아이콘은 하나의 라이브러리만 사용한다.
-- 현재 권장 아이콘 기준은 `Lucide Icons`이며, Vue 3에서는 `lucide-vue-next` 사용을 우선 검토한다.
+- 현재 사용 아이콘 기준은 `@vicons/ionicons5`이며, 모든 아이콘은 공통 `BaseIcon` 컴포넌트(공통 Wrapper)를 통해 사용한다.
 - 새로운 아이콘 라이브러리를 임의로 추가하지 않는다.
 - 모든 아이콘은 공통 `Icon` 컴포넌트 또는 공통 Wrapper를 통해 사용한다.
 - 직접 SVG를 반복 작성하지 않는다.
@@ -245,6 +236,8 @@
 - 기능 개발이 끝나기 전에는 Commit하지 않는다.
 - 검증이 끝나기 전에는 Commit하지 않는다.
 - 검증 없이 Commit하지 않는다.
+- 프로젝트 규칙(RULES.md·UI.md·BUSINESS.md·ARCHITECTURE.md 등)에 완벽히 부합해야 Commit한다.
+- 규칙을 완벽히 준수하지 않은 상태에서는 Commit하지 않는다.
 - 현재 기능 Commit이 끝나기 전에는 다음 기능 개발로 넘어가지 않는다.
 - Commit은 작은 단위로 유지하고, 의미 없는 대규모 묶음 Commit을 만들지 않는다.
 - 문서 수정도 독립적인 작업이면 별도 Commit 단위로 분리할 수 있다.
@@ -266,9 +259,10 @@
 ## 배포·운영 규칙
 - **서버 접속 정보(아이디·비밀번호·호스트 키)와 테스트 계정·API 키 같은 민감 정보는 로컬 전용 `.cursor/skills/nowhere-deployment/SECRETS.md`에 기록한다. 이 파일은 `.gitignore` 대상이라 GitHub에 올라가지 않는다.** 문서·코드·커밋에 민감 정보를 직접 넣지 않는다.
 - **서버 SSH 접속은 비밀번호 대신 키 인증(OpenSSH)을 사용한다.** 로컬 개인키는 `.deploy/id_rsa`(커밋 금지, 패스프레이즈 있음). Windows에서 접속할 때는 ① 키를 `%TEMP%\trae-agent-toolhost\`에 복사 → ② `icacls /inheritance:r` + 본인 계정만 `F` 권한 부여(안 하면 OpenSSH가 "bad permissions"로 거부) → ③ `SSH_ASKPASS=<askpass.bat>`·`SSH_ASKPASS_REQUIRE=force` 설정 후 `ssh -i`로 접속한다. 정확한 절차·패스프레이즈·호스트 키 지문은 SECRETS.md를 참조한다.
-- 배포는 git 기반으로 동기화한다: 로컬에서 커밋·`origin/main` push → 서버(`/var/www/nowhere`)에서 `git fetch origin main && git reset --hard origin/main`.
-- 서버 반영 전에는 현재 서버 상태를 `git stash push -m deploy-backup`으로 백업한 뒤 reset한다. 검증이 끝나면 백업 스태시를 정리한다.
-- `public/`은 프론트 빌드본(SPA dist 동기화 산출물)을 커밋한다. 서버는 npm 빌드 없이 nginx root(`/var/www/nowhere/public`)로 그대로 서빙한다.
+- 배포는 `.deploy/deploy_all.ps1` 통합 스크립트로 진행한다. 프론트는 `npm run build` → dist를 tar로 업로드해 서버 nginx root(`/var/www/frontend/dist`)에 반영하고, 백엔드는 변경 파일을 tar로 업로드해 `/var/www/nowhere`에 반영한다. 서버의 `.deploy/deploy_all.sh`가 해제·마이그레이션·캐시 정리·php-fpm 리로드·검증까지 수행한다.
+- 사용법: `.\deploy_all.ps1 -Frontend`, `.\deploy_all.ps1 -BackendFiles "app/..., routes/api.php"`, 또는 두 옵션 조합.
+- 백엔드 단일 파일 즉시 반영(빠른 수정)은 scp → `sudo cp` → `sudo systemctl reload php8.3-fpm`(opcache 갱신 필수)으로 처리한다.
+- 프론트 빌드본(`public/assets`·`public/index.html`·`public/build` 등)은 git에 커밋하지 않는다(.gitignore 대상). 서버는 npm 빌드 없이 배포 스크립트가 만든 dist를 그대로 서빙한다.
 - 의존성(composer.json)이 바뀌면 서버에서 `composer install`을 실행한다. 서버에서 GitHub 접속이 느리면 Aliyun composer 미러(`composer config -g repo.packagist composer https://mirrors.aliyun.com/composer/`)를 사용하고, 그래도 느리면 로컬 vendor를 tar.gz로 압축해 업로드·해제 후 `composer dump-autoload -o`로 정리한다.
 - 마이그레이션은 `php artisan migrate --force`, 캐시는 `config:clear / route:clear / view:clear`, php-fpm은 `systemctl reload php8.3-fpm`으로 반영한다.
 - 배포 후에는 반드시 `/up`(200), 루트 페이지(200), 새 빌드 asset 적용 여부로 검증한다.
@@ -279,7 +273,7 @@
 - 기능 개발·수정·업데이트는 원칙적으로 로컬에서만 진행하고 검증한다. 서버 배포·빌드는 사용자가 명시적으로 요청할 때만 수행한다.
 - 데이터베이스는 서버 SQLite를 사용한다: 로컬 SPA(vite dev `localhost:5174`, `/api`는 서버 프록시) → 서버 API(114.132.240.52) → 서버 DB(`/var/www/nowhere/database/database.sqlite`).
 - 외부 확인용 임시 주소는 로컬 개발 서버 기준 Cloudflare Quick Tunnel로 발급한다. "플래어주소 열어줘" 같은 요청이 오면 기존 터널만 종료 → 새 터널 발급 → `/up`·루트 200 검증 → URL 공유한다.
-- 백엔드 PHP 단일 파일 수정은 서버 즉시 반영이 가능하다 (pscp → `sudo cp` → `sudo systemctl reload php8.3-fpm`, opcache 갱신 필수). 단, 사용자 지시 없이 임의로 배포하지 않는다.
+- 백엔드 PHP 단일 파일 수정은 서버 즉시 반영이 가능하다 (scp → `sudo cp` → `sudo systemctl reload php8.3-fpm`, opcache 갱신 필수). 단, 사용자 지시 없이 임의로 배포하지 않는다.
 - 편집 후에는 반드시 grep/Read로 변경 내용이 실제 파일에 반영됐는지 재검증한다. 이 프로젝트는 import·선언·블록이 부분적으로 되돌아가는 원복 현상이 반복 발생한다.
 - 서버 API 응답은 nginx SPA 폴백으로 HTML(200)이 오는 함정이 있으므로 `Array.isArray(data?.data)` 같은 방어 코드로 JSON을 판별한다.
 
@@ -330,7 +324,7 @@
 - AI는 외부 접속 URL을 안내할 때 반드시 `/up` 헬스체크(HTTP 200)로 실제 동작을 검증한 뒤 안내한다.
 - AI는 새 공통 컴포넌트를 만들면 반드시 대시보드 허브와 개별 미리보기 페이지(`/dashboard/modules/{module}`)를 함께 등록한다.
 - AI는 컴포넌트의 모든 variant와 상태를 대시보드 미리보기 페이지에서 확인할 수 있게 구성한다.
-- AI는 배포를 진행할 때 로컬에서 검증(테스트·빌드)을 마친 뒤 커밋·푸시하고, 서버에서는 백업 스태시 후 `git reset --hard origin/main`으로 동기화한다.
+- AI는 배포를 진행할 때 로컬에서 검증(테스트·빌드)을 마친 뒤 커밋하고, 배포는 `.deploy/deploy_all.ps1` 통합 스크립트(`-Frontend` / `-BackendFiles`)로만 진행한다. git 기반 서버 동기화(`git reset --hard`)는 사용하지 않는다.
 - AI는 서버 배포 후 `/up`(200)과 루트 페이지(200)로 동작을 검증한 뒤 사용자에게 결과를 안내한다.
 - AI는 서버의 GitHub 접속이 느려 의존성 설치가 지연될 때 Aliyun composer 미러 또는 로컬 vendor 업로드 같은 대체 경로를 먼저 제안한다.
 - AI는 임시 외부 접속 주소 안내 시 Quick Tunnel의 임시성(프로세스 유지 동안만 유효, 재부팅 시 변경)을 함께 안내한다.

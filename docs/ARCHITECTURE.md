@@ -133,8 +133,8 @@ Vue 마운트 → resources/js/app.js → business/* (비즈니스) / shared/* (
 - 공통으로 재사용되는 화면 데이터 조립 규칙, 포맷 규칙, row builder 규칙은 컨트롤러나 Blade에 장기 보관하지 않고 분리 가능한 PHP class 계층으로 이동하는 것을 우선한다.
 
 ## Frontend
-- 렌더링 방식: Blade 기반 서버 렌더링
-- 스타일링: 프로젝트 내부 plain CSS
+- 렌더링 방식: Blade 기반 서버 렌더링 (관리자 대시보드) + `frontend/` 독립 SPA(Vue 3, Vite) 병행
+- 스타일링: 프로젝트 내부 plain CSS (SPA는 `frontend/src/` 내부에서 별도 관리, [RULES.md](./RULES.md) SPA 규칙 참조)
 - 번들러: Vite
 - 프런트 구조 원칙: `Application > Core / Shared / Modules` 기준 해석
 - 주요 화면
