@@ -75,6 +75,11 @@ class OrderListRowBuilder
             'sortTime' => $order->service_time ?: '',
             'sortCreatedAt' => $order->created_at?->toISOString() ?? '',
             'amountValue' => (int) ($order->expected_revenue ?? $order->amount_value ?? 0),
+            'estimatedDurationMinutes' => $order->estimated_duration_minutes,
+            // 랜딩(공항 픽업) 대기 시간(분) — 체인 하차 시각 계산에 사용. 항공기 도착 후 승객 퇴장 대기
+            'landingWaitMinutes' => ($order->service_type === 'landing' || str_contains((string) $order->pickup_location, '공항'))
+                ? (int) config('recommendation.landing_wait_minutes', 60)
+                : 0,
         ];
     }
 

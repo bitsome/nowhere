@@ -206,6 +206,97 @@ class MatchService
     }
 
     /**
+     * 앞연결 — 매칭 시간대 시작 전에 매칭 지역으로 도착(랜딩)하는 운행인지.
+     * (차량 위치 연속성: 도착지가 매칭 지역이고, 랜딩 시각이 시작 ~3시간 전~시작 사이)
+     */
+    public function isFrontLink(MatchPreference $preference, Order $order): bool
+    {
+        if (! $preference->start_time || blank($order->service_date) || blank($order->service_time)) {
+            return false;
+        }
+
+        return $this->dateMatches($preference, $order)
+            && $this->dayMatches($preference, $order)
+            && $this->passengerMatches($preference, $order)
+            && $this->revenueMatches($preference, $order)
+            && $this->dropoffInArea($preference, $order)
+            && $this->timeWithinRange(
+                Carbon::parse($order->service_date.' '.$order->service_time, 'Asia/Seoul')
+                    ->addMinutes($order->estimated_duration_minutes ?? 60)
+                    ->format('H:i'),
+                $this->addHours($preference->start_time, -3),
+                $preference->start_time,
+            );
+    }
+
+    /**
+     * 뒤연결 — 매칭 시간대 종료 후 매칭 지역에서 출발하는 운행인지.
+     * (차량 위치 연속성: 출발지가 매칭 지역이고, 시작 시각이 종료~종료 후 3시간 사이)
+     */
+    public function isBackLink(MatchPreference $preference, Order $order): bool
+    {
+        if (! $preference->end_time || blank($order->service_time)) {
+            return false;
+        }
+
+        return $this->dateMatches($preference, $order)
+            && $this->dayMatches($preference, $order)
+            && $this->passengerMatches($preference, $order)
+            && $this->revenueMatches($preference, $order)
+            && $this->pickupInArea($preference, $order)
+            && $this->timeWithinRange(
+                $order->service_time,
+                $preference->end_time,
+                $this->addHours($preference->end_time, 3),
+            );
+    }
+
+    /**
+     * HH:MM 시각이 [from, to] 범위 안인지. from > to면 자정을 넘기는 범위로 판단한다.
+     */
+    private function timeWithinRange(string $time, string $from, string $to): bool
+    {
+        if ($from <= $to) {
+            return $time >= $from && $time <= $to;
+        }
+
+        return $time >= $from || $time <= $to;
+    }
+
+    private function addHours(string $time, int $hours): string
+    {
+        return Carbon::parse($time)->addHours($hours)->format('H:i');
+    }
+
+    private function dropoffInArea(MatchPreference $preference, Order $order): bool
+    {
+        $area = trim((string) $preference->area);
+
+        if ($area === '') {
+            return true;
+        }
+
+        return mb_stripos(
+            str_replace('국제', '', (string) $order->dropoff_location),
+            str_replace('국제', '', $area),
+        ) !== false;
+    }
+
+    private function pickupInArea(MatchPreference $preference, Order $order): bool
+    {
+        $area = trim((string) $preference->area);
+
+        if ($area === '') {
+            return true;
+        }
+
+        return mb_stripos(
+            str_replace('국제', '', (string) $order->pickup_location),
+            str_replace('국제', '', $area),
+        ) !== false;
+    }
+
+    /**
      * 최대 인원 조건 — 설정한 최대 인원 이하 운행만 매칭 (비우면 전체).
      */
     private function passengerMatches(MatchPreference $preference, Order $order): bool

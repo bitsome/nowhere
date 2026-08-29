@@ -33,7 +33,7 @@ class OrderFactory extends Factory
             'flight_number' => strtoupper(fake()->lexify('??')).fake()->numberBetween(100, 9999),
             'scheduled_at' => now()->addHours(fake()->numberBetween(1, 48)),
             'order_type' => fake()->randomElement(array_keys(Order::orderTypeOptions())),
-            'estimated_duration_minutes' => fake()->numberBetween(20, 120),
+            'estimated_duration_minutes' => fake()->numberBetween(30, 120),
             'distance_km' => fake()->randomFloat(1, 3, 80),
             'expected_revenue' => fake()->numberBetween(12000, 180000),
             'status' => fake()->randomElement(array_keys(Order::statusOptions())),
