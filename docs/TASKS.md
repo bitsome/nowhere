@@ -104,8 +104,15 @@
 - [x] 왕복 노선 추천: 내가 맡은 운행의 하차지 근처에서 시작하는 운행을 마켓 상단 우선 노출, 시/도 단위 과매칭 제거·구/동 접미사 정규화 (CJ 더운반/uber Freight 리턴 로드 벤치마크)
 - [x] 테스트 29건 추가(매칭 5·오퍼 13·왕복 6·액션센터 5), 전체 253개 통과 · 라이브 배포·검증 완료 (오퍼 수락 → order 63/76 accepted, 왕복 추천 마포구 5건)
 
+### 검증 인프라 구축 (2026-08-29, 자동 사이클 기반)
+- [x] 프론트 테스트(vitest) 도입: vitest + @vue/test-utils + happy-dom, `npm test` 스크립트, 순수 로직·유틸·스토어 테스트 32건 (formatTime/chatTime/communityCategories/useImageStatus/levels/ui store)
+- [x] 원클릭 검증 스크립트 `verify_all.ps1`: Pint → Pest → vitest → 빌드 → check:refs, 실패 단계 리포트·종료 코드
+- [x] pre-commit에 백엔드 테스트 추가: PHP 변경 시 `php artisan test --compact` 자동 실행 (hooks/pre-commit 버전 관리)
+- [x] 검증 전용 스킬(`.cursor/skills/nowhere-verification`) — RULES 3단계 검증 체크리스트 정형화
+- [x] 왕복 추천 테스트 시간 의존성 제거: travelTo + service_time·소요시간 고정으로 결정적 테스트 전환 (281건 전체 통과)
+
 ## Current
-- [ ] 다음 작업 미지정 (후보: ① GitHub 히스토리 정리 후 리포 private 전환 ② 상용화 준비(고정 도메인·SSL) ③ Settlement 고도화(정산서·세금계산서))
+- [ ] 다음 작업 미지정 (후보: ① GitHub 히스토리 정리 후 리포 private 전환 ② 상용화 준비(고정 도메인·SSL) ③ Settlement 고도화(정산서·세금계산서) ④ CI(GitHub Actions) 도입 ⑤ 프론트 E2E(Playwright) ⑥ 프론트 테스트 커버리지 확대(composables·핵심 뷰))
 
 ## 원칙
 - 이 문서는 현재 작업을 하나만 지정하는 기준 문서다.
