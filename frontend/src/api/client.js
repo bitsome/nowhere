@@ -1,4 +1,5 @@
 import axios from 'axios';
+import router from '../router';
 
 /**
  * API 클라이언트 — 독립 SPA 전용.
@@ -28,11 +29,12 @@ apiClient.interceptors.response.use(
         if (error.response?.status === 401 && !error.config?.url?.includes('/auth/login')) {
             localStorage.removeItem('auth_token');
 
-            const base = import.meta.env.VITE_BASE || '/';
-            const loginUrl = `${base}login`.replace(/\/+/g, '/');
+            // SPA 이동 — 전체 리로드(window.location.href)는 진행 중이던 요청을
+            // ERR_ABORTED로 취소시키므로 라우터 push로 전환한다.
+            const name = router.currentRoute.value.name;
 
-            if (window.location.pathname !== loginUrl) {
-                window.location.href = loginUrl;
+            if (name !== 'login' && name !== 'register') {
+                router.push({ name: 'login' });
             }
         }
 

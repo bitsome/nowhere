@@ -29,6 +29,7 @@ const TIME_PRESETS = [
     { label: '저녁', start: '17:00', end: '20:00' },
     { label: '밤', start: '20:00', end: '00:00' },
     { label: '심야', start: '00:00', end: '03:00' },
+    { label: '자정 넘김', start: '22:00', end: '03:00' },
 ];
 
 // 금액 프리셋 — 단위 만원. 탭하면 최소 수익이 채워지고, 같은 칩을 다시 누르면 해제
@@ -282,15 +283,9 @@ export function useMatchSettings({ message, loadMatchedOrders }) {
         return days.map((day) => DAY_LABELS[day - 1]).join('·');
     };
 
-    const matchSummary = (pref) => {
+    // 매칭 설정 요약 — 시간대는 별도(다음날 배지)로 표시하므로 나머지만 묶는다
+    const matchRestSummary = (pref) => {
         const parts = [];
-
-        if (pref.start_time && pref.end_time) {
-            // 종료 시각이 시작보다 이르면 자정을 넘는 야간 시간대 → '다음날' 표시
-            const overnight = pref.start_time > pref.end_time;
-
-            parts.push(overnight ? `${pref.start_time}~다음날 ${pref.end_time}` : `${pref.start_time}~${pref.end_time}`);
-        }
 
         parts.push(matchDayLabel(pref.days));
 
@@ -335,6 +330,6 @@ export function useMatchSettings({ message, loadMatchedOrders }) {
         removeMatch,
         toggleMatchActive,
         matchDayLabel,
-        matchSummary,
+        matchRestSummary,
     };
 }

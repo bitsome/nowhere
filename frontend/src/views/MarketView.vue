@@ -989,10 +989,10 @@ watch(
                 hint="필터를 줄이거나 잠시 후 다시 확인해 주세요"
             />
             <template v-else>
-                <!-- 왕복 추천 — 내가 맡은 운행의 하차지 근처에서 시작하는 운행 (공차 복귀 절감) -->
+                <!-- 연결 운행 — 내가 맡은 운행의 하차지에서 이어지는 운행 (공차 복귀 절감) -->
                 <div v-if="returnRoutes.length" class="market-section">
                     <div class="market-section__head">
-                        <b>왕복 추천</b>
+                        <b>연결 운행</b>
                         <span class="market-section__count">{{ returnRoutes.length }}건 <BaseIcon name="arrow-forward" :size="12" /></span>
                     </div>
                     <div class="order-grid">

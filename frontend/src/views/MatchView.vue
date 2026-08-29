@@ -1,10 +1,11 @@
 <script setup>
-import { onActivated, onMounted, ref } from 'vue';
+import { computed, onActivated, onMounted, ref } from 'vue';
 import { useMessage } from 'naive-ui';
 import { apiOrders } from '../api/orders';
 import { useDriverStore } from '../stores/driver';
 import { useMatchSettings } from '../composables/useMatchSettings';
 import { useMatchCalling } from '../composables/useMatchCalling';
+import { matchDateRangeLabels, matchTimeInfo } from '../utils/matchTime';
 import OrderCard from '../components/orders/OrderCard.vue';
 import OrderCardSkeleton from '../components/orders/OrderCardSkeleton.vue';
 import EmptyState from '../components/common/EmptyState.vue';
@@ -43,8 +44,16 @@ const {
     applyTimePreset, applyAmountPreset, applyPassengerPreset,
     formPresets, applyFormPreset, removeFormPreset, matchForm,
     loadMatchPrefs, openMatchForm, closeMatchForm, saveMatch, removeMatch, toggleMatchActive,
-    matchDayLabel, matchSummary,
+    matchDayLabel, matchRestSummary,
 } = settings;
+
+// 매칭 설정 시간대 표시 — 공통 유틸에서 날짜·다음날 배지 조각을 만든다
+const prefTimeInfo = (pref) => matchTimeInfo(pref);
+
+// 시작/종료 시각 앞에 표시할 날짜(MM-DD) — 공통 유틸에서 날짜 범위 + 자정 넘김 여부로 계산
+const timeDateLabels = computed(() =>
+    matchDateRangeLabels(matchForm.date_range, matchForm.start_time, matchForm.end_time),
+);
 
 const { isCalling, callingHint, toggleCalling } = calling;
 
@@ -98,7 +107,17 @@ onActivated(() => {
                             <strong>{{ pref.name }}</strong>
                             <n-tag v-if="!pref.is_active" size="small" round type="default">비활성</n-tag>
                         </div>
-                        <span class="match-item__meta">{{ matchSummary(pref) }}</span>
+                        <span class="match-item__meta">
+                            <template v-if="prefTimeInfo(pref).start">
+                                <template v-if="prefTimeInfo(pref).date">{{ prefTimeInfo(pref).date }}&nbsp;</template>
+                                {{ prefTimeInfo(pref).start }}~
+                                <span v-if="prefTimeInfo(pref).overnight" class="match-item__nextday">다음날</span>
+                                {{ prefTimeInfo(pref).end }}
+                            </template>
+                            <template v-if="matchRestSummary(pref)">
+                                <template v-if="pref.start_time">&nbsp;·&nbsp;</template>{{ matchRestSummary(pref) }}
+                            </template>
+                        </span>
                     </div>
                     <div class="match-item__actions">
                         <n-switch :value="pref.is_active" size="small" @update:value="toggleMatchActive(pref)" />
@@ -196,10 +215,17 @@ onActivated(() => {
                 </n-form-item>
                 <div class="match-form__row">
                     <n-form-item label="시작 시각" style="flex: 1">
-                        <n-time-picker v-model:value="matchForm.start_time" format="HH:mm" style="width: 100%" />
+                        <div class="match-form__time-field">
+                            <span v-if="timeDateLabels.start" class="match-form__date">{{ timeDateLabels.start }}</span>
+                            <n-time-picker v-model:value="matchForm.start_time" format="HH:mm" style="width: 100%" />
+                        </div>
                     </n-form-item>
                     <n-form-item label="종료 시각" style="flex: 1">
-                        <n-time-picker v-model:value="matchForm.end_time" format="HH:mm" style="width: 100%" />
+                        <div class="match-form__time-field">
+                            <span v-if="timeDateLabels.overnight" class="match-form__nextday">다음날</span>
+                            <span v-if="timeDateLabels.end" class="match-form__date">{{ timeDateLabels.end }}</span>
+                            <n-time-picker v-model:value="matchForm.end_time" format="HH:mm" style="width: 100%" />
+                        </div>
                     </n-form-item>
                 </div>
                 <n-form-item label="요일">
@@ -447,6 +473,18 @@ html.dark .calling-bar--off {
     font-size: 11px;
 }
 
+/* 자정을 넘기는 시간대 — '다음날' 배지 */
+.match-item__nextday {
+    margin: 0 3px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--brand) 12%, transparent);
+    color: var(--brand);
+    font-size: 10px;
+    font-weight: 400;
+    white-space: nowrap;
+}
+
 .match-item__actions {
     display: flex;
     align-items: center;
@@ -457,6 +495,35 @@ html.dark .calling-bar--off {
 .match-form__row {
     display: flex;
     gap: 12px;
+}
+
+/* 시작/종료 시각 — 날짜(MM-DD)·다음날 배지 + 시간 피커 */
+.match-form__time-field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+}
+
+.match-form__date {
+    flex-shrink: 0;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--text-muted) 10%, transparent);
+    color: var(--text-muted);
+    font-size: 10px;
+    white-space: nowrap;
+}
+
+.match-form__nextday {
+    flex-shrink: 0;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--brand) 12%, transparent);
+    color: var(--brand);
+    font-size: 10px;
+    font-weight: 400;
+    white-space: nowrap;
 }
 
 /* 날짜 범위/시간대 프리셋 칩 */
