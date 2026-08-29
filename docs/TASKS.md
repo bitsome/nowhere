@@ -111,6 +111,11 @@
 - [x] 검증 전용 스킬(`.cursor/skills/nowhere-verification`) — RULES 3단계 검증 체크리스트 정형화
 - [x] 왕복 추천 테스트 시간 의존성 제거: travelTo + service_time·소요시간 고정으로 결정적 테스트 전환 (281건 전체 통과)
 
+### 홈 추천일정 (2026-08-29, 일정 없는 기사 추천 강화)
+- [x] 백엔드 `GET /orders/recommendations`: 일정(수락/운행중)이 있으면 왕복 노선 추천 우선, 없으면 '매칭 설정 + 운행 이력' 복합 추천 (이유: 매칭 설정/자주 다니는 노선/왕복 노선)
+- [x] 홈(HomeView)에 '추천일정' 섹션 추가 — OrderCard + 추천 이유 배지, 카드 클릭 시 운행 상세로 이동
+- [x] 추천 API 테스트 4건 추가 (설정/이력/왕복/빈 배열), 전체 285건 통과
+
 ## Current
 - [ ] 다음 작업 미지정 (후보: ① GitHub 히스토리 정리 후 리포 private 전환 ② 상용화 준비(고정 도메인·SSL) ③ Settlement 고도화(정산서·세금계산서) ④ CI(GitHub Actions) 도입 ⑤ 프론트 E2E(Playwright) ⑥ 프론트 테스트 커버리지 확대(composables·핵심 뷰))
 
