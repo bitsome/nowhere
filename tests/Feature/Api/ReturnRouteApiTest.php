@@ -23,13 +23,17 @@ beforeEach(function () {
 });
 
 test('내가 맡은 운행의 하차지 근처에서 시작하는 마켓 운행이 왕복 추천된다', function () {
-    // 내가 수락한 운행 — 하차지 '강남'
+    $this->travelTo(Carbon::parse('today 08:00 Asia/Seoul'));
+
+    // 내가 수락한 운행 — 하차지 '강남', 09:00 출발·소요 60분 → 10:30부터 복귀 가능
     Order::factory()->create([
         'user_id' => $this->driver->id,
         'status' => Order::STATUS_ACCEPTED,
         'pickup_location' => '인천공항 T2',
         'dropoff_location' => '서울 강남',
         'service_date' => now('Asia/Seoul')->format('Y-m-d'),
+        'service_time' => '09:00',
+        'estimated_duration_minutes' => 60,
     ]);
 
     // 마켓 — '서울 강남'에서 출발하는 운행은 복귀 노선 후보
@@ -39,6 +43,7 @@ test('내가 맡은 운행의 하차지 근처에서 시작하는 마켓 운행�
         'pickup_location' => '서울 강남',
         'dropoff_location' => '인천공항 T1',
         'service_date' => now('Asia/Seoul')->addDays(1)->format('Y-m-d'),
+        'service_time' => '11:00',
     ]);
 
     // 마켓 — 무관한 지역에서 출발하는 운행은 추천되지 않는다
@@ -48,6 +53,7 @@ test('내가 맡은 운행의 하차지 근처에서 시작하는 마켓 운행�
         'pickup_location' => '부산 해운대',
         'dropoff_location' => '울산',
         'service_date' => now('Asia/Seoul')->addDays(1)->format('Y-m-d'),
+        'service_time' => '11:00',
     ]);
 
     $this->getJson('/api/orders/return-routes')
@@ -57,12 +63,16 @@ test('내가 맡은 운행의 하차지 근처에서 시작하는 마켓 운행�
 });
 
 test('공항 터미널 코드가 달라도 같은 공항이면 왕복 추천된다', function () {
+    $this->travelTo(Carbon::parse('today 08:00 Asia/Seoul'));
+
     Order::factory()->create([
         'user_id' => $this->driver->id,
         'status' => Order::STATUS_ACCEPTED,
         'pickup_location' => '명동',
         'dropoff_location' => '인천공항 T2',
         'service_date' => now('Asia/Seoul')->format('Y-m-d'),
+        'service_time' => '09:00',
+        'estimated_duration_minutes' => 60,
     ]);
 
     Order::factory()->create([
@@ -71,6 +81,7 @@ test('공항 터미널 코드가 달라도 같은 공항이면 왕복 추천된�
         'pickup_location' => '인천공항 T1',
         'dropoff_location' => '명동',
         'service_date' => now('Asia/Seoul')->addDays(1)->format('Y-m-d'),
+        'service_time' => '11:00',
     ]);
 
     $this->getJson('/api/orders/return-routes')
@@ -79,6 +90,8 @@ test('공항 터미널 코드가 달라도 같은 공항이면 왕복 추천된�
 });
 
 test('시 단위 토큰만으로 겹치는 운행은 왕복 추천되지 않는다', function () {
+    $this->travelTo(Carbon::parse('today 08:00 Asia/Seoul'));
+
     // 하차지 '서울 마포구' — '서울' 시 단위만 겹치는 강남구 운행은 추천 제외
     Order::factory()->create([
         'user_id' => $this->driver->id,
@@ -86,6 +99,8 @@ test('시 단위 토큰만으로 겹치는 운행은 왕복 추천되지 않는�
         'pickup_location' => '인천공항 T2',
         'dropoff_location' => '서울 마포구',
         'service_date' => now('Asia/Seoul')->format('Y-m-d'),
+        'service_time' => '09:00',
+        'estimated_duration_minutes' => 60,
     ]);
 
     // 마포구에서 출발하는 운행 → 추천
@@ -95,6 +110,7 @@ test('시 단위 토큰만으로 겹치는 운행은 왕복 추천되지 않는�
         'pickup_location' => '서울 마포구',
         'dropoff_location' => '인천공항',
         'service_date' => now('Asia/Seoul')->addDays(1)->format('Y-m-d'),
+        'service_time' => '11:00',
     ]);
 
     // 강남구에서 출발하는 운행 → 같은 시지만 구가 다르므로 추천 제외
@@ -104,6 +120,7 @@ test('시 단위 토큰만으로 겹치는 운행은 왕복 추천되지 않는�
         'pickup_location' => '서울 강남구',
         'dropoff_location' => '인천공항',
         'service_date' => now('Asia/Seoul')->addDays(1)->format('Y-m-d'),
+        'service_time' => '11:00',
     ]);
 
     $this->getJson('/api/orders/return-routes')
@@ -113,6 +130,8 @@ test('시 단위 토큰만으로 겹치는 운행은 왕복 추천되지 않는�
 });
 
 test('구 접미사가 달라도 같은 상세 구역이면 왕복 추천된다', function () {
+    $this->travelTo(Carbon::parse('today 08:00 Asia/Seoul'));
+
     // 하차지 '강남' ↔ 출발지 '서울 강남구' — 접미사 정규화로 매칭
     Order::factory()->create([
         'user_id' => $this->driver->id,
@@ -120,6 +139,8 @@ test('구 접미사가 달라도 같은 상세 구역이면 왕복 추천된다'
         'pickup_location' => '인천공항 T2',
         'dropoff_location' => '강남',
         'service_date' => now('Asia/Seoul')->format('Y-m-d'),
+        'service_time' => '09:00',
+        'estimated_duration_minutes' => 60,
     ]);
 
     Order::factory()->create([
@@ -128,6 +149,7 @@ test('구 접미사가 달라도 같은 상세 구역이면 왕복 추천된다'
         'pickup_location' => '서울 강남구',
         'dropoff_location' => '인천공항',
         'service_date' => now('Asia/Seoul')->addDays(1)->format('Y-m-d'),
+        'service_time' => '11:00',
     ]);
 
     $this->getJson('/api/orders/return-routes')
@@ -227,6 +249,7 @@ test('왕복 추천도 현재 마켓 필터를 반영한다', function () {
         'dropoff_location' => '서울 강남',
         'service_date' => now('Asia/Seoul')->format('Y-m-d'),
         'service_time' => '09:00',
+        'estimated_duration_minutes' => 60,
     ]);
 
     $tomorrow = now('Asia/Seoul')->addDays(1)->format('Y-m-d');

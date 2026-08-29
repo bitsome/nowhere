@@ -256,15 +256,16 @@
 ## 기능 검증 규칙
 - 기능 구현 후에는 반드시 검증을 거친다. 순서는 `개발 → 검증 → 커밋`이며, 검증 통과 전에는 커밋하지 않는다.
 - 검증은 아래 3단계를 기본으로 수행한다. 자체 검증으로 충분하지 않거나 변경 범위가 크면 검증 전용 서브에이전트를 반드시 활용한다.
+- 1·2단계는 통합 검증 스크립트 `verify_all.ps1`(repo 루트)로 한 번에 실행할 수 있다. `.\verify_all.ps1`은 Pint → Pest → vitest → 빌드 → check:refs 순서로 실행하고 실패한 단계를 리포트한다. pre-commit 훅(`hooks/pre-commit`)도 PHP 변경 시 백엔드 테스트를 자동 실행한다.
 
 ### 1단계: 정적 검증 (Static)
 - 변경 파일을 grep/Read로 다시 읽어 실제 반영 여부를 확인한다. 원복 현상(import·선언·블록 일부 되돌아감)은 이 프로젝트에서 반복 발생하므로 반드시 대조한다.
-- 백엔드(PHP): `vendor/bin/pint --dirty --format agent`로 코드 스타일을 정리한다.
+- 백엔드(PHP): `php vendor/bin/pint --dirty --format agent`로 코드 스타일을 정리한다.
 - 프론트엔드(Vue): `npm run build`로 컴파일 오류(누락 import, ReferenceError, 문법 오류)를 확인하고, `npm run check:refs`로 템플릿 식별자/스크립트 정의 누락을 확인한다. 프론트 파일을 건드렸다면 이 두 명령은 필수다.
 
 ### 2단계: 동적 검증 (Runtime)
 - 백엔드: 관련 테스트를 `php artisan test --compact --filter=<기능>`으로 실행한다. 새 기능에는 테스트(`tests/Feature` 또는 `tests/Unit`)를 작성하거나 기존 테스트를 갱신한다. 인증·권한·비즈니스 로직 변경은 테스트 없이 통과시킬 수 없다.
-- 프론트엔드: 가능하면 헤드리스 브라우저(Edge `--headless=new --dump-dom --virtual-time-budget=15000 <url>`)로 해당 화면의 렌더링·JS 오류를 확인한다.
+- 프론트엔드: 순수 로직·유틸·스토어·컴포저블을 변경하면 `npm test`(vitest, `frontend/src/**/*.test.js`)를 실행하고 테스트를 작성·갱신한다. 화면 렌더링 확인은 헤드리스 브라우저(Edge `--headless=new --dump-dom --virtual-time-budget=15000 <url>`)로 수행한다.
 - 배포 대상이면 배포 후 `/up`(200), 루트 페이지(200), 새 빌드 asset 적용 여부로 검증한다.
 
 ### 3단계: 에이전트 검증 (Agent Review)

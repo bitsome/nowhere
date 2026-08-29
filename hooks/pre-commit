@@ -1,0 +1,34 @@
+#!/bin/sh
+# NoWhere pre-commit 훅 (버전 관리본)
+# 1) 프론트 템플릿 참조 검사 (check_template_refs.cjs)
+# 2) 변경된 PHP 파일이 있으면 백엔드 테스트(Pest) 실행
+#
+# 활성화: 이 파일을 .git/hooks/pre-commit으로 복사하거나, .git/hooks/pre-commit이
+#   exec "$(git rev-parse --show-toplevel)/hooks/pre-commit" 로 호출하도록 한다.
+# 신규 클론 시: `cp hooks/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit`
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT" || exit 1
+
+# ── 1) 프론트 템플릿 참조 검사 ──
+if command -v node >/dev/null 2>&1; then
+    if ! node check_template_refs.cjs; then
+        echo ""
+        echo "pre-commit FAILED: 일부 템플릿 참조가 script setup에 정의되지 않았습니다."
+        echo "직접 실행: npm run check:refs --prefix frontend"
+        exit 1
+    fi
+fi
+
+# ── 2) 백엔드 테스트 (PHP 변경 시) ──
+CHANGED_PHP=$(git diff --cached --name-only --diff-filter=ACM -- '*.php')
+if [ -n "$CHANGED_PHP" ]; then
+    echo "pre-commit: PHP 파일 변경 감지 → 백엔드 테스트 실행 (php artisan test --compact)"
+    if ! php artisan test --compact; then
+        echo ""
+        echo "pre-commit FAILED: 백엔드 테스트가 실패했습니다."
+        exit 1
+    fi
+fi
+
+exit 0
