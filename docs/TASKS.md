@@ -137,6 +137,8 @@
   - 서버 보안 강화: 비밀번호 로그인 비활성화(`PasswordAuthentication no`) — 키 인증만 유지
   - 상용화 준비: 고정 도메인 확보 + Let's Encrypt SSL (SQLite→MySQL은 완료)
   - Settlement 고도화 (정산서·세금계산서 등, 필요 시)
+- 개선점 (2026-08-29 발견)
+  - 서버가 HTTPS(443)로는 노출되지 않고 HTTP(80)로만 응답 → vite 프록시 기본 타깃(`https://114.132.240.52`)이 실패하므로 기본값을 `http://114.132.240.52`로 변경하거나 서버 443 오픈을 검토한다.
 
 ## Foundation Roadmap
 
