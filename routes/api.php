@@ -82,6 +82,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/chats/{conversation}/requests', [ChatController::class, 'request']);
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/return-routes', [OrderController::class, 'returnRoutes']);
+    Route::get('/orders/recommendations', [OrderController::class, 'recommendations']);
     Route::post('/orders', [OrderController::class, 'store'])->middleware('can:create,App\Models\Order');
     Route::post('/orders/batch', [OrderController::class, 'batchStore'])->middleware('can:create,App\Models\Order');
     Route::post('/orders/batch-settle', [OrderController::class, 'batchSettle']);

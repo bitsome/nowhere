@@ -4,8 +4,10 @@ import { useRouter } from 'vue-router';
 import { useMessage } from 'naive-ui';
 import { apiMyDriver, apiMyVehicles, apiSetDriverMatchEnabled } from '../api/driver';
 import { apiMatchPreferences } from '../api/match';
+import { apiRecommendations } from '../api/orders';
 import { getApiErrorMessage } from '../api/client';
 import BaseIcon from '../components/common/BaseIcon.vue';
+import OrderCard from '../components/orders/OrderCard.vue';
 import UiCard from '../components/ui/UiCard.vue';
 import UiSection from '../components/ui/UiSection.vue';
 import UiChip from '../components/ui/UiChip.vue';
@@ -19,6 +21,7 @@ const message = useMessage();
 const driver = ref(null);
 const vehicle = ref(null);
 const preference = ref(null);
+const recommendations = ref([]);
 const loading = ref(true);
 
 const matchEnabled = computed(() => Boolean(driver.value?.match_enabled));
@@ -29,12 +32,13 @@ const load = async (silent = false) => {
         loading.value = true;
     }
 
-    // 드라이버·차량·매칭설정을 병렬로 호출해 대기 시간을 줄인다.
+    // 드라이버·차량·매칭설정·추천일정을 병렬로 호출해 대기 시간을 줄인다.
     // (실패한 항목만 조용히 건너뛴다)
-    const [me, vehicles, prefs] = await Promise.allSettled([
+    const [me, vehicles, prefs, recs] = await Promise.allSettled([
         apiMyDriver(),
         apiMyVehicles(),
         apiMatchPreferences(),
+        apiRecommendations(),
     ]);
 
     if (me.status === 'fulfilled') {
@@ -48,6 +52,10 @@ const load = async (silent = false) => {
     if (prefs.status === 'fulfilled') {
         const list = prefs.value.data.data ?? [];
         preference.value = list.find((p) => p.is_active) ?? list[0] ?? null;
+    }
+
+    if (recs.status === 'fulfilled') {
+        recommendations.value = recs.value.data.data ?? [];
     }
 
     if (!silent) {
@@ -158,6 +166,19 @@ onActivated(() => {
                     </button>
                 </UiCard>
             </div>
+
+            <!-- 추천일정 — 일정이 없어도 매칭 설정·자주 다니는 노선 기준으로 마켓 운행 추천 -->
+            <UiSection v-if="recommendations.length" title="추천일정">
+                <p class="home-rec__hint">지금 조건에 맞는 운행이에요</p>
+                <div class="order-grid home-rec">
+                    <OrderCard
+                        v-for="order in recommendations"
+                        :key="order.key"
+                        :order="order"
+                        :recommend-reason="order.recommend_reason"
+                    />
+                </div>
+            </UiSection>
 
             <!-- 빠른 메뉴 -->
             <UiSection title="빠른 메뉴">
@@ -391,6 +412,16 @@ html.dark .home-match__cta {
     font-size: 16px;
     font-weight: 400;
     line-height: 1;
+}
+
+/* 추천일정 */
+.home-rec {
+    margin-top: 4px;
+}
+.home-rec__hint {
+    margin: -4px 0 10px;
+    font-size: 11px;
+    color: var(--text-muted);
 }
 
 /* 빠른 메뉴 */

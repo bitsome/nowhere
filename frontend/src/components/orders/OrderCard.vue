@@ -57,6 +57,7 @@ const statusColor = computed(() => statusColorVar[props.order.status] ?? 'var(--
             <div class="order-card__route">
                 <div class="order-card__route-top">
                     <span v-if="order.is_matched_to_me" class="order-card__matched" title="내 매칭 조건에 맞는 운행">추천</span>
+                    <span v-if="recommendReason" class="order-card__reason" title="추천 이유">{{ recommendReason }}</span>
                     <span v-if="order.isPriority" class="order-card__priority" title="긴급 운행">긴급</span>
                     <strong>{{ order.route }}</strong>
                     <span v-if="order.isUrgent" class="order-card__urgent" title="곧 운행 시작">임박</span>
@@ -297,6 +298,19 @@ const statusColor = computed(() => statusColorVar[props.order.status] ?? 'var(--
     background: var(--brand);
     color: #ffffff;
     box-shadow: 0 1px 4px color-mix(in srgb, var(--brand) 40%, transparent);
+}
+
+/* 추천 이유 배지 — 홈 추천일정 (매칭 설정/자주 다니는 노선/왕복 노선) */
+.order-card__reason {
+    flex-shrink: 0;
+    padding: 3px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: -0.2px;
 }
 
 .order-card__amount {

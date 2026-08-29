@@ -2,6 +2,7 @@
 
 namespace App\Services\Order;
 
+use App\Models\MatchPreference;
 use App\Models\Order;
 use App\Models\Review;
 use App\Models\User;
@@ -393,35 +394,7 @@ class OrderListService
         }
 
         // 마켓 후보 — 공개/거래중, 가져오기 요청 없음, 남의 운행, 서비스 시각이 지나지 않음
-        $cutoff = now('Asia/Seoul')->subHours(2);
-        [$cutoffDate, $cutoffTime] = explode(' ', $cutoff->format('Y-m-d H:i'));
-
-        $candidatesQuery = Order::query()
-            ->whereIn('status', [Order::STATUS_PUBLISHED, Order::STATUS_TRADING])
-            ->whereNull('claimed_at')
-            ->where('user_id', '!=', $user->id)
-            ->whereNotNull('pickup_location')
-            ->where('pickup_location', '!=', '')
-            ->where(function ($sub) use ($cutoffDate, $cutoffTime) {
-                $sub->where(function ($q) use ($cutoffDate, $cutoffTime) {
-                    $q->whereNotNull('service_date')
-                        ->where('service_date', '!=', '')
-                        ->whereNotNull('service_time')
-                        ->where('service_time', '!=', '')
-                        ->where(function ($dateQuery) use ($cutoffDate, $cutoffTime) {
-                            $dateQuery->where('service_date', '>', $cutoffDate)
-                                ->orWhere(function ($q2) use ($cutoffDate, $cutoffTime) {
-                                    $q2->where('service_date', $cutoffDate)
-                                        ->where('service_time', '>=', $cutoffTime);
-                                });
-                        });
-                })->orWhere(function ($q) {
-                    $q->whereNull('service_date')
-                        ->orWhere('service_date', '')
-                        ->orWhereNull('service_time')
-                        ->orWhere('service_time', '');
-                });
-            });
+        $candidatesQuery = $this->marketCandidatesQuery($user);
 
         // 현재 마켓 필터를 함께 적용 — 검색 중인 노선·날짜·시간대·차량에 맞는 복귀 운행만 추천
         $this->applyFilters($request, $candidatesQuery);
@@ -447,6 +420,173 @@ class OrderListService
         $rows = app(OrderWorkspaceListBuilder::class)->build($matched, null, 'date');
 
         return $this->withOwnerTrust($rows, $matched->all());
+    }
+
+    /**
+     * 홈 '추천일정' — 현재 운행(예약·일정)이 없어도 마켓 운행을 추천한다.
+     *
+     * 우선순위:
+     * 1) 현재 맡은 운행(수락/운행중)이 있으면 왕복 노선 추천을 그대로 사용한다.
+     * 2) 일정이 없으면 '매칭 설정 + 운행 이력' 복합으로 추천한다.
+     *    - 활성 매칭 설정의 지역·시간·날짜·최소수익 조건에 맞는 운행 (이유: '매칭 설정')
+     *    - 최근 운행 이력에서 자주 다니는 출발/하차 지역에서 시작하는 운행 (이유: '자주 다니는 노선')
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function recommendations(Request $request): array
+    {
+        // 1) 왕복 노선 — 현재 맡은 운행 기준 (일정이 있는 경우 우선)
+        $returnRoutes = $this->returnRoutes($request);
+
+        if ($returnRoutes !== []) {
+            foreach ($returnRoutes as &$row) {
+                $row['recommend_reason'] = '왕복 노선';
+            }
+            unset($row);
+
+            return $returnRoutes;
+        }
+
+        // 2) 일정이 없으면 매칭 설정 + 운행 이력 복합 추천
+        $user = $request->user();
+        $candidates = $this->marketCandidatesQuery($user)
+            ->orderBy('service_date')
+            ->orderBy('service_time')
+            ->limit(100)
+            ->get();
+
+        if ($candidates->isEmpty()) {
+            return [];
+        }
+
+        $matched = [];
+        $reasons = [];
+
+        // 2-1) 활성 매칭 설정 조건 일치 — 설정 우선
+        $preferences = $user->matchPreferences()->where('is_active', true)->get();
+
+        foreach ($candidates as $order) {
+            if ($preferences->contains(fn (MatchPreference $preference) => $this->matchService->isMatch($preference, $order))) {
+                $matched[$order->id] = $order;
+                $reasons[$order->id] = '매칭 설정';
+            }
+        }
+
+        // 2-2) 운행 이력의 자주 다니는 지역 기준 — 설정 매칭이 없는 운행만 채운다
+        $frequentAreas = $this->frequentDriverAreas($user);
+
+        if ($frequentAreas !== []) {
+            foreach ($candidates as $order) {
+                if (isset($matched[$order->id])) {
+                    continue;
+                }
+
+                if ($this->matchesAnyArea((string) $order->pickup_location, $frequentAreas)) {
+                    $matched[$order->id] = $order;
+                    $reasons[$order->id] = '자주 다니는 노선';
+                }
+            }
+        }
+
+        if ($matched === []) {
+            return [];
+        }
+
+        $orderItems = array_values($matched);
+        $rows = app(OrderWorkspaceListBuilder::class)->build(collect($orderItems), null, 'date');
+
+        foreach ($rows as &$row) {
+            $row['recommend_reason'] = $reasons[$row['id']] ?? null;
+        }
+        unset($row);
+
+        return $this->withOwnerTrust($rows, $orderItems);
+    }
+
+    /**
+     * 마켓 추천 후보 쿼리 — 공개/거래중, 가져오기 요청 없음, 남의 운행, 서비스 시각이 지나지 않은 운행.
+     */
+    private function marketCandidatesQuery(User $user): Builder
+    {
+        $cutoff = now('Asia/Seoul')->subHours(2);
+        [$cutoffDate, $cutoffTime] = explode(' ', $cutoff->format('Y-m-d H:i'));
+
+        return Order::query()
+            ->whereIn('status', [Order::STATUS_PUBLISHED, Order::STATUS_TRADING])
+            ->whereNull('claimed_at')
+            ->where('user_id', '!=', $user->id)
+            ->whereNotNull('pickup_location')
+            ->where('pickup_location', '!=', '')
+            ->where(function ($sub) use ($cutoffDate, $cutoffTime) {
+                $sub->where(function ($q) use ($cutoffDate, $cutoffTime) {
+                    $q->whereNotNull('service_date')
+                        ->where('service_date', '!=', '')
+                        ->whereNotNull('service_time')
+                        ->where('service_time', '!=', '')
+                        ->where(function ($dateQuery) use ($cutoffDate, $cutoffTime) {
+                            $dateQuery->where('service_date', '>', $cutoffDate)
+                                ->orWhere(function ($q2) use ($cutoffDate, $cutoffTime) {
+                                    $q2->where('service_date', $cutoffDate)
+                                        ->where('service_time', '>=', $cutoffTime);
+                                });
+                        });
+                })->orWhere(function ($q) {
+                    $q->whereNull('service_date')
+                        ->orWhere('service_date', '')
+                        ->orWhereNull('service_time')
+                        ->orWhere('service_time', '');
+                });
+            });
+    }
+
+    /**
+     * 최근 운행 이력에서 자주 다니는 지역 토큰 (출발·하차 합산, 상위 10개).
+     *
+     * @return array<int, string>
+     */
+    private function frequentDriverAreas(User $user): array
+    {
+        $counts = [];
+
+        $trips = Order::query()
+            ->where('user_id', $user->id)
+            ->whereIn('status', [
+                Order::STATUS_ACCEPTED,
+                Order::STATUS_DRIVING,
+                Order::STATUS_COMPLETED,
+                Order::STATUS_SETTLED,
+            ])
+            ->latest('service_date')
+            ->limit(50)
+            ->get();
+
+        foreach ($trips as $trip) {
+            foreach ([$trip->pickup_location, $trip->dropoff_location] as $location) {
+                foreach ($this->locationTokens((string) $location) as $token) {
+                    $counts[$token] = ($counts[$token] ?? 0) + 1;
+                }
+            }
+        }
+
+        arsort($counts);
+
+        return array_slice(array_keys($counts), 0, 10);
+    }
+
+    /**
+     * 출발지가 자주 다니는 지역과 겹치는지 확인한다.
+     *
+     * @param  array<int, string>  $frequentAreas
+     */
+    private function matchesAnyArea(string $location, array $frequentAreas): bool
+    {
+        foreach ($this->locationTokens($location) as $token) {
+            if (in_array($token, $frequentAreas, true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

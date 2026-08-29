@@ -49,6 +49,18 @@ class OrderController extends Controller
     }
 
     /**
+     * 홈 '추천일정' — 일정이 없어도 매칭 설정·운행 이력 기준으로 마켓 운행을 추천한다.
+     *
+     * @return JsonResponse{data: array<int, array<string, mixed>>}
+     */
+    public function recommendations(Request $request, OrderListService $listService): JsonResponse
+    {
+        return response()->json([
+            'data' => $listService->recommendations($request),
+        ]);
+    }
+
+    /**
      * 운행 상세 — 라인아이템, 셋트면 그룹 전체 일정 포함.
      *
      * @return JsonResponse{data: array<string, mixed>}

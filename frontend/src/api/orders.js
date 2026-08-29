@@ -5,6 +5,9 @@ export const apiOrders = (params) => apiClient.get('/orders', { params });
 // 왕복 노선 추천 — 내가 맡은 운행의 하차지 근처에서 시작하는 마켓 운행 (현재 마켓 필터 반영)
 export const apiReturnRoutes = (params) => apiClient.get('/orders/return-routes', { params });
 
+// 홈 추천일정 — 일정이 없어도 매칭 설정·운행 이력 기준으로 마켓 운행을 추천
+export const apiRecommendations = () => apiClient.get('/orders/recommendations');
+
 export const apiOrder = (id) => apiClient.get(`/orders/${id}`);
 
 export const apiCreateOrder = (payload) => apiClient.post('/orders', payload);
