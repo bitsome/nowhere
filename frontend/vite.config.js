@@ -17,11 +17,9 @@ import { cpSync, rmSync } from 'node:fs';
  */
 const apiProxy = {
     '/api': {
-        // dev 터널(HTTPS)에서 HTTP 서버 API로 Mixed Content 차단을 피하기 위해
-        // vite가 서버 API(114.132.240.52)로 프록시한다 (브라우저는 같은 origin만 봄).
-        // 서버가 HTTP→HTTPS(자체서명) 301 리다이렉트하므로 HTTPS로 직접 연결하고
-        // secure:false 로 자체서명 인증서 검증을 끈다.
-        target: process.env.VITE_API_PROXY_TARGET || 'https://114.132.240.52',
+        // 개발은 로컬 Laravel API(`php artisan serve`, 기본 8000)로 프록시한다 — 로컬 DB 사용.
+        // 서버 API를 임시로 보고 싶을 때는 VITE_API_PROXY_TARGET=https://114.132.240.52 로 덮어쓴다.
+        target: process.env.VITE_API_PROXY_TARGET || 'http://127.0.0.1:8000',
         changeOrigin: true,
         secure: false,
     },

@@ -113,6 +113,15 @@
 - `createGroup`, `removeFromGroup`, `moveToGroup`, `recalculateAfterDelete`는 각각 Single → Set, Set → Single, Set → Set, Order 삭제 후 재계산 규칙을 담당한다.
 - `recalculateAfterDelete` 호출 시에는 삭제 전에 조회한 Order 인스턴스를 넘긴다.
 
+## 추천 알고리즘 규칙
+- 운행 추천(홈 '추천일정') 알고리즘은 [RECOMMENDATION.md](./RECOMMENDATION.md)를 기준으로 유지한다.
+- 기본 패턴: 샌딩 → 랜딩은 샌딩 기준 **30분~2시간**, 랜딩 → 샌딩은 **낮(09~17시) 2시간~3시간 / 새벽·저녁·밤·야밤 1시간~2시간** 간격을 이어 붙이는 구조를 우선한다.
+- 랜딩 운행의 service_time은 **항공기 도착 시각**이며, 승객이 나오는 데 **30분~2시간(평균 1시간)**이 걸리므로 연결 창 계산에서 이를 가산한다(설정: `config/recommendation.php`의 `landing_wait_minutes`, env `LANDING_WAIT_MINUTES`, 기본 60분). 실하차 = 항공기 도착 + 랜딩 대기 + 운행 소요.
+- 서비스 지역: **서울/인천/경기만** 취급하며, 시작·도착지가 서비스 지역 밖(부산·대구·광주·대전·울산·세종·강원·충청·전라·경상·제주 등)인 운행은 추천에서 제외한다. 공항은 김포공항(국내선/국제선), 인천공항(T1/T2)이며 같은 공항의 터미널·선은 연결된다.
+- 지역 연속성: **같은 시/도(서울/인천/경기) 안이면 연결**된다. 구 단위가 달라도 시/도가 같으면 일반 추천으로 연결되며, **같은 구 또는 같은 공항 터미널(인천공항 T1↔T1, T2↔T2, 김포 국내선↔국내선, 국제선↔국제선)이면 강력추천**으로 구분한다.
+- 추천 우선순위: 연결 운행(강력: 같은 구·같은 공항 터미널 > 일반: 같은 시/도) > 매칭 설정 > 자주 다니는 노선 > 자주 운행한 시간.
+- 기본 시간 창은 지금부터 4시간(오늘~내일)이며, 매칭 설정 조건 운행은 창 밖이어도 추천한다(알람과 동일). 과거 운행은 추천하지 않는다.
+
 ## Frontend 규칙
 - 스타일링은 프로젝트 내부 CSS 파일로 직접 작성한다.
 - `Tailwind CSS`, `Bootstrap`, `Bulma` 같은 외부 CSS 라이브러리/프레임워크는 사용하지 않는다.
@@ -291,12 +300,12 @@
 - 의존성(composer.json)이 바뀌면 서버에서 `composer install`을 실행한다. 서버에서 GitHub 접속이 느리면 Aliyun composer 미러(`composer config -g repo.packagist composer https://mirrors.aliyun.com/composer/`)를 사용하고, 그래도 느리면 로컬 vendor를 tar.gz로 압축해 업로드·해제 후 `composer dump-autoload -o`로 정리한다.
 - 마이그레이션은 `php artisan migrate --force`, 캐시는 `config:clear / route:clear / view:clear`, php-fpm은 `systemctl reload php8.3-fpm`으로 반영한다.
 - 배포 후에는 반드시 `/up`(200), 루트 페이지(200), 새 빌드 asset 적용 여부로 검증한다.
-- 데이터베이스는 상용화 전까지 SQLite(`database/database.sqlite`)를 유지한다. 동시 접속·성능이 필요해지는 시점에 MySQL로 전환을 검토한다.
+- 데이터베이스는 서버가 MySQL(`nowhere`), 로컬이 SQLite(`database/database.sqlite`)다. 로컬 데이터는 서버 MySQL 덤프를 `.deploy/import_sqlite.php`로 변환·주입해 동기화한다.
 - 개선 작업은 시간이 오래 걸리는 작업(DB 이전, 도메인·SSL, 고정 터널 등)보다 빠르게 완료되는 작업부터 우선 진행한다.
 
 ## 개발 워크플로우 규칙
 - 기능 개발·수정·업데이트는 원칙적으로 로컬에서만 진행하고 검증한다. 서버 배포·빌드는 사용자가 명시적으로 요청할 때만 수행한다.
-- 데이터베이스는 서버 SQLite를 사용한다: 로컬 SPA(vite dev `localhost:5174`, `/api`는 서버 프록시) → 서버 API(114.132.240.52) → 서버 DB(`/var/www/nowhere/database/database.sqlite`).
+- 데이터베이스는 로컬 SQLite(`database/database.sqlite`)를 사용한다: 로컬 SPA(vite dev `localhost:5174`) → 로컬 API(`php artisan serve`, 기본 8000 프록시) → 로컬 DB. 서버 데이터가 필요하면 사용자 요청 시 서버 MySQL 덤프를 받아 `.deploy/import_sqlite.php`로 동기화한다.
 - 외부 확인용 임시 주소는 로컬 개발 서버 기준 Cloudflare Quick Tunnel로 발급한다. "플래어주소 열어줘" 같은 요청이 오면 기존 터널만 종료 → 새 터널 발급 → `/up`·루트 200 검증 → URL 공유한다.
 - 백엔드 PHP 단일 파일 수정은 서버 즉시 반영이 가능하다 (scp → `sudo cp` → `sudo systemctl reload php8.3-fpm`, opcache 갱신 필수). 단, 사용자 지시 없이 임의로 배포하지 않는다.
 - 편집 후에는 반드시 grep/Read로 변경 내용이 실제 파일에 반영됐는지 재검증한다. 이 프로젝트는 import·선언·블록이 부분적으로 되돌아가는 원복 현상이 반복 발생한다.
@@ -360,7 +369,7 @@
 - AI는 프론트 파일을 변경하면 `npm run build`와 `npm run check:refs`를 반드시 실행해 컴파일 오류와 템플릿 참조 누락을 확인한다.
 - AI는 백엔드를 변경하면 관련 테스트(`php artisan test --compact --filter=...`)를 실행하고, 새 기능·권한·인증 변경에는 테스트를 작성하거나 갱신한다.
 - AI는 변경 범위가 크거나 스스로 검증하기 어려운 작업은 검증 전용 서브에이전트로 교차 검토를 받고, 지적사항을 모두 수정한 뒤 재검증한다.
-- AI는 로컬 개발 시 DB를 서버 SQLite에 연결된 서버 API를 통해 사용한다 (로컬 SQLite를 별도로 사용하지 않는다).
+- AI는 로컬 개발 시 로컬 SQLite(서버 MySQL에서 동기화)를 사용한다. 서버 API를 경유하지 않으며, 서버 배포·DB 동기화는 사용자가 요청할 때만 수행한다.
 - AI는 기능이나 페이지가 새로 완성되면 `docs/TASKS.md`의 Completed 목록에 기록하고, 사용자 확인을 거친 항목은 `docs/CHANGELOG.md`도 갱신한다. 완료 기록 없이 다음 작업으로 넘어가지 않는다.
 - AI는 기능을 완성하면 다음에 필요한 기능·부족한 점·미래에 할 일을 `docs/TASKS.md`의 Next/Scope 후보로 미리 기록하고 사용자에게 제안한다. 구현은 하지 않고 기록·제안만 한다.
 - AI는 기능 개발 중 개선이 필요한 점(코드 구조·성능·UX·중복·안정성 등)을 발견하면 `docs/TASKS.md`에 기록하고 사용자에게 제안한다. 즉시 리팩터링하지 않고 기록·제안만 한다.
