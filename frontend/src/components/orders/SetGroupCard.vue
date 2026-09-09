@@ -1,7 +1,9 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { statusColorVar } from '../../utils/colors';
+import { relativeDateLabel } from '../../utils/dateText';
+import { trackClick, trackImpression } from '../../utils/tracking';
 import BaseIcon from '../common/BaseIcon.vue';
 
 const props = defineProps({
@@ -13,22 +15,62 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    // 행동 신호(노출·클릭) 컨텍스트 — 홈 추천·마켓 목록에서만 넘긴다 { scope, section, rank }
+    tracking: {
+        type: Object,
+        default: null,
+    },
 });
 
 const router = useRouter();
 
 // 셋트 카드 클릭 — 첫 번째 운행 상세로 이동
 const open = () => {
+    // 행동 신호 — 셋트 카드 클릭 (meta.group으로 단일 운행과 구분)
+    if (props.tracking) {
+        trackClick({
+            orderId: props.set.firstOrderId,
+            scope: props.tracking.scope,
+            section: props.tracking.section,
+            rank: props.tracking.rank,
+            meta: { group: true },
+        });
+    }
+
     if (props.set.firstOrderId) {
         router.push({ name: 'order-detail', params: { id: props.set.firstOrderId } });
     }
 };
 
+// 카드가 실제로 화면에 그려지면 노출 신호 — 같은 셋트는 세션 동안 한 번만
+onMounted(() => {
+    if (props.tracking) {
+        trackImpression({
+            orderId: props.set.firstOrderId,
+            scope: props.tracking.scope,
+            section: props.tracking.section,
+            rank: props.tracking.rank,
+            meta: { group: true },
+        });
+    }
+});
+
 // 상태별 배지 색상 — 중앙 팔레트에서 참조 (mixed=회색)
-const statusColor = computed(() => statusColorVar[props.set.status] ?? 'var(--status-draft)');
+// 예약(가져오기 수락) 배지는 오렌지색 — 테마 대응은 거래중 색상 재사용
+const statusColor = computed(() => {
+    if (props.set.status === 'accepted') return 'var(--status-trading)';
+
+    return statusColorVar[props.set.status] ?? 'var(--status-draft)';
+});
 
 // 셋트명에서 "KLOOK 8월 셋트" 앞 글자
 const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
+
+// 공개 상태 — 배지는 정보 가치가 낮아 생략하고 배지 자리에 금액을 노출한다
+const isPublished = computed(() => props.set.status === 'published');
+
+// 라우트별 일시 — 오늘/내일/모레는 상대 라벨, 이후 날짜는 "9/2(수)" 유지
+const routeDateLabel = (route) => relativeDateLabel(route.date, route.sortDate);
 </script>
 
 <template>
@@ -44,22 +86,25 @@ const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
             <div class="set-card__flags">
                 <span v-if="set.isNew" class="set-card__new" title="새로 등록된 셋트">N</span>
                 <span v-if="set.isUrgent" class="set-card__urgent" title="곧 운행 시작">임박</span>
-                <span class="status-badge" :class="`status-badge--${set.status}`" :style="{ background: statusColor, borderColor: statusColor }">
+                <!-- 공개 상태는 배지 대신 금액 -->
+                <span v-if="isPublished" class="set-card__amount">
+                    <BaseIcon name="coin" :size="15" />
+                    {{ set.totalAmount }}
+                </span>
+                <span v-else class="status-badge" :class="`status-badge--${set.status}`" :style="{ background: statusColor, borderColor: statusColor }">
                     {{ set.statusLabel }}
                 </span>
-                <span v-if="set.routes[0]?.vehicle || set.routes[0]?.passengerCount || set.routes[0]?.flightNumber" class="set-card__side-line">
-                    <span v-if="set.routes[0]?.vehicle" class="side-chip">
-                        <BaseIcon class="side-chip__icon" name="car" :size="12" />
-                        {{ set.routes[0].vehicle }}
-                    </span>
-                    <span v-if="set.routes[0]?.passengerCount" class="side-chip">
-                        <BaseIcon class="side-chip__icon" name="people" :size="12" />
-                        {{ set.routes[0].passengerCount }}명
-                    </span>
-                    <span v-if="set.routes[0]?.flightNumber" class="side-chip">
-                        <BaseIcon class="side-chip__icon" name="airplane" :size="12" />
-                        {{ set.routes[0].flightNumber }}
-                    </span>
+                <!-- 차량 — 한 줄 -->
+                <span v-if="set.routes[0]?.vehicle" class="set-card__side-line">
+                    <BaseIcon name="car" :size="12" />
+                    {{ set.routes[0].vehicle }}
+                </span>
+                <!-- 인원·캐리어 — 같은 줄 (아이콘 + 숫자) -->
+                <span v-if="set.routes[0]?.passengerCount || set.routes[0]?.luggageCount" class="set-card__side-line">
+                    <BaseIcon v-if="set.routes[0]?.passengerCount" name="people" :size="12" />
+                    <span v-if="set.routes[0]?.passengerCount">{{ set.routes[0].passengerCount }}</span>
+                    <BaseIcon v-if="set.routes[0]?.luggageCount" name="bag" :size="12" />
+                    <span v-if="set.routes[0]?.luggageCount">{{ set.routes[0].luggageCount }}</span>
                 </span>
             </div>
         </div>
@@ -70,7 +115,11 @@ const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
                 :key="index"
                 class="set-card__route-row"
             >
-                <span class="set-card__route-time">{{ route.date }} {{ route.time }}</span>
+                <span class="set-card__route-time">{{ routeDateLabel(route) }} {{ route.time }}</span>
+                <span v-if="route.flightNumber" class="set-card__route-flight" title="항공편">
+                    <BaseIcon name="airplane" :size="11" />
+                    {{ route.flightNumber }}
+                </span>
                 <span class="set-card__route-dot">{{ route.serviceLabel }}</span>
                 <strong class="set-card__route-name">{{ route.route }}</strong>
             </div>
@@ -78,7 +127,7 @@ const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
 
         <div class="set-card__meta">
             <span>총 {{ set.passengerCount }}명</span>
-            <span class="set-card__amount">{{ set.totalAmount }}</span>
+            <span v-if="!isPublished" class="set-card__amount">{{ set.totalAmount }}</span>
         </div>
     </article>
 </template>
@@ -87,8 +136,8 @@ const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
 .set-card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 18px;
+    border-radius: var(--card-radius);
+    padding: var(--card-pad);
     cursor: pointer;
     transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
 }
@@ -203,12 +252,12 @@ const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
 /* 임박 배지 */
 .set-card__urgent {
     flex-shrink: 0;
-    padding: 3px 10px;
+    padding: 1px 6px;
     border-radius: 999px;
     background: var(--danger);
     color: #ffffff;
-    font-size: 11px;
-    font-weight: 700;
+    font-size: 10px;
+    font-weight: 400;
     letter-spacing: -0.2px;
     box-shadow: 0 1px 4px rgba(229, 72, 77, 0.4);
     animation: urgent-pulse 1.6s ease-in-out infinite;
@@ -241,6 +290,9 @@ const avatarText = computed(() => (props.set.name ?? 'S').charAt(0));
 .status-badge--driving,
 .status-badge--trading,
 .status-badge--acceptance-pending,
+/* accepted(예약) 배지는 script에서 앰버(--status-trading)로 칠하고, completed(완료)는 초록 — 둘 다 밝아 어두운 글자 */
+.status-badge--accepted,
+.status-badge--completed,
 html.dark .status-badge--published,
 html.dark .status-badge--driving {
     color: #101418;
@@ -250,9 +302,7 @@ html.dark .status-badge--driving {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    margin-top: 16px;
-    padding-top: 14px;
-    border-top: 1px solid var(--border);
+    margin-top: 14px;
 }
 
 .set-card__route-row {
@@ -269,11 +319,22 @@ html.dark .status-badge--driving {
     min-width: 88px;
 }
 
-.set-card__route-dot {
+/* 항공편 — 시간 옆 아이콘 + 텍스트 (알약 스타일 없이 텍스트로) */
+.set-card__route-flight {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
     color: var(--text-muted);
     font-size: 11px;
+    font-weight: 600;
     flex-shrink: 0;
-    padding: 1px 8px;
+}
+
+.set-card__route-dot {
+    color: var(--text-muted);
+    font-size: 10px;
+    flex-shrink: 0;
+    padding: 1px 6px;
     border-radius: 999px;
     background: rgba(0, 0, 0, 0.05);
 }
@@ -300,31 +361,24 @@ html.dark .set-card__route-dot {
 }
 
 .set-card__side-line {
-    display: flex;
+    display: inline-flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 10px;
+    gap: 4px;
     color: var(--text-muted);
     font-size: 11px;
     white-space: nowrap;
     opacity: 0.85;
 }
 
-.side-chip {
+.set-card__amount {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
-}
-
-.side-chip__icon {
-    width: 13px;
-    height: 13px;
-    flex-shrink: 0;
-}
-
-.set-card__amount {
-    color: var(--text);
-    font-weight: 700;
-    font-size: 11px;
+    gap: 4px;
+    color: var(--brand);
+    font-weight: 800;
+    font-size: 13px;
+    letter-spacing: -0.2px;
+    white-space: nowrap;
 }
 </style>

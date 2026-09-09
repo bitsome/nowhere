@@ -39,6 +39,7 @@ class OrderCreator
                 ...$this->toAttributes([], $userId),
                 'reservation_company' => $source->reservation_company,
                 'customer_name' => $source->customer_name,
+                'customer_phone' => $source->customer_phone,
                 'reservation_channel' => $source->reservation_channel,
                 'vehicle_type' => $source->vehicle_type,
                 'service_type' => $source->service_type,
@@ -52,6 +53,7 @@ class OrderCreator
                 'luggage_count' => $source->luggage_count,
                 'expected_revenue' => $source->expected_revenue,
                 'amount_value' => $source->amount_value,
+                'tags' => $source->tags,
             ]);
 
             foreach ($source->lineItems as $lineItem) {
@@ -108,6 +110,7 @@ class OrderCreator
         $order->update([
             'reservation_company' => $data['reservation_company'] ?? $order->reservation_company,
             'customer_name' => $data['customer_name'] ?? $order->customer_name,
+            'customer_phone' => $data['customer_phone'] ?? $order->customer_phone,
             'reservation_channel' => $data['reservation_channel'] ?? $order->reservation_channel,
             'vehicle_type' => $data['vehicle_type'] ?? $order->vehicle_type,
             'service_type' => $data['service_type'] ?? $order->service_type,
@@ -121,6 +124,7 @@ class OrderCreator
             'luggage_count' => $data['luggage_count'] ?? $order->luggage_count,
             'expected_revenue' => $data['expected_revenue'] ?? $order->expected_revenue,
             'amount_value' => $data['expected_revenue'] ?? $order->amount_value,
+            'tags' => $data['tags'] ?? $order->tags,
             'is_priority' => $data['is_priority'] ?? $order->is_priority,
         ]);
 
@@ -146,6 +150,7 @@ class OrderCreator
             'group_id' => $groupId,
             'reservation_company' => $data['reservation_company'] ?? '직접예약',
             'customer_name' => $data['customer_name'] ?? '미지정',
+            'customer_phone' => $data['customer_phone'] ?? null,
             'reservation_channel' => $data['reservation_channel'] ?? Order::CHANNEL_KAKAO,
             'group_type' => $groupId === null ? '단일' : '셋트',
             'vehicle_type' => $data['vehicle_type'] ?? null,
@@ -160,6 +165,7 @@ class OrderCreator
             'luggage_count' => $data['luggage_count'] ?? null,
             'expected_revenue' => $data['expected_revenue'] ?? null,
             'amount_value' => $data['expected_revenue'] ?? null,
+            'tags' => $data['tags'] ?? null,
             'order_type' => Order::TYPE_GENERAL,
             'status' => Order::STATUS_DRAFT,
             'is_priority' => $data['is_priority'] ?? false,

@@ -5,11 +5,13 @@ defineProps({
     title: { type: String, default: '데이터가 없습니다' },
     hint: { type: String, default: '' },
     icon: { type: String, default: 'inbox' }, // utils/icons.js의 아이콘 이름
+    // 콤팩트 모드 — 카드/모달 안에 넣을 때 여백을 줄인다
+    compact: { type: Boolean, default: false },
 });
 </script>
 
 <template>
-    <div class="empty-state">
+    <div class="empty-state" :class="{ 'empty-state--compact': compact }">
         <div class="empty-state__icon" :class="`empty-state__icon--${icon}`">
             <BaseIcon :name="icon" :size="30" />
         </div>
@@ -30,6 +32,29 @@ defineProps({
     gap: 6px;
     padding: 36px 20px 28px;
     text-align: center;
+}
+
+.empty-state--compact {
+    padding: 20px 12px 16px;
+}
+
+.empty-state--compact .empty-state__icon {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 4px;
+}
+
+.empty-state--compact .empty-state__icon :deep(svg) {
+    width: 22px;
+    height: 22px;
+}
+
+.empty-state--compact .empty-state__title {
+    font-size: 11px;
+}
+
+.empty-state--compact .empty-state__hint {
+    font-size: 10.5px;
 }
 
 .empty-state__icon {

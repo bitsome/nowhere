@@ -30,8 +30,8 @@ defineProps({
     display: block;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 16px;
+    border-radius: var(--card-radius);
+    padding: var(--card-pad);
     color: inherit;
     text-decoration: none;
     text-align: left;

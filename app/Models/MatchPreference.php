@@ -17,8 +17,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'date_range',
     'days',
     'area',
+    'tags',
     'max_passengers',
     'min_revenue',
+    'service_type',
+    'origin',
+    'destination',
+    'vehicle_id',
     'is_active',
 ])]
 class MatchPreference extends Model
@@ -37,6 +42,7 @@ class MatchPreference extends Model
     {
         return [
             'days' => 'array',
+            'tags' => 'array',
             'is_active' => 'boolean',
             'max_passengers' => 'integer',
             'min_revenue' => 'integer',

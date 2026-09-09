@@ -5,17 +5,30 @@ import { useRouter } from 'vue-router';
 import { apiOrders, apiReturnRoutes } from '../api/orders';
 import { getApiErrorMessage } from '../api/client';
 import { useUiStore } from '../stores/ui';
+import { useAuthStore } from '../stores/auth';
 import OrderCard from '../components/orders/OrderCard.vue';
 import SetGroupCard from '../components/orders/SetGroupCard.vue';
 import OrderCardSkeleton from '../components/orders/OrderCardSkeleton.vue';
+import QuickMatchPanel from '../components/orders/QuickMatchPanel.vue';
 import EmptyState from '../components/common/EmptyState.vue';
 import BaseIcon from '../components/common/BaseIcon.vue';
+import {
+    CITY_OPTIONS,
+    detailSelectOptions,
+    districtSelectOptions,
+    locationParam,
+} from '../utils/locations';
 
 defineOptions({ name: 'MarketView' });
 
 const ui = useUiStore();
 const notification = useNotification();
 const router = useRouter();
+const auth = useAuthStore();
+
+// 빠른매칭 퀵 — 기사만 사용하며, 하단 네비 위 플로팅 버튼으로 패널을 연다
+const isDriver = computed(() => auth.user?.role === 'Driver');
+const quickOpen = ref(false);
 
 const orders = ref([]);
 const pagination = ref(null);
@@ -35,9 +48,6 @@ const clearSearch = () => {
     searchOpen.value = false;
     handleFilterChange();
 };
-
-// 추천(매칭) 운행 — is_matched_to_me 플래그 기준
-const recommended = computed(() => orders.value.filter((o) => o.is_matched_to_me && o.kind !== 'set'));
 
 // 왕복 노선 추천 — 내가 맡은 운행의 하차지 근처에서 시작하는 운행 (CJ 더운반/uber Freight 리턴 로드 개념)
 const returnRoutes = ref([]);
@@ -98,6 +108,12 @@ sort.value = savedState.sort ?? 'latest';
 quick.value = savedState.quick ?? '';
 search.value = savedState.search ?? '';
 
+// '금액' 퀵 보기는 정렬의 '금액 높은순'과 동일 동작 — 기존 저장값을 정렬로 이전한다
+if (savedState.quick === 'amount' && sort.value === 'latest') {
+    sort.value = 'amount';
+    quick.value = '';
+}
+
 const persistState = () => {
     try {
         localStorage.setItem(MARKET_STATE_KEY, JSON.stringify({
@@ -145,11 +161,10 @@ const resetFilters = () => {
     search.value = '';
 };
 
-// 빠른 보기 칩 — 최신/임박/금액/긴급 (서버 quick 파라미터와 1:1)
+// 빠른 보기 칩 — 신규/임박/긴급만 (금액 정렬은 '정렬'에서 선택하므로 중복 제거)
 const QUICK_OPTIONS = [
-    { label: '최신', value: 'new' },
+    { label: '신규', value: 'new' },
     { label: '임박', value: 'urgent' },
-    { label: '금액', value: 'amount' },
     { label: '긴급', value: 'priority' },
 ];
 
@@ -235,11 +250,11 @@ const isAmountInRange = (v) => {
     return curMin > 0 && v >= curMin && (curMax === 0 || v <= curMax);
 };
 
-// 상단 서비스 유형 칩 — 샌딩/랜딩/픽업만 상단에서 바로 선택, 나머지는 필터 모달에서
+// 상단 서비스 유형 칩 — 픽업/샌딩/랜딩 (필터 모달의 '서비스 유형'과 동일 옵션·라벨)
 const SERVICE_QUICK_OPTIONS = [
+    { label: '픽업', value: 'pickup' },
     { label: '샌딩', value: 'sending' },
     { label: '랜딩', value: 'landing' },
-    { label: '픽업', value: 'pickup' },
 ];
 
 const toggleServiceType = (value) => {
@@ -293,8 +308,8 @@ watch(vehicleType, () => {
 const SERVICE_FILTER_OPTIONS = [
     { label: '전체', value: '' },
     { label: '픽업', value: 'pickup' },
-    { label: '공항샌딩', value: 'sending' },
-    { label: '공항랜딩', value: 'landing' },
+    { label: '샌딩', value: 'sending' },
+    { label: '랜딩', value: 'landing' },
 ];
 
 const SORT_OPTIONS = [
@@ -336,13 +351,7 @@ const PASSENGER_OPTIONS = [
 ];
 
 // 출발지/도착지 — 시(서울/인천/경기도/공항) → 구 상세 선택
-const CITY_OPTIONS = [
-    { label: '전체', value: '' },
-    { label: '공항', value: 'airport' },
-    { label: '서울', value: 'seoul' },
-    { label: '인천', value: 'incheon' },
-    { label: '경기도', value: 'gyeonggi' },
-];
+// (CITY_OPTIONS·구 목록·locationParam은 utils/locations.js에서 공용으로 사용)
 
 // 즐겨찾기 도시 — 별표(★)로 토글, 즐겨찾기된 시가 셀렉트 상단에 온다 (기본: 공항)
 const FAV_CITY_KEY = 'nowhere:market:favCities';
@@ -396,56 +405,6 @@ const renderCityLabel = (option) => {
         }, fav ? '★' : '☆'),
         h('span', {}, option.label),
     ]);
-};
-
-const CITY_LABELS = { seoul: '서울', incheon: '인천', gyeonggi: '경기도', airport: '공항' };
-
-const SEOUL_DISTRICTS = ['강남구', '강동구', '강북구', '강서구', '관악구', '광진구', '구로구', '금천구', '노원구', '도봉구', '동대문구', '동작구', '마포구', '서대문구', '서초구', '성동구', '성북구', '송파구', '양천구', '영등포구', '용산구', '은평구', '종로구', '중구', '중랑구'];
-const INCHEON_DISTRICTS = ['중구', '미추홀구', '연수구', '남동구', '부평구', '계양구', '서구', '동구'];
-const GYEONGGI_DISTRICTS = ['수원', '성남', '분당', '판교', '고양', '일산', '부천', '안양', '용인', '화성', '평택', '남양주', '김포', '파주', '의정부', '시흥', '구리', '하남'];
-const AIRPORTS = ['인천공항', '김포공항'];
-
-// 시 선택 시 표시할 구 목록 (전체 포함)
-const districtSelectOptions = (city) => {
-    const list = city === 'seoul' ? SEOUL_DISTRICTS
-        : city === 'incheon' ? INCHEON_DISTRICTS
-        : city === 'gyeonggi' ? GYEONGGI_DISTRICTS
-        : city === 'airport' ? AIRPORTS
-        : [];
-    return [
-        { label: '전체', value: '' },
-        ...list.map((d) => ({ label: d, value: d })),
-    ];
-};
-
-// 공항 3단 세부(구) 목록 — 인천공항: T1/T2, 김포공항: 국내/국제
-const detailSelectOptions = (city, district) => {
-    if (city !== 'airport') {
-        return [];
-    }
-    const details = district === '인천공항' ? ['T1', 'T2'] : district === '김포공항' ? ['국내', '국제'] : [];
-    return [
-        { label: '전체', value: '' },
-        ...details.map((d) => ({ label: d, value: d })),
-    ];
-};
-
-// 출발/도착 API 파라미터 — 시/구(세부) 선택에 따라 매칭 문자열 생성
-const locationParam = (city, district, detail = '') => {
-    if (city === 'airport') {
-        if (!district) {
-            return '공항';
-        }
-        if (district === '인천공항') {
-            // 인천공항 전체는 '인천공항 T1/T2'·'인천국제공항' 모두 잡도록 와일드카드 사용
-            return detail ? `인천공항 ${detail}` : '인천%공항';
-        }
-        return detail ? `김포공항 ${detail}` : '김포공항';
-    }
-    if (district) {
-        return district;
-    }
-    return CITY_LABELS[city] ?? '';
 };
 
 const load = async (silent = false) => {
@@ -600,7 +559,8 @@ const activeFilterChips = computed(() => {
     }
     const departure = locationParam(departureCity.value, departureDistrict.value, departureDetail.value);
     if (departure) {
-        push(`출발 ${departure}`, () => {
+        // API용 와일드카드('%')는 칩 문구에 노출하지 않는다 (예: '출발 인천%공항' → '출발 인천공항')
+        push(`출발 ${departure.replace('%', '')}`, () => {
             departureCity.value = '';
             departureDistrict.value = '';
             departureDetail.value = '';
@@ -609,7 +569,7 @@ const activeFilterChips = computed(() => {
     }
     const arrival = locationParam(arrivalCity.value, arrivalDistrict.value, arrivalDetail.value);
     if (arrival) {
-        push(`도착 ${arrival}`, () => {
+        push(`도착 ${arrival.replace('%', '')}`, () => {
             arrivalCity.value = '';
             arrivalDistrict.value = '';
             arrivalDetail.value = '';
@@ -724,7 +684,7 @@ watch(
 </script>
 
 <template>
-    <div>
+    <div class="page-shell">
         <!-- 필터 칩 — 샌딩/랜딩/픽업은 상단에서 바로, 나머지 필터는 모달로 -->
         <div class="market-filters">
             <button
@@ -743,7 +703,8 @@ watch(
                 :class="{ 'market-filters__chip--active': hasModalFilters }"
                 @click="filterOpen = true"
             >
-                필터 {{ hasModalFilters ? '▾' : '' }}
+                필터
+                <span v-if="activeFilterCount > 0" class="market-filters__badge">{{ activeFilterCount }}</span>
             </button>
             <button
                 v-if="activeFilterCount > 0"
@@ -791,7 +752,7 @@ watch(
         <!-- 필터 모달 -->
         <n-modal v-model:show="filterOpen" preset="card" title="필터" :style="{ maxWidth: '400px' }">
             <div class="filter-body">
-                <label class="filter-label">빠른 날짜</label>
+                <label class="filter-label">날짜</label>
                 <div class="filter-quick">
                     <button
                         type="button"
@@ -812,10 +773,7 @@ watch(
                         {{ opt.label }}
                     </button>
                 </div>
-                <label class="filter-label">날짜시간</label>
-                <div class="filter-date-row">
-                    <input v-model="date" type="datetime-local" class="filter-date" />
-                </div>
+                <input v-model="date" type="datetime-local" class="filter-date" />
                 <label class="filter-label">시간대</label>
                 <div class="filter-quick">
                     <button
@@ -829,20 +787,7 @@ watch(
                         {{ opt.label }}
                     </button>
                 </div>
-                <label class="filter-label">빠른 보기</label>
-                <div class="filter-quick">
-                    <button
-                        v-for="opt in QUICK_OPTIONS"
-                        :key="opt.value"
-                        type="button"
-                        class="filter-quick__chip"
-                        :class="{ 'filter-quick__chip--active': quick === opt.value }"
-                        @click="handleQuick(opt)"
-                    >
-                        {{ opt.label }}
-                    </button>
-                </div>
-                <label class="filter-label">서비스 구분</label>
+                <label class="filter-label">서비스 유형</label>
                 <div class="filter-quick">
                     <button
                         v-for="opt in SERVICE_FILTER_OPTIONS"
@@ -851,6 +796,19 @@ watch(
                         class="filter-quick__chip"
                         :class="{ 'filter-quick__chip--active': serviceType === opt.value }"
                         @click="serviceType = opt.value"
+                    >
+                        {{ opt.label }}
+                    </button>
+                </div>
+                <label class="filter-label">특별 보기</label>
+                <div class="filter-quick">
+                    <button
+                        v-for="opt in QUICK_OPTIONS"
+                        :key="opt.value"
+                        type="button"
+                        class="filter-quick__chip"
+                        :class="{ 'filter-quick__chip--active': quick === opt.value }"
+                        @click="handleQuick(opt)"
                     >
                         {{ opt.label }}
                     </button>
@@ -901,13 +859,13 @@ watch(
                         size="large"
                     />
                 </div>
-                <label class="filter-label">인원</label>
+                <label class="filter-label">최소 탑승 인원</label>
                 <n-select
                     v-model:value="minPassengers"
                     :options="PASSENGER_OPTIONS"
                     size="large"
                 />
-                <label class="filter-label">빠른 금액</label>
+                <label class="filter-label">금액</label>
                 <div class="filter-quick">
                     <button
                         type="button"
@@ -928,7 +886,6 @@ watch(
                         {{ opt.label }}
                     </button>
                 </div>
-                <label class="filter-label">금액 범위 (원)</label>
                 <div class="filter-amount-row">
                     <n-input v-model:value="minAmount" type="number" placeholder="최소" clearable size="large" />
                     <span class="filter-amount-sep">~</span>
@@ -991,54 +948,34 @@ watch(
             <template v-else>
                 <!-- 연결 운행 — 내가 맡은 운행의 하차지에서 이어지는 운행 (공차 복귀 절감) -->
                 <div v-if="returnRoutes.length" class="market-section">
-                    <div class="market-section__head">
-                        <b>연결 운행</b>
-                        <span class="market-section__count">{{ returnRoutes.length }}건 <BaseIcon name="arrow-forward" :size="12" /></span>
-                    </div>
                     <div class="order-grid">
                         <OrderCard
-                            v-for="order in returnRoutes"
+                            v-for="(order, ri) in returnRoutes"
                             :key="order.key"
                             :order="order"
                             :highlight="highlightKeys.has(order.key)"
-                        />
-                    </div>
-                </div>
-
-                <!-- 추천 운행 — 내 매칭 조건에 맞는 운행 -->
-                <div v-if="recommended.length" class="market-section">
-                    <div class="market-section__head">
-                        <b>추천 운행</b>
-                        <span class="market-section__count">{{ recommended.length }}건 <BaseIcon name="arrow-forward" :size="12" /></span>
-                    </div>
-                    <div class="order-grid">
-                        <OrderCard
-                            v-for="order in recommended"
-                            :key="order.key"
-                            :order="order"
-                            :highlight="highlightKeys.has(order.key)"
+                            :tracking="{ scope: 'market', section: 'return', rank: ri + 1 }"
                         />
                     </div>
                 </div>
 
                 <!-- 전체 운행 -->
                 <div class="market-section">
-                    <div class="market-section__head">
-                        <b>전체 운행</b>
-                        <span class="market-section__count">{{ singleRows.length + setRows.length }}건</span>
-                    </div>
                     <div class="order-grid">
                         <SetGroupCard
-                            v-for="order in setRows"
+                            v-for="(order, si) in setRows"
                             :key="order.key"
                             :set="order"
                             :highlight="highlightKeys.has(order.key)"
+                            :tracking="{ scope: 'market', section: 'set', rank: si + 1 }"
                         />
                         <OrderCard
-                            v-for="order in singleRows"
+                            v-for="(order, oi) in singleRows"
                             :key="order.key"
                             :order="order"
                             :highlight="highlightKeys.has(order.key)"
+                            :show-match-reasons="true"
+                            :tracking="{ scope: 'market', section: 'list', rank: oi + 1 }"
                         />
                     </div>
                 </div>
@@ -1053,6 +990,33 @@ watch(
                 />
             </div>
         </n-spin>
+
+        <!-- 빠른매칭 퀵 — 하단 네비 바로 위 우측에 떠 있는 원형 버튼 -->
+        <button
+            v-if="isDriver"
+            type="button"
+            class="market-fab"
+            aria-label="빠른매칭"
+            title="빠른매칭"
+            @click="quickOpen = true"
+        >
+            <BaseIcon name="flash" :size="22" />
+        </button>
+
+        <!-- 빠른매칭 패널 — 상태·조건 관리·나에게 매칭된 운행 -->
+        <n-drawer v-model:show="quickOpen" placement="bottom" :height="'80vh'" :auto-focus="false">
+            <div class="qm-drawer">
+                <div class="qm-drawer__head">
+                    <strong>빠른매칭</strong>
+                    <button type="button" class="qm-drawer__close" aria-label="닫기" @click="quickOpen = false">
+                        <BaseIcon name="close" :size="16" />
+                    </button>
+                </div>
+                <div class="qm-drawer__body">
+                    <QuickMatchPanel @changed="load(true)" />
+                </div>
+            </div>
+        </n-drawer>
     </div>
 </template>
 <style scoped>
@@ -1089,8 +1053,11 @@ watch(
     transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 
-.filter-quick__chip:hover {
-    border-color: var(--brand);
+/* hover — 데스크톱에서만. 터치 기기는 탭 후 남는 포커스로 hover가 고정돼 '선택된 것처럼' 보이므로 제외 */
+@media (hover: hover) {
+    .filter-quick__chip:hover {
+        border-color: var(--brand);
+    }
 }
 
 .filter-quick__chip--active {
@@ -1103,12 +1070,6 @@ watch(
     display: flex;
     flex-direction: column;
     gap: 14px;
-}
-
-.filter-date-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
 }
 
 .filter-amount-row {
@@ -1176,7 +1137,7 @@ watch(
 .order-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 16px;
+    gap: var(--card-gap);
 }
 
 .market-pagination {
@@ -1185,12 +1146,39 @@ watch(
     margin-top: 24px;
 }
 
+/* ── 빠른매칭 플로팅 버튼 — 하단 네비 바로 위 우측 ── */
+.market-fab {
+    position: fixed;
+    right: 16px;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    z-index: 90;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 54px;
+    height: 54px;
+    border: 0;
+    border-radius: 50%;
+    background: var(--brand);
+    color: #ffffff;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.market-fab:active {
+    transform: scale(0.94);
+}
+html.dark .market-fab {
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
 /* ── 필터 칩 행 ── */
 .market-filters {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    margin-bottom: 10px;
+    /* 칩 행 아래 여백 — 홈/채팅 등과 동일하게 공용 토큰 사용 */
+    margin-bottom: var(--chips-gap);
 }
 .market-filters__chip {
     flex-shrink: 0;
@@ -1209,9 +1197,27 @@ watch(
     color: var(--brand);
     background: var(--brand-soft);
 }
+
+/* 필터 버튼의 활성 필터 개수 배지 — brand 채움에는 어두운 글자(#07120e) 표준 적용 */
+.market-filters__badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 16px;
+    height: 16px;
+    margin-left: 5px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: var(--brand);
+    color: #07120e;
+    font-size: 10px;
+    font-weight: 400;
+    line-height: 1;
+}
+
 .market-filters__chip--reset {
-    color: var(--danger);
-    border-color: var(--danger);
+    color: var(--text-muted);
+    border-color: var(--border);
 }
 
 .market-filters__myorders {
@@ -1229,9 +1235,11 @@ watch(
     transition: border-color 0.15s ease, color 0.15s ease;
 }
 
-.market-filters__myorders:hover {
-    border-color: var(--brand);
-    color: var(--brand);
+@media (hover: hover) {
+    .market-filters__myorders:hover {
+        border-color: var(--brand);
+        color: var(--brand);
+    }
 }
 
 .market-filters__search {
@@ -1248,9 +1256,11 @@ watch(
     transition: border-color 0.15s ease, color 0.15s ease;
 }
 
-.market-filters__search:hover {
-    border-color: var(--brand);
-    color: var(--brand);
+@media (hover: hover) {
+    .market-filters__search:hover {
+        border-color: var(--brand);
+        color: var(--brand);
+    }
 }
 
 .market-filters__search--active {
@@ -1273,7 +1283,11 @@ watch(
     display: flex;
     gap: 6px;
     flex-wrap: wrap;
-    margin: 0 0 12px;
+    margin: 0 0 var(--chips-gap);
+}
+/* 필터 칩 행 아래 요약 칩 — 위로 끌어올려 여백을 작게 */
+.market-filters + .market-active {
+    margin-top: -4px;
 }
 
 .market-active__chip {
@@ -1291,9 +1305,11 @@ watch(
     transition: background 0.12s ease, border-color 0.12s ease;
 }
 
-.market-active__chip:hover {
-    background: color-mix(in srgb, var(--brand) 14%, transparent);
-    border-color: var(--brand);
+@media (hover: hover) {
+    .market-active__chip:hover {
+        background: color-mix(in srgb, var(--brand) 14%, transparent);
+        border-color: var(--brand);
+    }
 }
 
 .market-active__chip svg {
@@ -1315,23 +1331,53 @@ watch(
     gap: 8px;
 }
 
-/* ── 섹션 ── */
+/* ── 섹션 — 그룹 사이 간격만 관리 (헤더 라벨은 두지 않는다) ── */
 .market-section {
     margin-bottom: 16px;
 }
-.market-section__head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-}
-.market-section__head b {
-    font-size: 11px;
-    font-weight: 800;
-}
-.market-section__count {
-    font-size: 11px;
-    color: var(--text-muted);
-}
 
+</style>
+
+<!-- 빠른매칭 드로어 — body에 텔레포트되므로 전역 스타일 (scoped 적용 안 됨) -->
+<style>
+.qm-drawer {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+.qm-drawer__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 20px 0;
+    flex-shrink: 0;
+}
+.qm-drawer__head strong {
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+}
+.qm-drawer__close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+.qm-drawer__body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    width: 100%;
+    max-width: var(--page-max-width);
+    margin: 0 auto;
+    padding: 10px 20px 30px;
+    box-sizing: border-box;
+}
 </style>

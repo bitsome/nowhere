@@ -24,7 +24,10 @@ class OrderPolicy
 
     public function update(User $user, Order $order): bool
     {
-        return true;
+        // 수정은 운행 등록자(원 등록자)만 가능 — 가져온 기사는 운행 정보를 수정할 수 없다
+        return $order->original_owner_id !== null
+            ? $order->original_owner_id === $user->id
+            : $order->user_id === $user->id;
     }
 
     public function delete(User $user, Order $order): bool
@@ -38,15 +41,15 @@ class OrderPolicy
             return true;
         }
 
-        // 완료 → 정산(settled) 전이는 등록자(원 등록자)만 가능 — 진행자는 '정산 진행중'으로 대기
+        // 완료 → 정산(settled) 전이는 등록자(원 등록자)만 가능 — 수행 기사는 완료가 마지막
         if ($order->status === Order::STATUS_COMPLETED) {
             return $order->original_owner_id !== null
                 ? $order->original_owner_id === $user->id
                 : $order->user_id === $user->id;
         }
 
-        // 운행 소유자(가져온 드라이버)는 본인 운행의 상태를 진행시킬 수 있다.
-        // 가져오기 승인 전에도 실제 운행을 맡을 드라이버(신청자)는 상태 진행이 가능해야 한다.
-        return $order->user_id === $user->id || $order->claimant_user_id === $user->id;
+        // 운행 진행(예약→운행중→완료)은 운행자(운행 소유자)·수행자(가져오기 신청자)만 진행할 수 있다.
+        // 등록자(원 등록자)는 운행 수정만 가능하고 진행 상태를 바꿀 수 없다.
+        return $order->user_id === $user->id || $order->hasPendingClaimBy($user->id);
     }
 }

@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'amount',
     'message',
     'status',
+    'reject_reason',
 ])]
 class OrderOffer extends Model
 {

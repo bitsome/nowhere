@@ -1,4 +1,14 @@
 :root {
+    /* 공용 페이지 폭 — 하위 화면들이 이 값을 공유한다 */
+    --page-max-width: 880px;
+    /* 공용 카드 간격 — 모든 페이지의 카드 목록/그리드가 같은 카드 사이 여백을 쓴다 */
+    --card-gap: 8px;
+    /* 공용 카드 — 리스트·피드형 흰 카드가 같은 안쪽 여백과 모서리를 쓴다 */
+    --card-pad: 16px;
+    --card-radius: 14px;
+    /* 공용 칩 탭 여백 — 홈/채팅/커뮤니티 등 칩 행과 다음 콘텐츠 사이 간격 */
+    --chips-gap: 8px;
+
     /* 브랜드 — 라이트=파랑, 다크=틸 (utils/colors.js와 동일 값) */
     --brand: #36adff;
     --brand-hover: #5cbfff;
@@ -22,6 +32,7 @@
     --bg: #f4f4f4;
     --surface: #ffffff;
     --border: #dddddd;
+    --border-strong: #c8c8d0;
     --text: #1f1f1f;
     --text-muted: #6a6a6a;
     --accent: #1f1f1f;
@@ -52,6 +63,7 @@ html.dark {
     --bg: #121216;
     --surface: #1c1c22;
     --border: #32323a;
+    --border-strong: #44444e;
     --text: #e5e5ea;
     --text-muted: #9aa0ac;
     --accent: #63e2b7;
@@ -61,7 +73,7 @@ html.dark {
     box-sizing: border-box;
 }
 
-/* 紐⑤컮???붾㈃ ?뺣?/異뺤냼 李⑤떒 + ?붾툝??以?諛⑹? */
+/* ── 공통 기본 — 모바일 터치·글자 크기 조정·본문 폰트 ── */
 html {
     touch-action: manipulation;
 }
@@ -91,11 +103,16 @@ img {
     max-width: 100%;
 }
 
-/* 리스트/카드 렌더링 성능 — 브라우저가 독립 레이어로 합성 */
+/* 리스트/카드 렌더링 성능 — 화면 밖 카드는 렌더링을 건너뛰어 스크롤을 가볍게 한다.
+   (content-visibility 미지원 브라우저는 contain으로 레이아웃/paint 독립만 유지) */
 .order-grid > *,
 .feed-list > *,
-.my-order-list > * {
+.my-order-list > *,
+.notify-list > *,
+.chat-list__item {
     contain: layout paint;
+    content-visibility: auto;
+    contain-intrinsic-size: auto 200px;
 }
 
 .app-shell {
@@ -254,7 +271,7 @@ html.dark .bell-button:hover {
     }
 }
 
-/* ?뚮┝ ?⑤꼸 / 紐⑸줉 */
+/* 알림 패널 / 목록 */
 .notify-panel {
     width: 280px;
     max-width: calc(100vw - 32px);
@@ -359,7 +376,7 @@ html.dark .notify-full__item:hover {
     padding: 6px 14px;
 }
 
-/* 梨꾪똿 */
+/* 채팅 목록 */
 .chat-list__item {
     display: flex;
     align-items: center;
@@ -426,9 +443,23 @@ html.dark .chat-list__item:hover {
 }
 
 .app-content {
-    max-width: 880px;
+    max-width: var(--page-max-width);
     margin: 0 auto;
-    padding: 28px 20px calc(88px + env(safe-area-inset-bottom));
+    /* 좌우 여백은 각 페이지의 .page-shell이 담당 — 여기서는 상하 여백만 관리한다 */
+    padding: 18px 0 calc(88px + env(safe-area-inset-bottom));
+}
+
+/* ── 공용 페이지 폭 — 모든 하위 페이지가 한 가지 폭을 공유한다 ──
+   페이지 래퍼에 .page-shell을 붙이면 폭·중앙 정렬·좌우 여백을 한 곳에서 관리한다.
+   좌우 여백 14px는 헤더(.hb__inner)와 동일한 값이라 콘텐츠가 헤더와 정확히 정렬된다.
+   상하 여백은 각 페이지가 padding-top/bottom으로만 다르게 둔다. */
+.page-shell {
+    width: 100%;
+    max-width: var(--page-max-width, 880px);
+    margin: 0 auto;
+    box-sizing: border-box;
+    padding-left: 14px;
+    padding-right: 14px;
 }
 
 .card {
@@ -522,11 +553,11 @@ html.dark .btn--ghost:hover {
 .badge {
     display: inline-flex;
     align-items: center;
-    padding: 3px 10px;
+    padding: 1px 6px;
     border-radius: 999px;
-    background: #ececec;
-    font-size: 11px;
-    font-weight: 600;
+    background: color-mix(in srgb, var(--text-muted) 14%, transparent);
+    font-size: 10px;
+    font-weight: 400;
 }
 
 html.dark .badge {
@@ -687,12 +718,12 @@ html.dark .alert--error {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    padding: 3px 10px;
+    padding: 1px 6px;
     border-radius: 999px;
     background: var(--brand-soft);
     color: var(--brand);
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 10px;
+    font-weight: 400;
 }
 
 .verify-row {
@@ -717,21 +748,21 @@ html.dark .alert--error {
 }
 
 .verify-row__done {
-    padding: 1px 8px;
+    padding: 1px 6px;
     border-radius: 999px;
     background: rgba(46, 160, 67, 0.12);
     color: #2ea043;
-    font-size: 11px;
-    font-weight: 700;
+    font-size: 10px;
+    font-weight: 400;
 }
 
 .verify-row__pending {
-    padding: 1px 8px;
+    padding: 1px 6px;
     border-radius: 999px;
     background: rgba(128, 128, 128, 0.14);
     color: var(--text-muted);
-    font-size: 11px;
-    font-weight: 700;
+    font-size: 10px;
+    font-weight: 400;
 }
 
 .verify-row__badge {
@@ -757,4 +788,38 @@ html.dark .alert--error {
 
 .verify-row__link:hover {
     background: var(--brand-soft);
+}
+
+/* ── 채팅 공용 — 날짜/유형 구분선 (ChatThread·OrderDetailChat 공유) ── */
+.chat-day-sep {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 14px 0 8px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.chat-day-sep::before,
+.chat-day-sep::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+/* 채팅 유형 카테고리 — 요청 이벤트 유형별 구분 라벨 */
+.chat-type-sep {
+    align-self: center;
+    margin: 6px 0 2px;
+    padding: 3px 12px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--status-accepted) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--status-accepted) 28%, transparent);
+    color: var(--status-accepted);
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
 }

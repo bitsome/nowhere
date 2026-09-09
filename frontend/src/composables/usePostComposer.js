@@ -1,6 +1,7 @@
 import { ref } from 'vue';
 import { apiCreateCommunityPost } from '../api/community';
 import { getApiErrorMessage } from '../api/client';
+import { resizeImage } from '../utils/imageResize';
 
 /**
  * 커뮤니티 글 작성 모달 — 내용/사진(리사이즈)/영상 URL과 등록을 담당한다.
@@ -41,49 +42,6 @@ export function usePostComposer({ message, posts }) {
         draftImage.value = resized ?? file;
         draftPreviewUrl.value = URL.createObjectURL(draftImage.value);
     };
-
-    /**
-     * 이미지를 canvas로 리사이즈해 JPEG Blob으로 변환한다.
-     * 실패(비이미지 등)하면 null — 원본 그대로 사용.
-     */
-    const resizeImage = (file, maxSize) =>
-        new Promise((resolve) => {
-            const url = URL.createObjectURL(file);
-            const img = new Image();
-
-            img.onload = () => {
-                const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
-                const width = Math.max(1, Math.round(img.width * scale));
-                const height = Math.max(1, Math.round(img.height * scale));
-                const canvas = document.createElement('canvas');
-
-                canvas.width = width;
-                canvas.height = height;
-                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-                URL.revokeObjectURL(url);
-
-                canvas.toBlob(
-                    (blob) => {
-                        if (!blob) {
-                            resolve(null);
-
-                            return;
-                        }
-
-                        resolve(new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' }));
-                    },
-                    'image/jpeg',
-                    0.82,
-                );
-            };
-
-            img.onerror = () => {
-                URL.revokeObjectURL(url);
-                resolve(null);
-            };
-
-            img.src = url;
-        });
 
     const submitPost = async () => {
         const content = draftContent.value.trim();

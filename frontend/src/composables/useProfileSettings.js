@@ -1,7 +1,8 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { apiUpdateProfile } from '../api/auth';
 import { apiCommunityUser } from '../api/community';
-import { apiClient, getApiErrorMessage } from '../api/client';
+import { getApiErrorMessage } from '../api/client';
+import { ROLE_CUSTOMER, roleLabel as roleLabelOf } from '../data/roles';
 import { getActivePushSubscription, subscribeToPush, unsubscribeFromPush } from '../utils/push';
 import {
     isBrowserNotifyEnabled,
@@ -10,7 +11,8 @@ import {
 } from '../utils/browserNotify';
 
 /**
- * 프로필 설정 — 회원정보 수정, 브라우저 알림, 인증 신청, 내 실적을 담당한다.
+ * 프로필 설정 — 회원정보 수정, 브라우저 알림, 내 실적을 담당한다.
+ * (차량·면허 인증 신청은 B-3 증빙 심사로 대체되어 SettingsVerificationView가 전담한다)
  *
  * @param {object} options
  * @param {object} options.auth useAuthStore
@@ -19,7 +21,6 @@ import {
  */
 export function useProfileSettings({ auth, router, message }) {
     const saving = ref(false);
-    const requesting = ref('');
     const error = ref('');
     const success = ref('');
 
@@ -86,36 +87,15 @@ export function useProfileSettings({ auth, router, message }) {
     const form = reactive({
         name: '',
         phone: '',
+        companyName: '',
     });
 
-    const roleLabel = computed(() => {
-        const labels = {
-            'Super Admin': '최고 관리자',
-            Admin: '관리자',
-            Operator: '운영자',
-            Driver: '드라이버',
-        };
-
-        return labels[auth.user?.role] ?? auth.user?.role ?? '-';
-    });
+    const roleLabel = computed(() => roleLabelOf(auth.user?.role));
+    const isCustomer = computed(() => auth.user?.role === ROLE_CUSTOMER);
 
     const initials = computed(() => auth.user?.name?.charAt(0) ?? 'N');
     const level = computed(() => auth.user?.level ?? null);
     const formatWon = (value) => (value ?? 0).toLocaleString();
-
-    // 차량·면허 인증 신청 — 관리자에게 알림이 전달된다
-    const requestVerification = async (type) => {
-        requesting.value = type;
-
-        try {
-            await apiClient.post('/verification/request', { [type]: true });
-            message.success('인증 신청이 관리자에게 전달되었습니다.');
-        } catch (e) {
-            message.error(getApiErrorMessage(e));
-        } finally {
-            requesting.value = '';
-        }
-    };
 
     const save = async () => {
         if (!form.name.trim()) {
@@ -133,6 +113,8 @@ export function useProfileSettings({ auth, router, message }) {
             const { data } = await apiUpdateProfile({
                 name: form.name.trim(),
                 phone: form.phone.trim(),
+                // 업체명은 등록자(업체)만 — 기사 등 다른 역할에서는 서버가 무시
+                ...(isCustomer.value ? { company_name: form.companyName.trim() || null } : {}),
             });
 
             auth.user = data.data;
@@ -153,7 +135,6 @@ export function useProfileSettings({ auth, router, message }) {
 
     return {
         saving,
-        requesting,
         error,
         success,
         notifyEnabled,
@@ -162,10 +143,10 @@ export function useProfileSettings({ auth, router, message }) {
         loadMyStats,
         form,
         roleLabel,
+        isCustomer,
         initials,
         level,
         formatWon,
-        requestVerification,
         save,
         logout,
     };

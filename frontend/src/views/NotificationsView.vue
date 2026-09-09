@@ -45,6 +45,8 @@ const KIND = {
     warning: { icon: 'calendar', cls: 'warn', tag: '확인', tagCls: 'warn', group: 'request' },
     cancel: { icon: 'close', cls: 'cancel', tag: '취소', tagCls: 'danger', group: 'request' },
     price: { icon: 'cash', cls: 'price', tag: '요금', tagCls: 'price', group: 'request' },
+    // 신고/분쟁 — 문제 신호라 레드 톤 (접수·처리 결과 모두)
+    report: { icon: 'warning', cls: 'cancel', tag: '신고', tagCls: 'danger', group: 'request' },
     success: { icon: 'check-done', cls: 'success', tag: '완료', tagCls: 'success', group: 'complete' },
     chat: { icon: 'chat', cls: 'chat', tag: '채팅', tagCls: 'info', group: 'chat' },
     flight: { icon: 'airplane', cls: 'flight', tag: '항공', tagCls: 'flight', group: 'system' },
@@ -58,6 +60,8 @@ const classify = (notification) => {
 
     const text = `${notification.title ?? ''} ${notification.message ?? ''}`;
 
+    // 신고 — 제목·내용 어디든 신고 언급이면 레드(문제)로 분류 (완료·승인 규칙보다 먼저)
+    if (/신고/.test(text)) return 'report';
     if (/항공|항공편/.test(text)) return 'flight';
     if (/채팅|메시지/.test(notification.title ?? '')) return 'chat';
     if (/취소/.test(notification.title ?? '')) return 'cancel';
@@ -77,14 +81,15 @@ const classify = (notification) => {
 
 const kindOf = (notification) => KIND[classify(notification)] ?? KIND.system;
 
-// 알림 유형 → 공통 칩 색상 매핑
+// 알림 유형 → 공통 칩 색상 매핑 (요청=확인 필요 옐로우, 완료=민트)
 const TAG_VARIANT = {
     offer: 'yellow',
-    request: 'green',
+    request: 'yellow',
     warning: 'yellow',
     cancel: 'red',
     price: 'yellow',
-    success: 'green',
+    report: 'red',
+    success: 'teal',
     chat: 'blue',
     flight: 'purple',
     ride: 'teal',
@@ -107,7 +112,7 @@ const priorityItems = computed(() =>
 
 const priorityCls = (n) => ({
     offer: 'price',
-    request: 'success',
+    request: 'warn',
     warning: 'warn',
     cancel: 'danger',
     price: 'price',
@@ -218,7 +223,7 @@ const goActions = () => {
 </script>
 
 <template>
-    <div class="alerts-page">
+    <div class="alerts-page page-shell">
         <!-- 로딩 스켈레톤 — 알림 카드 목록 골격 -->
         <div v-if="!store.loaded" class="alerts-skeleton">
             <div v-for="n in 5" :key="n" class="sk-card alerts-skeleton__card">
@@ -394,20 +399,8 @@ const goActions = () => {
 
 /* 알림센터 — v8 디자인 (상황별 컬러) */
 .alerts-page {
-    width: 100%;
-    max-width: 880px;
-    margin: 0 auto;
-    padding: 4px 20px 24px;
-}
-
-/* 모바일 — 홈·더보기와 동일하게 좌우 여백 없이 화면 폭을 꽉 채운다 */
-@media (max-width: 480px) {
-    .alerts-page {
-        width: calc(100% + 40px);
-        margin: 0 -20px;
-        padding: 4px 14px 24px;
-        max-width: none;
-    }
+    /* 상단 시작은 공용 .page-shell 기준으로 통일 — 하단 여백만 페이지가 관리한다 */
+    padding-bottom: 24px;
 }
 
 .v8-head {
@@ -415,7 +408,6 @@ const goActions = () => {
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-top: 6px;
 }
 .v8-head__title {
     margin: 0;
@@ -430,13 +422,13 @@ const goActions = () => {
 }
 .v8-total {
     flex-shrink: 0;
-    padding: 6px 10px;
+    padding: 1px 6px;
     border-radius: 9px;
     background: color-mix(in srgb, var(--brand) 8%, transparent);
     border: 1px solid color-mix(in srgb, var(--brand) 25%, transparent);
     color: var(--brand);
-    font-size: 11px;
-    font-weight: 700;
+    font-size: 10px;
+    font-weight: 400;
 }
 
 /* 지금 처리할 알림 */
@@ -458,13 +450,13 @@ html.dark .v8-priority {
     font-weight: 800;
 }
 .v8-priority-head span {
-    padding: 4px 8px;
+    padding: 1px 6px;
     border-radius: 7px;
     background: color-mix(in srgb, var(--brand) 10%, transparent);
     border: 1px solid color-mix(in srgb, var(--brand) 22%, transparent);
     color: var(--brand);
-    font-size: 11px;
-    font-weight: 700;
+    font-size: 10px;
+    font-weight: 400;
 }
 .v8-priority-item {
     display: flex;
@@ -567,10 +559,10 @@ html.dark .v8-priority-item.price {
 }
 .v8-priority-status {
     display: inline-flex;
-    padding: 2px 8px;
+    padding: 1px 6px;
     border-radius: 999px;
-    font-size: 11px;
-    font-weight: 800;
+    font-size: 10px;
+    font-weight: 400;
     white-space: nowrap;
 }
 .v8-priority-time {
@@ -581,8 +573,8 @@ html.dark .v8-priority-item.price {
 }
 .v8-priority-status--warn { background: rgba(217, 141, 0, 0.14); color: #9a6a00; }
 html.dark .v8-priority-status--warn { color: #ffd071; }
-.v8-priority-status--success { background: rgba(14, 157, 108, 0.12); color: #0d8a63; }
-html.dark .v8-priority-status--success { color: #70e8be; }
+.v8-priority-status--success { background: rgba(45, 212, 191, 0.12); color: #0e9d8d; }
+html.dark .v8-priority-status--success { color: #5de4d2; }
 .v8-priority-status--danger { background: rgba(229, 72, 77, 0.12); color: #c03a3f; }
 html.dark .v8-priority-status--danger { color: #ff8a8a; }
 .v8-priority-status--info { background: rgba(77, 143, 232, 0.12); color: #1d5fd0; }
@@ -600,7 +592,7 @@ html.dark .v8-priority-status--ride { color: #5de4d2; }
     display: flex;
     gap: 6px;
     overflow-x: auto;
-    margin: 15px 0 12px;
+    margin: 15px 0 var(--chips-gap);
     padding-bottom: 2px;
 }
 .v8-filter button {
@@ -666,11 +658,11 @@ html.dark .v8-priority-status--ride { color: #5de4d2; }
     background: color-mix(in srgb, var(--brand) 5%, transparent);
 }
 .v8-day__count {
-    padding: 1px 7px;
+    padding: 1px 6px;
     border-radius: 999px;
     background: color-mix(in srgb, var(--text-muted) 14%, transparent);
-    font-size: 11px;
-    font-weight: 700;
+    font-size: 10px;
+    font-weight: 400;
 }
 .v8-day__arrow {
     margin-left: auto;
@@ -681,7 +673,7 @@ html.dark .v8-priority-status--ride { color: #5de4d2; }
 .v8-list {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 15px;
+    border-radius: var(--card-radius);
     overflow: hidden;
 }
 
@@ -713,21 +705,21 @@ html.dark .v8-priority-status--ride { color: #5de4d2; }
     font-size: 11px;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
 }
-.v8-icon.req { background: rgba(14, 157, 108, 0.1); color: #0d8a63; border: 1px solid rgba(14, 157, 108, 0.3); }
+.v8-icon.req { background: rgba(242, 169, 59, 0.14); color: #9a6a00; border: 1px solid rgba(217, 141, 0, 0.38); }
 .v8-icon.warn { background: rgba(242, 169, 59, 0.14); color: #9a6a00; border: 1px solid rgba(217, 141, 0, 0.38); }
 .v8-icon.cancel { background: rgba(229, 72, 77, 0.1); color: #c03a3f; border: 1px solid rgba(229, 72, 77, 0.35); }
 .v8-icon.price { background: rgba(242, 184, 75, 0.14); color: #9a6a00; border: 1px solid rgba(217, 141, 0, 0.38); }
-.v8-icon.success { background: rgba(14, 157, 108, 0.1); color: #0e9a6e; border: 1px solid rgba(14, 157, 108, 0.32); }
+.v8-icon.success { background: rgba(45, 212, 191, 0.12); color: #0e9d8d; border: 1px solid rgba(45, 212, 191, 0.32); }
 .v8-icon.chat { background: rgba(77, 143, 232, 0.12); color: #1d5fd0; border: 1px solid rgba(77, 143, 232, 0.32); }
 .v8-icon.flight { background: rgba(139, 120, 232, 0.12); color: #6b46d6; border: 1px solid rgba(139, 120, 232, 0.32); }
 .v8-icon.teal { background: rgba(45, 212, 191, 0.12); color: #0e9d8d; border: 1px solid rgba(45, 212, 191, 0.32); }
 .v8-icon.system { background: rgba(140, 151, 148, 0.12); color: #5c6670; border: 1px solid rgba(115, 125, 121, 0.32); }
 
-html.dark .v8-icon.req { background: rgba(99, 226, 183, 0.08); color: var(--brand); border: 1px solid rgba(99, 226, 183, 0.3); }
+html.dark .v8-icon.req { background: rgba(242, 169, 59, 0.12); color: #ffd071; border: 1px solid rgba(242, 184, 75, 0.4); }
 html.dark .v8-icon.warn { background: rgba(242, 169, 59, 0.12); color: #ffd071; border: 1px solid rgba(242, 184, 75, 0.4); }
 html.dark .v8-icon.cancel { background: rgba(224, 91, 91, 0.1); color: #ff8a8a; border: 1px solid rgba(224, 91, 91, 0.4); }
 html.dark .v8-icon.price { background: rgba(242, 184, 75, 0.1); color: #ffd071; border: 1px solid rgba(242, 184, 75, 0.4); }
-html.dark .v8-icon.success { background: rgba(99, 226, 183, 0.09); color: #70e8be; border: 1px solid rgba(99, 226, 183, 0.33); }
+html.dark .v8-icon.success { background: rgba(45, 212, 191, 0.1); color: #5de4d2; border: 1px solid rgba(45, 212, 191, 0.33); }
 html.dark .v8-icon.chat { background: rgba(44, 111, 255, 0.13); color: #79a8ff; border: 1px solid rgba(77, 143, 232, 0.33); }
 html.dark .v8-icon.flight { background: rgba(155, 123, 255, 0.12); color: #b9a7ff; border: 1px solid rgba(139, 120, 232, 0.33); }
 html.dark .v8-icon.teal { background: rgba(45, 212, 191, 0.1); color: #5de4d2; border: 1px solid rgba(45, 212, 191, 0.33); }

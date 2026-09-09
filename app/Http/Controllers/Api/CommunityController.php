@@ -38,10 +38,6 @@ class CommunityController extends Controller
             $query->where('user_id', $request->user()->id);
         }
 
-        if ($category !== '' && $category !== 'all') {
-            $query->where('category', $category);
-        }
-
         if ($search !== '') {
             $query->where('content', 'like', '%'.str_replace(['%', '_'], ['\%', '\_'], $search).'%');
         }
@@ -65,6 +61,17 @@ class CommunityController extends Controller
             });
         }
 
+        // 카테고리 칩 건수 — 선택한 카테고리와 무관하게 현재 범위(검색/기간/내 글)의 카테고리별 글 수
+        $categoryCounts = (clone $query)->reorder()
+            ->selectRaw('category, count(*) as total')
+            ->groupBy('category')
+            ->pluck('total', 'category')
+            ->map(fn ($total) => (int) $total);
+
+        if ($category !== '' && $category !== 'all') {
+            $query->where('category', $category);
+        }
+
         if ($sort === 'popular') {
             $query->reorder()->withCount('likes')->orderByDesc('likes_count');
         }
@@ -74,6 +81,7 @@ class CommunityController extends Controller
         return response()->json([
             'data' => $paginator->map(fn (CommunityPost $post) => $posts->serialize($post)),
             'meta' => [
+                'category_counts' => $categoryCounts,
                 'pagination' => [
                     'current_page' => $paginator->currentPage(),
                     'per_page' => $paginator->perPage(),

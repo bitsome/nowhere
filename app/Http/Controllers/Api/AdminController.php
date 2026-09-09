@@ -7,12 +7,17 @@ use App\Models\AutoOrderSetting;
 use App\Models\Driver;
 use App\Models\Order;
 use App\Models\User;
+use App\Notifications\OrderNotification;
+use App\Services\Admin\AuditService;
+use App\Services\DriverMatchRanker;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class AdminController extends Controller
 {
+    use AuthorizesAdmin;
+
     /**
      * 운영 관리용 사용자 목록 (관리자/슈퍼 관리자 전용).
      *
@@ -38,10 +43,16 @@ class AdminController extends Controller
             'data' => $users->map(fn (User $user) => [
                 'id' => $user->id,
                 'name' => $user->name,
+                'company_name' => $user->company_name,
                 'email' => $user->email,
                 'role' => $user->role,
                 'is_vehicle_verified' => (bool) $user->is_vehicle_verified,
                 'is_license_verified' => (bool) $user->is_license_verified,
+                'is_business_verified' => (bool) $user->is_business_verified,
+                'is_account_verified' => (bool) $user->is_account_verified,
+                'moderation_status' => $user->moderation_status,
+                'moderation_label' => User::moderationOptions()[$user->moderation_status] ?? $user->moderation_status,
+                'moderation_note' => $user->moderation_note,
                 'created_at' => $user->created_at?->format('Y-m-d'),
                 'completed_count' => (int) ($completedCounts[$user->id] ?? 0),
             ]),
@@ -49,6 +60,54 @@ class AdminController extends Controller
                 'total' => $users->total(),
                 'current_page' => $users->currentPage(),
                 'last_page' => $users->lastPage(),
+            ],
+        ]);
+    }
+
+    /**
+     * 사용자 역할 변경 — 기사↔등록자 전환(테스트용 포함)과 관리자 지정.
+     * 루트(id=1)만 Admin을 지정할 수 있고, Super Admin은 지정할 수 없다 (User::canAssignRole).
+     *
+     * @return JsonResponse{data: array<string, mixed>}
+     */
+    public function setUserRole(Request $request, User $user): JsonResponse
+    {
+        $this->authorizeAdmin($request->user());
+
+        $actor = $request->user();
+
+        abort_if(! $actor->canManageUser($user), 403, '더 높은 등급의 관리자만 역할을 변경할 수 있습니다.');
+
+        $data = $request->validate([
+            'role' => ['required', Rule::in(User::roleOptions())],
+        ]);
+
+        $role = $data['role'];
+
+        abort_unless($actor->canAssignRole($role), 403, '이 등급에서는 지정할 수 없는 역할입니다.');
+        abort_if($user->role === $role, 422, '이미 같은 역할입니다.');
+
+        $beforeRole = $user->role;
+
+        $user->forceFill(['role' => $role])->save();
+
+        $user->notify(new OrderNotification(
+            '계정 역할 변경',
+            "계정 역할이 '".User::roleLabel($role)."'(으)로 변경되었습니다.",
+        ));
+
+        AuditService::record($actor, 'user.role-change', "{$user->name}님의 역할을 '".User::roleLabel($beforeRole)."' → '".User::roleLabel($role)."'(으)로 변경", [
+            'user_id' => $user->id,
+            'before' => $beforeRole,
+            'after' => $role,
+        ]);
+
+        return response()->json([
+            'data' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'role' => $user->role,
+                'role_label' => User::roleLabel($user->role),
             ],
         ]);
     }
@@ -240,8 +299,22 @@ class AdminController extends Controller
         return response()->json(['data' => ['deleted' => $deleted]]);
     }
 
-    private function authorizeAdmin(User $user): void
+    /**
+     * 운행별 적합 기사 상위 N명 — 자동 매칭 랭킹 엔진 조회 (관리자 전용).
+     * 배점: docs/OPERATIONS.md '자동 매칭 점수', 구현: app/Services/DriverMatchRanker.php
+     *
+     * @return JsonResponse{data: array<int, array<string, mixed>>, meta: array<string, mixed>}
+     */
+    public function matchingDrivers(Request $request, Order $order, DriverMatchRanker $ranker): JsonResponse
     {
-        abort_unless(in_array($user->role, [User::ROLE_ADMIN, User::ROLE_SUPER_ADMIN], true), 403, '관리자만 접근할 수 있습니다.');
+        $this->authorizeAdmin($request->user());
+
+        return response()->json([
+            'data' => $ranker->rank($order),
+            'meta' => [
+                'order_id' => $order->id,
+                'weights' => config('matching.weights'),
+            ],
+        ]);
     }
 }

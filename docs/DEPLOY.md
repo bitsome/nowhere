@@ -24,7 +24,7 @@ php artisan key:generate
 
 # DB 마이그레이션 + 데모 데이터
 php artisan migrate --force
-php artisan db:seed --force        # 데모: 오더/알림/채팅
+php artisan db:seed --force        # 데모: 운행/알림/채팅
 
 # 캐시 정리
 php artisan config:cache
@@ -81,13 +81,13 @@ curl -s https://market.example.com/up        # 백엔드 헬스체크 (200)
 curl -s https://market.example.com/          # SPA index.html (200)
 ```
 
-- 로그인: `test@example.com / password` (데모 계정, 시드 후)
+- 로그인: `test@example.com / password` (로컬 시드 기준 데모 계정. 서버 배포본은 전 계정 비밀번호 `123456`로 통일)
 - 알림/채팅 실시간 확인: 다른 계정에서 메시지/알림 전송 → 수신 화면 확인
 
 ## 6. 외부 접속 (임시 Quick Tunnel)
 
 ### 개발 중 (로컬)
-로컬 vite dev 서버를 그대로 노출한다. `/api`는 vite proxy가 서버 API(114.132.240.52)로 연결되고 DB는 서버 SQLite를 사용한다.
+로컬 vite dev 서버를 그대로 노출한다. `/api`는 vite proxy가 서버 API(114.132.240.52)로 연결되고 DB는 서버 MySQL을 사용한다.
 
 ```powershell
 cloudflared.exe tunnel --url http://localhost:5174 --no-autoupdate

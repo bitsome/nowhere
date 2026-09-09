@@ -62,6 +62,33 @@ class ChatController extends Controller
     }
 
     /**
+     * 대화 증분 동기화 — after_id 이후의 새 메시지 + 읽음 처리된 내 메시지 id.
+     * 3초 폴링이 전체 메시지를 반복 수신하지 않도록 가볍게 유지한다.
+     *
+     * @return JsonResponse{data: array{messages: array<int, array<string, mixed>>, read_ids: array<int, int>}}
+     */
+    public function sync(Request $request, Conversation $conversation, ChatService $chatService): JsonResponse
+    {
+        $afterId = max(0, (int) $request->query('after_id', 0));
+
+        return response()->json([
+            'data' => $chatService->sync($request->user(), $conversation, $afterId),
+        ]);
+    }
+
+    /**
+     * 내 모든 대화의 안 읽은 메시지를 읽음 처리한다 (목록의 '모두 읽음').
+     *
+     * @return JsonResponse{updated: int}
+     */
+    public function markAllRead(Request $request, ChatService $chatService): JsonResponse
+    {
+        return response()->json([
+            'updated' => $chatService->markAllRead($request->user()),
+        ]);
+    }
+
+    /**
      * 대화에 메시지를 보낸다 — 여러 장 이미지는 image_paths로 한 개 말풍선에 묶는다.
      *
      * @return JsonResponse{data: array<string, mixed>}
@@ -209,6 +236,32 @@ class ChatController extends Controller
         return response()->json([
             'data' => $chatService->serializeMessage($message),
         ], 201);
+    }
+
+    /**
+     * 받은 요청 카드를 수락·거절로 확정한다.
+     * 수락하면 요청 종류에 따라 운행(시간·경로·금액·취소)에 반영된다.
+     *
+     * @return JsonResponse{data: array<string, mixed>}
+     */
+    public function resolve(Request $request, Conversation $conversation, Message $message, ChatService $chatService): JsonResponse
+    {
+        $data = $request->validate([
+            'action' => ['required', 'string', Rule::in(['accept', 'reject'])],
+            'reason' => ['nullable', 'string', 'max:200'],
+        ]);
+
+        $message = $chatService->resolveRequest(
+            $request->user(),
+            $conversation,
+            $message,
+            $data['action'],
+            $data['reason'] ?? null,
+        );
+
+        return response()->json([
+            'data' => $chatService->serializeMessage($message),
+        ]);
     }
 
     /**

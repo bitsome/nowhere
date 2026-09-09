@@ -27,12 +27,14 @@ use InvalidArgumentException;
     'service_type',
     'reservation_company',
     'customer_name',
+    'customer_phone',
     'reservation_channel',
     'passenger_count',
     'luggage_count',
     'amount_text',
     'amount_value',
     'extra_options',
+    'tags',
     'pickup_location',
     'dropoff_location',
     'flight_number',
@@ -49,11 +51,18 @@ use InvalidArgumentException;
     'claimant_user_id',
     'claim_lock_driver_id',
     'claim_lock_until',
+    'claim_batch_id',
+    'approved_at',
+    'ride_step',
+    'ride_step_times',
     'user_id',
     'original_owner_id',
     'started_at',
     'completed_at',
     'actual_revenue',
+    'is_hidden',
+    'admin_hold',
+    'admin_hold_reason',
 ])]
 class Order extends Model
 {
@@ -75,11 +84,25 @@ class Order extends Model
 
     public const STATUS_ACCEPTANCE_PENDING = 'acceptance_pending';
 
+    // 운행중 세부 단계 — 카드 단계 스테퍼(운행시작→픽업 도착→승객 도착→출발→이동중→도착지 도착)에 사용.
+    // 최종 '완료'는 운행 완료(status=completed) 처리로 이어진다.
+    public const RIDE_STEP_START = 'ride_start';
+
+    public const RIDE_STEP_PICKUP_ARRIVED = 'pickup_arrived';
+
+    public const RIDE_STEP_PASSENGER_ARRIVED = 'passenger_arrived';
+
+    public const RIDE_STEP_DEPARTED = 'departed';
+
+    public const RIDE_STEP_MOVING = 'moving';
+
+    public const RIDE_STEP_ARRIVED = 'arrived';
+
     /**
-     * 운행 라이프사이클 전이 규칙.
+     * 운행 라이프사이클 전이 규칙 — docs/ORDER_FLOW.md 가 단일 소스다.
      *
-     * Create → Edit → Single/Set → Publish → Trade → Accepted → Driving → Completed → Settlement
-     * Trade는 Order의 상태 변화 중 하나이며, Set은 그룹 기능만 담당한다.
+     * draft → published → acceptance_pending → accepted → driving → completed → settled
+     * 거래중(trading)은 과거 데이터·데모 대응용이며 신규 전이는 만들지 않는다.
      *
      * @var array<string, array<int, string>>
      */
@@ -116,6 +139,52 @@ class Order extends Model
     use HasFactory;
 
     /**
+     * 운행 상태·운행중 단계가 바뀌는 순간 이벤트를 자동 기록한다.
+     * 모든 전이 경로(claim 승인·거절, 상태 전이, 운행중 단계 진행, 취소 등)에서
+     * Eloquent updated 훅으로 한 번에 남겨 빠짐없는 타임라인을 보장한다.
+     */
+    protected static function booted(): void
+    {
+        static::updated(function (Order $order) {
+            // 정보 수정(시간·금액 등)은 기록하지 않고, 상태·단계 변경만 남긴다
+            if (! $order->isDirty('status') && ! $order->isDirty('ride_step')) {
+                return;
+            }
+
+            $events = [];
+
+            if ($order->isDirty('status')) {
+                $events[] = [
+                    'event' => OrderEvent::EVENT_STATUS,
+                    'from_status' => $order->getOriginal('status'),
+                    'to_status' => $order->status,
+                ];
+            }
+
+            if ($order->isDirty('ride_step')) {
+                $events[] = [
+                    'event' => OrderEvent::EVENT_RIDE_STEP,
+                    'from_status' => $order->getOriginal('ride_step'),
+                    'to_status' => $order->ride_step,
+                ];
+            }
+
+            foreach ($events as $data) {
+                // 취소 사유가 있는 상태 전이는 사유를 함께 남겨 분쟁·정산 대응 근거로 삼는다
+                $note = $order->status === self::STATUS_CANCELLED && filled($order->cancel_reason)
+                    ? $order->cancel_reason
+                    : null;
+
+                $order->orderEvents()->create([
+                    'user_id' => auth()->id(),
+                    'note' => $note,
+                    ...$data,
+                ]);
+            }
+        });
+    }
+
+    /**
      * @return array<string, string>
      */
     public static function statusOptions(): array
@@ -124,13 +193,67 @@ class Order extends Model
             self::STATUS_DRAFT => '초안',
             self::STATUS_PUBLISHED => '공개',
             self::STATUS_TRADING => '거래중',
-            self::STATUS_ACCEPTED => '수락',
+            self::STATUS_ACCEPTED => '예약',
             self::STATUS_DRIVING => '운행중',
             self::STATUS_COMPLETED => '완료',
             self::STATUS_SETTLED => '정산',
             self::STATUS_CANCELLED => '취소',
             self::STATUS_ACCEPTANCE_PENDING => '수락 대기',
         ];
+    }
+
+    /**
+     * 운행중 세부 단계 순서 — 운행시작 → 픽업장소 도착 → 승객 도착 → 출발 → 도착지로 이동중 → 도착지 도착.
+     * '완료'는 운행 완료(status=completed) 처리이므로 이 목록에 없다.
+     *
+     * @return array<int, string>
+     */
+    public static function rideStepSequence(): array
+    {
+        return [
+            self::RIDE_STEP_START,
+            self::RIDE_STEP_PICKUP_ARRIVED,
+            self::RIDE_STEP_PASSENGER_ARRIVED,
+            self::RIDE_STEP_DEPARTED,
+            self::RIDE_STEP_MOVING,
+            self::RIDE_STEP_ARRIVED,
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public static function rideStepOptions(): array
+    {
+        return [
+            self::RIDE_STEP_START => '운행시작',
+            self::RIDE_STEP_PICKUP_ARRIVED => '픽업장소 도착',
+            self::RIDE_STEP_PASSENGER_ARRIVED => '승객 도착',
+            self::RIDE_STEP_DEPARTED => '출발',
+            self::RIDE_STEP_MOVING => '도착지로 이동중',
+            self::RIDE_STEP_ARRIVED => '도착지 도착',
+        ];
+    }
+
+    /**
+     * 운행중 다음 단계를 반환한다 — 현재 단계의 바로 다음 단계.
+     * 아직 시작 전이면 첫 단계(운행시작), 마지막 단계(도착지 도착) 다음이면 null (완료는 완료 전이가 담당).
+     */
+    public function nextRideStep(): ?string
+    {
+        $steps = self::rideStepSequence();
+
+        if ($this->ride_step === null) {
+            return $steps[0];
+        }
+
+        $index = array_search($this->ride_step, $steps, true);
+
+        if ($index === false || $index >= count($steps) - 1) {
+            return null;
+        }
+
+        return $steps[$index + 1];
     }
 
     /**
@@ -152,7 +275,14 @@ class Order extends Model
             throw new InvalidArgumentException('운행 상태를 전환할 수 없는 단계입니다.');
         }
 
-        $this->update(['status' => $status]);
+        $attributes = ['status' => $status];
+
+        // 배차 승인(수락) 시점 기록 — 진행중 목록의 '승인받은 시간'에 사용
+        if ($status === self::STATUS_ACCEPTED && $this->approved_at === null) {
+            $attributes['approved_at'] = now();
+        }
+
+        $this->update($attributes);
     }
 
     /**
@@ -230,6 +360,14 @@ class Order extends Model
         return $when !== '' ? $route.' ('.$when.')' : $route;
     }
 
+    /**
+     * @return HasMany<OrderEvent, $this>
+     */
+    public function orderEvents(): HasMany
+    {
+        return $this->hasMany(OrderEvent::class)->latest('id');
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
@@ -238,6 +376,38 @@ class Order extends Model
     public function claimant(): BelongsTo
     {
         return $this->belongsTo(User::class, 'claimant_user_id');
+    }
+
+    /**
+     * 이 운행에 대한 모든 가져오기 신청 (여러 드라이버 동시 신청 가능).
+     */
+    public function claimRequests(): HasMany
+    {
+        return $this->hasMany(OrderClaim::class, 'order_id');
+    }
+
+    /**
+     * 아직 처리 대기인 가져오기 신청 목록.
+     */
+    public function pendingClaims(): HasMany
+    {
+        return $this->claimRequests()->pending();
+    }
+
+    /**
+     * 특정 드라이버가 이 운행에 승인 대기 중인 신청을 남겼는지.
+     */
+    public function hasPendingClaimBy(int $userId): bool
+    {
+        return $this->claimRequests()
+            ->pending()
+            ->where('driver_id', $userId)
+            ->exists();
+    }
+
+    public function originalOwner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'original_owner_id');
     }
 
     public function group(): BelongsTo
@@ -283,15 +453,20 @@ class Order extends Model
             'luggage_count' => 'integer',
             'amount_value' => 'integer',
             'extra_options' => 'array',
+            'tags' => 'array',
             'structured_payload' => 'array',
+            'ride_step_times' => 'array',
             'scheduled_at' => 'datetime',
             'claimed_at' => 'datetime',
             'claim_lock_until' => 'datetime',
+            'approved_at' => 'datetime',
             'estimated_duration_minutes' => 'integer',
             'is_priority' => 'boolean',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
             'actual_revenue' => 'integer',
+            'is_hidden' => 'boolean',
+            'admin_hold' => 'boolean',
         ];
     }
 

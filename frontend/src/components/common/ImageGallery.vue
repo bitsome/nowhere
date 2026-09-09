@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import BaseIcon from './BaseIcon.vue';
-import { useImageStatus } from '../../utils/useImageStatus';
+import { useImageStatus } from '../../composables/useImageStatus';
 
 /**
  * ImageGallery — 전체 화면 이미지 갤러리 (PhotoSwipe 방식).

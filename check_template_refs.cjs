@@ -136,8 +136,11 @@ function templateIdentifiers(src) {
     for (const m of tpl.matchAll(/<\/?([A-Z][\w]*)/g)) ids.add(m[1]);
 
     for (const expr of exprs) {
+        // 문자열 리터럴('ko-KR' 등)은 변수 참조가 아니므로 제외한다.
+        const cleaned = expr.replace(/['"][^'"]*['"]/g, ' ');
+
         // 속성 접근(x.foo)·메서드 호출(x.foo())은 제외 — 바로 앞이 '.'인 토큰은 건너뛴다
-        for (const m of expr.matchAll(/(?<!\.)\b([A-Za-z_$][\w$]*)\b/g)) {
+        for (const m of cleaned.matchAll(/(?<!\.)\b([A-Za-z_$][\w$]*)\b/g)) {
             const tok = m[1];
             if (/^n[A-Z]/.test(tok)) continue; // naive-ui 자동 import 컴포넌트
             if (tok.startsWith('v-')) continue;

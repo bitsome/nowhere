@@ -2,10 +2,13 @@
 
 namespace App\Services\Order;
 
+use App\Models\MatchPreference;
 use App\Models\Order;
 use App\Models\Review;
 use App\Models\User;
+use App\Models\Vehicle;
 use App\Services\MatchService;
+use App\Support\Orders\LocationTokens;
 use App\Support\Orders\OrderWorkspaceListBuilder;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -54,11 +57,12 @@ class OrderListService
 
         if ($request->string('scope', 'market')->toString() === 'market') {
             $rows = $this->decorateMarketRows($rows, $orders, $request->user());
+            $rows = $this->attachMatchScores($rows, collect($orders->items())->keyBy('id'), $request->user());
         } else {
-            // 내 운행(진행자) 관점 — 완료됐지만 아직 정산 전이면 '정산 진행중'으로 표시
+            // 내 운행(진행자) 관점 — 완료됐지만 아직 정산 전이면 '정산 대기중'으로 표시
             foreach ($rows as &$row) {
                 if (($row['status'] ?? null) === Order::STATUS_COMPLETED) {
-                    $row['statusLabel'] = '정산 진행중';
+                    $row['statusLabel'] = '정산 대기중';
                 }
             }
             unset($row);
@@ -92,7 +96,8 @@ class OrderListService
         $user = $request->user();
 
         if ($scope === 'mine') {
-            $this->applyMineScope($query, $user, $source, $tab);
+            $requestCategory = $request->string('request_category', 'received')->toString();
+            $this->applyMineScope($query, $user, $source, $tab, $request, $requestCategory);
         } else {
             $this->applyMarketScope($query, $user);
         }
@@ -100,8 +105,25 @@ class OrderListService
         return $query;
     }
 
-    private function applyMineScope(Builder $query, User $user, string $source, string $tab): void
+    private function applyMineScope(Builder $query, User $user, string $source, string $tab, Request $request, string $requestCategory = 'received'): void
     {
+        // 요청 탭 — 가져오기 요청(승인 대기) 전용. 보낸(내가 요청)/받은(내 운행에 요청) 방향만 나눈다.
+        if ($tab === '요청') {
+            $query->where('status', Order::STATUS_ACCEPTANCE_PENDING)
+                ->with('claimant');
+
+            if ($requestCategory === 'sent') {
+                $query->whereHas('pendingClaims', fn ($q) => $q->where('driver_id', $user->id));
+            } else {
+                $query->where(function ($q) use ($user) {
+                    $q->where('user_id', $user->id)
+                        ->orWhere('original_owner_id', $user->id);
+                });
+            }
+
+            return;
+        }
+
         if ($source === 'registered') {
             // 등록된 운행 — 직접 등록(아직 안 넘어감) + 내가 등록해 남에게 넘어간 운행(original_owner_id)
             // 가져오기 요청(승인 대기)도 함께 노출된다.
@@ -114,31 +136,47 @@ class OrderListService
                     ->orWhere('original_owner_id', $user->id);
             });
         } elseif ($source === 'all') {
-            // 등록 + 받은 운행 모두 — 내가 등록했거나(original_owner 포함), 가져왔거나(claimant 포함) 한 운행
+            // 등록 + 받은 운행 모두 — 내가 등록했거나(original_owner 포함), 가져왔거나(신청자 포함) 한 운행
             $query->where(function ($q) use ($user) {
                 $q->where('user_id', $user->id)
                     ->orWhere('original_owner_id', $user->id)
-                    ->orWhere('claimant_user_id', $user->id);
+                    ->orWhereHas('pendingClaims', fn ($sub) => $sub->where('driver_id', $user->id));
             });
+        } elseif ($source === 'history') {
+            // 히스토리 — 내가 수행한 운행 중 완전히 끝난 것만 (완료/정산완료/취소)
+            $query->where(function ($q) use ($user) {
+                $q->where('user_id', $user->id)
+                    ->whereNotNull('claimed_at')
+                    ->where('status', '!=', Order::STATUS_ACCEPTANCE_PENDING)
+                    ->orWhereHas('pendingClaims', fn ($sub) => $sub->where('driver_id', $user->id));
+            })->whereIn('status', [
+                Order::STATUS_COMPLETED,
+                Order::STATUS_SETTLED,
+                Order::STATUS_CANCELLED,
+            ]);
         } else {
             // 받은 운행 = 내가 소유한 가져온 운행 + 내가 요청한 승인 대기
             $query->where(function ($q) use ($user) {
                 $q->where('user_id', $user->id)
                     ->whereNotNull('claimed_at')
                     ->where('status', '!=', Order::STATUS_ACCEPTANCE_PENDING)
-                    ->orWhere('claimant_user_id', $user->id);
+                    ->orWhereHas('pendingClaims', fn ($sub) => $sub->where('driver_id', $user->id));
             });
         }
 
         // 탭별 상태 그룹 — 등록자 기준: 공개(등록·거래) / 진행중(배차~운행) / 정산(완료·정산)
         match ($tab) {
+            '전체' => $query->whereNotIn('status', [Order::STATUS_DRAFT]),
             '공개' => $query->whereIn('status', [Order::STATUS_PUBLISHED, Order::STATUS_TRADING]),
             '진행중' => $query->whereIn('status', [
-                Order::STATUS_ACCEPTANCE_PENDING,
                 Order::STATUS_ACCEPTED,
                 Order::STATUS_DRIVING,
             ]),
+            '예약' => $query->where('status', Order::STATUS_ACCEPTED),
+            '운행중' => $query->where('status', Order::STATUS_DRIVING),
             '정산' => $query->whereIn('status', [Order::STATUS_COMPLETED, Order::STATUS_SETTLED]),
+            '정산완료' => $query->where('status', Order::STATUS_SETTLED),
+            '완료' => $query->where('status', Order::STATUS_COMPLETED),
             '초안' => $query->where('status', Order::STATUS_DRAFT),
             '취소' => $query->where('status', Order::STATUS_CANCELLED),
             default => $query->whereNotIn('status', [
@@ -149,6 +187,15 @@ class OrderListService
             ]),
         };
 
+        // 진행중 탭 — 상태 세분화 (전체/수락/운행중). 전체(all)면 그룹 상태 그대로 유지한다.
+        if ($tab === '진행중') {
+            $progressStatus = $request->string('progress_status')->toString();
+
+            if (in_array($progressStatus, [Order::STATUS_ACCEPTED, Order::STATUS_DRIVING], true)) {
+                $query->where('status', $progressStatus);
+            }
+        }
+
         // 요청자(claimant) 이름을 함께 내려 주고, 승인 대기 운행은 항상 맨 위에 노출
         $query->with('claimant')
             ->orderByRaw("CASE WHEN status = '".Order::STATUS_ACCEPTANCE_PENDING."' THEN 0 ELSE 1 END");
@@ -156,13 +203,17 @@ class OrderListService
 
     private function applyMarketScope(Builder $query, User $user): void
     {
-        // 가져오기 요청(승인 대기)이 걸린 운행은 다른 드라이버에게 노출하지 않는다
+        // 승인 대기(가져오기 신청) 운행도 아직 다른 드라이버가 신청할 수 있으므로 마켓에 노출한다.
+        // 다만 내가 이미 신청한 운행은 마켓에서 제외한다 (내 마켓 '보낸 요청' 탭으로 이동).
         $query->whereIn('status', [
             Order::STATUS_PUBLISHED,
             Order::STATUS_TRADING,
             Order::STATUS_ACCEPTANCE_PENDING,
         ])
-            ->whereNull('claimed_at');
+            // 관리자 개입(B-2) — 숨김(마켓 제외)·보류(진행 동결) 운행은 다른 기사에게 노출하지 않는다
+            ->where('is_hidden', false)
+            ->where('admin_hold', false)
+            ->whereDoesntHave('pendingClaims', fn ($sub) => $sub->where('driver_id', $user->id));
 
         // 서비스 날짜가 이미 지난 운행은 노출하지 않는다 (날짜 미정 운행은 유지, KST 기준)
         $query->where(function ($sub) {
@@ -314,9 +365,10 @@ class OrderListService
         }
 
         if ($scope === 'market') {
-            // 마켓 검색은 노선(출발/도착)만 매칭한다 — 고객명 등 개인정보는 검색하지 않는다
+            // 마켓 검색은 노선(출발/도착)과 주문번호만 매칭한다 — 고객명 등 개인정보는 검색하지 않는다
             $query->where(function ($sub) use ($search) {
-                $sub->where('pickup_location', 'like', "%{$search}%")
+                $sub->where('order_number', 'like', "%{$search}%")
+                    ->orWhere('pickup_location', 'like', "%{$search}%")
                     ->orWhere('dropoff_location', 'like', "%{$search}%");
             });
 
@@ -375,9 +427,9 @@ class OrderListService
      *
      * 정합성 보완:
      * - 서비스 시각이 이미 충분히 지난 운행은 추천 근거에서 제외 (최근·예정 운행만 사용)
-     * - 연결 운행은 랜딩 후 간격 창(낮 3~4시간 / 새벽·저녁·밤·야밤 2~3시간)에 시작하는 것만 추천
+     * - 연결 운행은 직전 운행 간격 창(샌딩→랜딩 30분~2시간 / 랜딩→샌딩 낮 2~3시간·야간 1~2시간)에 시작하는 것만 추천
      * - 목적지 서울이면 다음 출발도 서울이어야 하고, 서울 내 구 단위는 달라도 연결한다
-     * - 연결1(연결2)을 탄 뒤 차량이 도착하는 하차지에서 이어지는 다음 연결(연결3)까지 체인으로 추천한다
+     * - 연결1을 탄 뒤 차량이 도착하는 하차지에서 이어지는 다음 연결(연결2~연결4)까지 체인으로 추천한다
      *   (출발지 = 차량 위치, 공운행 방지)
      * - 현재 마켓 필터(시간대·날짜·노선·차량 등)를 함께 반영해 목록과 일관성 유지
      *
@@ -396,9 +448,9 @@ class OrderListService
             ->get()
             ->filter(fn (Order $trip) => $this->isRelevantTrip($trip))
             ->map(fn (Order $trip) => [
+                'trip' => $trip,
                 'dropoff' => (string) $trip->dropoff_location,
                 'tokens' => $this->locationTokens($trip->dropoff_location),
-                'landingAt' => $this->landingAt($trip),
             ])
             ->filter(fn (array $signal) => $this->inServiceRegion($signal['dropoff']))
             ->values();
@@ -423,13 +475,19 @@ class OrderListService
             ->filter(fn (Order $order) => $this->inServiceRegion((string) $order->pickup_location)
                 && $this->inServiceRegion((string) $order->dropoff_location));
 
-        // 연결1 — 출발지가 내 하차지(차량 위치)와 연결되고, 랜딩 후 간격(낮 3~4시간/야간 2~3시간)에
-        // 시작하는 샌딩(소요 30분~3시간)만 추천한다. (목적지 서울 → 출발 서울 규칙 포함)
+        // 연결 체인 — 연결1(leg2)부터 연결4(leg5)까지, 직전 운행의 하차지에서 이어지는
+        // 운행만 이어붙인다. (출발지 = 차량 위치, 공운행 방지)
+        $usedIds = [];
+        $levels = [];
+
+        // 연결1 — 출발지가 내 하차지(차량 위치)와 연결되고, 직전 운행과 반대 방향(양방향 왕복)이며,
+        // 간격 창에 시작하는 운행만 추천한다.
         $leg2 = $candidates
             ->filter(fn (Order $order) => $tripSignals->contains(
                 fn (array $signal) => $this->regionMatches($signal['dropoff'], (string) $order->pickup_location)
+                    && $this->isBidirectionalPair($signal['trip'], $order)
                     && $this->hasReasonableDuration($order)
-                    && $this->startsWithinLandingGap($signal['landingAt'], $order),
+                    && $this->startsWithinGap($signal['trip'], $order),
             ))
             ->take(10);
 
@@ -437,90 +495,291 @@ class OrderListService
             return [];
         }
 
-        // 연결2 — 연결1을 탄 뒤 차량이 도착하는 하차지에서 이어지는 다음 연결 (공운행 방지)
-        $leg2Signals = $leg2->map(fn (Order $order) => [
-            'dropoff' => (string) $order->dropoff_location,
-            'landingAt' => $this->landingAt($order),
-        ]);
+        // 연결1을 표시 순서(강력 우선)로 정렬 — 뒤 연결들은 화면에 보이는 순서에 맞춰 붙어야 체인이 이어진다
+        $leg2Ordered = $this->sortStrongFirstOrders($leg2, $tripSignals);
+        $usedIds += $leg2Ordered->pluck('id')->flip()->all();
 
-        $leg3 = $candidates
-            ->filter(fn (Order $order) => $leg2Signals->contains(
-                fn (array $signal) => $this->regionMatches($signal['dropoff'], (string) $order->pickup_location)
-                    && $this->hasReasonableDuration($order)
-                    && $this->startsWithinLandingGap($signal['landingAt'], $order),
-            ))
-            // 연결1과 같은 운행은 제외 (출발지가 다르므로 실제로 겹치진 않지만 안전망)
-            ->reject(fn (Order $order) => $leg2->contains('id', $order->id))
+        $levels[] = [
+            'orders' => $leg2Ordered,
+            'signals' => $tripSignals,
+            'rows' => $this->returnRouteRows($leg2Ordered, $tripSignals),
+            'prevMap' => [],
+        ];
+
+        // 연결2~연결4 (leg3~leg5) — 직전 연결의 하차지에서 이어지는 다음 연결을 1건씩 붙인다
+        for ($leg = 3; $leg <= 5; $leg++) {
+            $prevLevel = $levels[count($levels) - 1];
+            $prevOrders = $prevLevel['orders'];
+
+            $next = $candidates
+                ->filter(fn (Order $order) => $prevOrders->contains(
+                    fn (Order $prevOrder) => $this->regionMatches((string) $prevOrder->dropoff_location, (string) $order->pickup_location)
+                        && $this->isBidirectionalPair($prevOrder, $order)
+                        && $this->hasReasonableDuration($order)
+                        && $this->startsWithinGap($prevOrder, $order),
+                ))
+                ->reject(fn (Order $order) => isset($usedIds[$order->id]))
+                ->values();
+
+            if ($next->isEmpty()) {
+                break;
+            }
+
+            // 표시 순서의 직전 연결마다 가장 빠른 이어지는 연결을 1건씩 배정한다.
+            // (연결이 여럿이어도 각자 자기 뒤의 연결을 가져 연결 체인이 끊기지 않는다)
+            $prevMap = [];
+            $nextUsed = [];
+
+            foreach ($prevOrders as $prevOrder) {
+                foreach ($next as $order) {
+                    if (isset($nextUsed[$order->id])) {
+                        continue;
+                    }
+
+                    if ($this->regionMatches((string) $prevOrder->dropoff_location, (string) $order->pickup_location)
+                        && $this->isBidirectionalPair($prevOrder, $order)
+                        && $this->startsWithinGap($prevOrder, $order)) {
+                        $prevMap[$order->id] = $prevOrder->id;
+                        $nextUsed[$order->id] = true;
+
+                        break;
+                    }
+                }
+            }
+
+            // 이어진 직전 연결이 없는 운행은 제외 (고립 연결 방지)
+            $next = $next->filter(fn (Order $order) => isset($prevMap[$order->id]))->values();
+
+            if ($next->isEmpty()) {
+                break;
+            }
+
+            $usedIds += $next->pluck('id')->flip()->all();
+
+            $nextSignals = $prevOrders->map(fn (Order $order) => [
+                'dropoff' => (string) $order->dropoff_location,
+            ]);
+
+            $nextRows = $this->returnRouteRows($next, $nextSignals);
+
+            foreach ($nextRows as &$row) {
+                $row['chain_prev_id'] = $prevMap[$row['id']] ?? null;
+            }
+            unset($row);
+
+            $levels[] = [
+                'orders' => $next,
+                'signals' => $nextSignals,
+                'rows' => $nextRows,
+                'prevMap' => $prevMap,
+            ];
+        }
+
+        // 최종 순서 — 연결1(강력 우선) 뒤에 그에 이어지는 연결2→연결3→연결4를 붙여 체인으로 만든다
+        $ordered = [];
+
+        foreach ($levels[0]['rows'] as $row) {
+            $row['chain_leg'] = 2;
+            $ordered[] = $row;
+            $prevId = $row['id'];
+
+            for ($l = 1; $l < count($levels); $l++) {
+                $nextRow = null;
+
+                foreach ($levels[$l]['rows'] as $candidate) {
+                    if (($candidate['chain_prev_id'] ?? null) === $prevId) {
+                        $nextRow = $candidate;
+
+                        break;
+                    }
+                }
+
+                if ($nextRow === null) {
+                    break;
+                }
+
+                $nextRow['chain_leg'] = $l + 2;
+                $ordered[] = $nextRow;
+                $prevId = $nextRow['id'];
+            }
+        }
+
+        // 추천 근거 + 조건 일치율 — 복귀(연결) 운행 카드에도 '왜 이 운행인가'를 보여준다
+        return $this->attachMatchScores($ordered, $candidates->keyBy('id'), $user);
+    }
+
+    /**
+     * 마켓 왕복 체인 — 맡은 운행이 없어도, 마켓에서 샌딩(도심→공항)을 시작점으로
+     * 랜딩(공항→도심)→샌딩→랜딩…으로 이어지는 왕복 체인을 만들어 강력추천으로 보여준다.
+     * - 샌딩 → 랜딩: 같은 공항, 샌딩 시작 후 30분~2시간
+     * - 랜딩 → 샌딩: 같은 구, 랜딩 시작 후 3시간~6시간 (랜딩 + 3시간 이후)
+     * 각 다리에 recommend_level=strong을 붙이고, 활성 매칭 설정 시간대에 맞는 체인은
+     * recommend_order=1(추천1), 다른 시간대 체인은 recommend_order=2(추천2)로 나눈다.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function marketReturnPairs(Request $request): array
+    {
+        $user = $request->user();
+        $now = now('Asia/Seoul');
+
+        $candidates = $this->marketCandidatesQuery($user, null, $now)
+            ->orderBy('service_date')
+            ->orderBy('service_time')
+            ->limit(2000)
+            ->get()
+            ->filter(fn (Order $order) => $this->inServiceRegion((string) $order->pickup_location)
+                && $this->inServiceRegion((string) $order->dropoff_location))
             ->values();
 
-        // 연결1을 표시 순서(강력 우선)로 정렬 — 연결2는 화면에 보이는 연결1 뒤에 붙어야 체인이 이어진다
-        $leg2Ordered = $this->sortStrongFirstOrders($leg2, $tripSignals);
-
-        // 행 구성 — 연결1은 강력 우선, 연결2는 이어진 연결1 바로 뒤에 배치
-        $leg2Rows = $this->returnRouteRows($leg2Ordered, $tripSignals);
-
-        foreach ($leg2Rows as &$row) {
-            $row['chain_leg'] = 2;
+        if ($candidates->isEmpty()) {
+            return [];
         }
-        unset($row);
 
-        // 연결2를 연결1별로 배정 — 표시 순서의 연결1마다 가장 빠른 이어지는 연결을 1건씩 붙인다.
-        // (연결1이 여럿이어도 각자 자기 뒤의 연결2를 가져 연결 체인이 끊기지 않는다)
-        $leg2ById = $leg2Ordered->keyBy('id');
-        $leg3Prev = [];
-        $leg3Used = [];
+        $sendings = $candidates->filter(fn (Order $order) => $this->isSendingTrip($order))->values();
 
-        foreach ($leg2Rows as $row) {
-            $l2 = $leg2ById[$row['id']] ?? null;
+        if ($sendings->isEmpty()) {
+            return [];
+        }
 
-            if ($l2 === null) {
+        // 활성 매칭 설정 — 설정 시간대에 맞는 체인을 '추천1', 다른 시간대 체인은 '추천2'로 나눈다
+        $preferences = $user->matchPreferences()->where('is_active', true)->get();
+
+        $matchesPreference = function (Order $order) use ($preferences): bool {
+            foreach ($preferences as $preference) {
+                if ($this->matchService->isMatch($preference, $order)) {
+                    return true;
+                }
+            }
+
+            return false;
+        };
+
+        // 추천1(시간대 일치) 후보를 먼저, 그다음 추천2 후보를 만든다
+        if ($preferences->isNotEmpty()) {
+            $anchors = $sendings
+                ->filter(fn (Order $order) => $matchesPreference($order))
+                ->concat($sendings->filter(fn (Order $order) => ! $matchesPreference($order)))
+                ->values();
+        } else {
+            $anchors = $sendings;
+        }
+
+        $chains = [];
+        $usedOrderIds = [];
+
+        foreach ($anchors as $anchor) {
+            // 홈 노출 최대 3개 그룹 — 추천1(시간대 일치)부터 채운다
+            if (count($chains) >= 3) {
+                break;
+            }
+
+            if (isset($usedOrderIds[$anchor->id])) {
                 continue;
             }
 
-            foreach ($leg3 as $order) {
-                if (isset($leg3Used[$order->id])) {
+            $chain = $this->buildMarketChain($candidates, $anchor, $usedOrderIds);
+
+            // 왕복(최소 2다리: 샌딩+랜딩)이 되어야만 추천한다 — 복귀 없이 나가는 샌딩 단독은 추천하지 않는다
+            if (count($chain) < 2) {
+                continue;
+            }
+
+            $chains[] = [
+                'orders' => $chain,
+                // 매칭 설정이 없거나 시간대가 일치하면 추천1, 설정이 있는데 다른 시간대면 추천2
+                'rank' => ($preferences->isNotEmpty() && ! $matchesPreference($chain[0])) ? 2 : 1,
+            ];
+        }
+
+        if ($chains === []) {
+            return [];
+        }
+
+        $chainOrders = collect();
+        $orderItems = [];
+
+        foreach ($chains as $chain) {
+            foreach ($chain['orders'] as $order) {
+                $chainOrders->push($order);
+                $orderItems[] = $order;
+            }
+        }
+
+        $rowsById = collect(app(OrderWorkspaceListBuilder::class)->build($chainOrders, null, 'date'))->keyBy('id');
+
+        $rows = [];
+
+        foreach ($chains as $chain) {
+            $prevId = null;
+
+            foreach ($chain['orders'] as $index => $order) {
+                $row = $rowsById[$order->id] ?? null;
+
+                if ($row === null) {
                     continue;
                 }
 
-                if ($this->regionMatches((string) $l2->dropoff_location, (string) $order->pickup_location)
-                    && $this->startsWithinLandingGap($this->landingAt($l2), $order)) {
-                    $leg3Prev[$order->id] = $l2->id;
-                    $leg3Used[$order->id] = true;
+                $row['recommend_reason'] = '연결 운행';
+                $row['recommend_level'] = 'strong';
+                $row['recommend_order'] = $chain['rank'];
+                $row['chain_leg'] = 2 + $index;
 
-                    break;
+                if ($prevId !== null) {
+                    $row['chain_prev_id'] = $prevId;
                 }
+
+                $rows[] = $row;
+                $prevId = $order->id;
             }
         }
 
-        $leg3Rows = $this->returnRouteRows($leg3, $leg2Signals);
+        return $this->withOwnerTrust($rows, $orderItems);
+    }
 
-        foreach ($leg3Rows as &$row) {
-            $row['chain_leg'] = 3;
-            $row['chain_prev_id'] = $leg3Prev[$row['id']] ?? null;
-        }
-        unset($row);
+    /**
+     * 마켓 왕복 체인 생성 — 앵커 샌딩(도심→공항)부터 같은 공항 랜딩, 같은 구 샌딩…으로
+     * 최대 5다리까지 이어붙인다. (출발지 = 차량 위치, 공운행 방지)
+     *
+     * @param  Collection<int, Order>  $candidates
+     * @param  array<string, bool>  $usedOrderIds
+     * @return array<int, Order>
+     */
+    private function buildMarketChain(Collection $candidates, Order $anchor, array &$usedOrderIds): array
+    {
+        $orders = [$anchor];
+        $usedOrderIds[$anchor->id] = true;
+        $prev = $anchor;
 
-        // 최종 순서 — 연결1(같은 구 우선) 뒤에 그에 이어지는 연결2를 붙여 체인으로 만든다
-        $ordered = [];
-
-        foreach ($leg2Rows as $row) {
-            $ordered[] = $row;
-
-            foreach ($leg3Rows as $leg3Row) {
-                if (($leg3Row['chain_prev_id'] ?? null) === $row['id']) {
-                    $ordered[] = $leg3Row;
+        for ($leg = 2; $leg <= 5; $leg++) {
+            $next = $candidates->first(function (Order $order) use ($prev, &$usedOrderIds) {
+                if (isset($usedOrderIds[$order->id])) {
+                    return false;
                 }
+
+                return $this->regionMatches((string) $prev->dropoff_location, (string) $order->pickup_location)
+                    && $this->isBidirectionalPair($prev, $order)
+                    && $this->hasReasonableDuration($order)
+                    && $this->startsWithinGap($prev, $order);
+            });
+
+            if ($next === null) {
+                break;
             }
+
+            $usedOrderIds[$next->id] = true;
+            $orders[] = $next;
+            $prev = $next;
         }
 
-        return $ordered;
+        return $orders;
     }
 
     /**
      * 연결 운행 행을 만든다 — 강력추천(같은 구·같은 공항 터미널) 우선 정렬과 등록자 신뢰 정보를 함께 붙인다.
      *
      * @param  Collection<int, Order>  $orders
-     * @param  Collection<int, array{dropoff: string, landingAt?: Carbon|null}>  $signals
+     * @param  Collection<int, array{dropoff: string, tokens?: array<int, string>}>  $signals
      * @return array<int, array<string, mixed>>
      */
     private function returnRouteRows(Collection $orders, Collection $signals): array
@@ -607,6 +866,12 @@ class OrderListService
         //    (2)의 매칭 설정·운행 이력 추천과 합쳐 홈 '강력추천'·'추천일정'에 함께 노출된다.
         $returnRows = $this->returnRoutes($request, null, $now);
 
+        // 맡은 운행이 없으면 마켓에서 샌딩↔랜딩 왕복 짝을 찾아 강력추천으로 보여준다.
+        // (일정이 없어도 강력추천은 항상 양방향 왕복만 노출하도록 보장)
+        if ($returnRows === []) {
+            $returnRows = $this->marketReturnPairs($request);
+        }
+
         foreach ($returnRows as &$row) {
             $row['recommend_reason'] = '연결 운행';
         }
@@ -688,6 +953,20 @@ class OrderListService
 
         $orderItems = array_values($matched);
 
+        // 셋트 운행 — 한 다리라도 매칭되면 셋트 전체(나머지 일정)를 추천에 포함시켜 묶음 카드로 보여준다
+        $matchedSetGroupIds = collect($orderItems)->pluck('group_id')->filter()->unique()->all();
+
+        if ($matchedSetGroupIds !== []) {
+            $extraSetOrders = Order::query()
+                ->whereIn('group_id', $matchedSetGroupIds)
+                ->whereIn('status', [Order::STATUS_PUBLISHED, Order::STATUS_TRADING])
+                ->whereNotIn('id', collect($orderItems)->pluck('id'))
+                ->get()
+                ->all();
+
+            $orderItems = array_merge($orderItems, $extraSetOrders);
+        }
+
         if ($orderItems === []) {
             $rows = [];
         } else {
@@ -729,7 +1008,45 @@ class OrderListService
             $merged[] = $row;
         }
 
-        return $merged;
+        // 추천 근거 + 조건 일치율 점수 부여 — 홈 카드의 '조건 N%'와 ✓ 체크리스트용
+        $orderMap = Order::query()->whereIn('id', collect($merged)->pluck('id'))->get()->keyBy('id');
+
+        $merged = $this->attachMatchScores($merged, $orderMap, $user);
+
+        // 선호도(조건 일치율)가 기본 기준 미만인 운행은 추천에서 제외한다 — 낮은 후보로 판단을 늘리지 않는다.
+        $minScore = (int) config('recommendation.min_match_score', 60);
+
+        $rows = collect($merged)
+            ->filter(function (array $row) use ($minScore): bool {
+                if (($row['kind'] ?? '') === 'set') {
+                    return true; // 셋트 그룹은 개별 점수 없이 유지
+                }
+
+                return ($row['match_score'] ?? 0) >= $minScore;
+            })
+            ->values()
+            ->all();
+
+        // 홈 랭킹 — 연결 운행(체인)은 다리 순서를 유지하고,
+        // 개별 추천은 조건 일치율(match_score)이 높은 운행부터 보여준다.
+        // (같은 점수 안에서는 기존 순서 유지 — 안정 정렬)
+        $chainRows = [];
+        $singleRows = [];
+        $setRows = [];
+
+        foreach ($rows as $row) {
+            if (($row['kind'] ?? '') === 'set') {
+                $setRows[] = $row;
+            } elseif (($row['recommend_reason'] ?? '') === '연결 운행') {
+                $chainRows[] = $row;
+            } else {
+                $singleRows[] = $row;
+            }
+        }
+
+        usort($singleRows, fn (array $a, array $b): int => ($b['match_score'] ?? 0) <=> ($a['match_score'] ?? 0));
+
+        return array_merge($chainRows, $singleRows, $setRows);
     }
 
     /**
@@ -744,6 +1061,9 @@ class OrderListService
 
         $query = Order::query()
             ->whereIn('status', [Order::STATUS_PUBLISHED, Order::STATUS_TRADING])
+            // 관리자 개입(B-2) — 숨김·보류 운행은 추천 후보에서 제외
+            ->where('is_hidden', false)
+            ->where('admin_hold', false)
             ->whereNull('claimed_at')
             ->where('user_id', '!=', $user->id)
             ->whereNotNull('pickup_location')
@@ -889,33 +1209,31 @@ class OrderListService
     }
 
     /**
-     * 실제 하차(차량이 비워지는) 시각 — 서비스 시작 + 랜딩 대기 + 소요시간. 시간 미정 운행은 null.
-     *
-     * 랜딩(공항 픽업) 운행은 service_time이 '항공기 도착 시각'이므로, 승객이
-     * 입국심사·짐찾기로 나오는 데 걸리는 대기(설정: 평균 60분)를 먼저 더한다.
-     */
-    private function landingAt(Order $trip): ?Carbon
-    {
-        if (blank($trip->service_time)) {
-            return null;
-        }
-
-        $carbon = Carbon::parse($trip->service_date.' '.$trip->service_time, 'Asia/Seoul');
-
-        if ($this->isLandingTrip($trip)) {
-            $carbon = $carbon->addMinutes((int) config('recommendation.landing_wait_minutes', 60));
-        }
-
-        return $carbon->addMinutes($trip->estimated_duration_minutes ?? 60);
-    }
-
-    /**
-     * 랜딩(공항 픽업) 운행 여부 — service_type이 landing이거나 출발지가 공항이면 랜딩이다.
+     * 랜딩(공항 픽업) 운행 여부 — 출발지가 공항이면 랜딩이다.
+     * (service_type은 데이터에 따라 부정확할 수 있어 방향(출발지)만으로 판단한다)
      */
     private function isLandingTrip(Order $order): bool
     {
-        return $order->service_type === 'landing'
-            || mb_stripos((string) $order->pickup_location, '공항') !== false;
+        return mb_stripos((string) $order->pickup_location, '공항') !== false;
+    }
+
+    /**
+     * 샌딩(도심→공항) 운행 여부 — 도착지가 공항이면 샌딩이다.
+     */
+    private function isSendingTrip(Order $order): bool
+    {
+        return mb_stripos((string) $order->dropoff_location, '공항') !== false;
+    }
+
+    /**
+     * 양방향(왕복) 연결 여부 — 강력추천은 반드시 공항 왕복이어야 한다.
+     * 샌딩(도심→공항) 뒤에는 랜딩(공항→도심), 랜딩 뒤에는 샌딩만 연결하고,
+     * 도심↔도심 픽업처럼 방향이 이어지지 않는 운행은 강력추천에서 제외한다.
+     */
+    private function isBidirectionalPair(Order $prev, Order $next): bool
+    {
+        return ($this->isSendingTrip($prev) && $this->isLandingTrip($next))
+            || ($this->isLandingTrip($prev) && $this->isSendingTrip($next));
     }
 
     /**
@@ -934,67 +1252,97 @@ class OrderListService
     }
 
     /**
-     * 후보 운행(샌딩)이 내 랜딩 후 간격 창(낮 2~3시간 / 야간 1~2시간)에 시작하는지.
-     * 일시 불완전 운행은 시간 검증을 건너뛴다.
+     * 후보 운행이 직전 운행의 간격 창에 시작하는지 판정한다.
+     * - 후보가 랜딩(공항 픽업)이면 '샌딩→랜딩' 규칙: 직전 운행 시작 후 30분~2시간(설정).
+     *   승객 퇴장 대기(landing_wait_minutes)가 샌딩 소요를 흡수하므로 타이트하게 연결할 수 있다.
+     * - 그 외(랜딩→샌딩)는 '랜딩→샌딩' 규칙: 직전 랜딩 시작 후 3시간~6시간 창.
      */
-    private function startsWithinLandingGap(?Carbon $landingAt, Order $order): bool
+    private function startsWithinGap(Order $prevTrip, Order $order): bool
     {
-        if ($landingAt === null) {
+        $start = $this->orderStart($order);
+
+        if ($start === null) {
             return true;
         }
 
-        if (blank($order->service_date) || blank($order->service_time)) {
+        $prevStart = $this->orderStart($prevTrip);
+
+        if ($prevStart === null) {
             return true;
         }
 
-        $start = Carbon::parse($order->service_date.' '.$order->service_time, 'Asia/Seoul');
-        [$minHours, $maxHours] = $this->landingGapHours($landingAt);
+        if ($this->isLandingTrip($order)) {
+            [$minMinutes, $maxMinutes] = $this->sendLandingGapMinutes();
 
-        return $start->gte($landingAt->copy()->addHours($minHours))
-            && $start->lte($landingAt->copy()->addHours($maxHours));
+            return $start->gte($prevStart->copy()->addMinutes($minMinutes))
+                && $start->lte($prevStart->copy()->addMinutes($maxMinutes));
+        }
+
+        // 랜딩(공항→도심) 후 다음 샌딩(도심→공항) — 랜딩 시작(service_time) 기준 3시간 이후에만 연결한다.
+        // (사용자 규칙: '14:30 랜딩 → 다음 운행은 14:30 + 3시간 이후')
+        [$minHours, $maxHours] = $this->landingSendGapHours();
+
+        return $start->gte($prevStart->copy()->addHours($minHours))
+            && $start->lte($prevStart->copy()->addHours($maxHours));
     }
 
     /**
-     * 랜딩 후 다음 샌딩까지 간격(시간).
-     * 2~3시간은 구간 이동시간(서울 내 30~60분, 공항 터미널 T1↔T2 약 15분) + 여유 1시간을
-     * 포함한 기본값이고, 낮(09~17시)이 아닌 새벽·저녁·밤·야밤에는 이동이 빨라 1~2시간으로 타이트하게 잡는다.
+     * 후보 운행(샌딩)이 랜딩 후 간격 창에 시작하는지.
+     * 일시 불완전 운행은 시간 검증을 건너뛴다.
+     */
+    private function orderStart(Order $order): ?Carbon
+    {
+        if (blank($order->service_date) || blank($order->service_time)) {
+            return null;
+        }
+
+        return Carbon::parse($order->service_date.' '.$order->service_time, 'Asia/Seoul');
+    }
+
+    /**
+     * 랜딩 후 다음 샌딩 간격(시간) — 랜딩 시작(service_time) 기준 3시간 이후에 연결한다.
+     * (운행 소요 + 이동 + 휴식 여유를 합친 값. 사용자 규칙: '랜딩 + 3시간 이후')
      *
      * @return array{int, int} [최소시간, 최대시간]
      */
-    private function landingGapHours(Carbon $landingAt): array
+    private function landingSendGapHours(): array
     {
-        $hour = (int) $landingAt->format('G');
-        $isDaytime = $hour >= 9 && $hour <= 16;
+        $gap = config('recommendation.landing_send_gap_hours', ['min' => 3, 'max' => 6]);
 
-        return $isDaytime ? [2, 3] : [1, 2];
+        return [(int) ($gap['min'] ?? 3), (int) ($gap['max'] ?? 6)];
     }
 
     /**
-     * 연속 운행 지역 매칭 — 같은 시/도(서울/인천/경기) 안이면 연결된다.
-     * 구 단위가 달라도 시/도가 같으면 일반 추천으로 연결되고,
-     * 같은 구·같은 공항 터미널은 강력추천(recommend_level=strong)으로 구분된다.
-     * 예) 하차 '서울 중구' → 출발 '서울 강남구' (매칭), 하차 '인천 송도' → 출발 '인천 부평' (매칭)
+     * 샌딩→랜딩 간격(분) — 랜딩 시작(항공기 도착)이 직전 샌딩 시작 후 몇 분 이내인지.
+     *
+     * @return array{int, int} [최소분, 최대분]
+     */
+    private function sendLandingGapMinutes(): array
+    {
+        $gap = config('recommendation.send_landing_gap_minutes', ['min' => 30, 'max' => 120]);
+
+        return [(int) ($gap['min'] ?? 30), (int) ($gap['max'] ?? 120)];
+    }
+
+    /**
+     * 연속 운행 지역 매칭 — '가까운 위치' 기준으로만 연결한다.
+     * - 같은 구/동/읍/면(상세 구역 토큰 일치) → 강력추천
+     * - 같은 공항(터미널·선 무관, 인천공항 T1↔T2·김포 국내선↔국제선 포함) → 강력추천
+     * 같은 시/도(서울/인천/경기)만으로는 연결하지 않는다. (경기 도내 먼 시/군 연결 방지)
+     * 예) 하차 '서울 중구' → 출발 '서울 중구' (연결), 하차 '인천공항 T1' → 출발 '인천공항 T2' (연결)
      */
     private function regionMatches(string $dropoff, string $pickup): bool
     {
-        if ($this->sameProvince($dropoff, $pickup)) {
-            return true;
-        }
-
-        return array_intersect($this->locationTokens($pickup), $this->locationTokens($dropoff)) !== [];
+        return $this->strongRegionMatch($dropoff, $pickup);
     }
 
     /**
-     * 같은 시/도(서울/인천/경기) 여부 — 서비스 지역 안에서는 시/도 단위로 연결을 허용한다.
+     * 같은 공항(터미널 무관) 여부 — '인천공항' ↔ '인천공항 T1', '김포공항 국내선' ↔ '김포공항' 등.
      */
-    private function sameProvince(string $a, string $b): bool
+    private function sameAirport(string $a, string $b): bool
     {
-        $normalize = fn (string $location): string => str_replace('특별시', '', $location);
-        $aNormalized = $normalize($a);
-        $bNormalized = $normalize($b);
-
-        foreach (['서울', '인천', '경기'] as $province) {
-            if (mb_stripos($aNormalized, $province) !== false && mb_stripos($bNormalized, $province) !== false) {
+        foreach (['인천공항', '김포공항'] as $airport) {
+            if (mb_stripos($a, $airport) !== false && mb_stripos($b, $airport) !== false) {
                 return true;
             }
         }
@@ -1003,23 +1351,19 @@ class OrderListService
     }
 
     /**
-     * 강력추천 여부 — 하차지와 출발지가 '같은 구/상세 구역'이거나 '같은 공항 터미널'이면 강력추천.
+     * 강력추천 여부 — 하차지와 출발지가 '같은 구/상세 구역'이거나 '같은 공항'이면 강력추천.
      * - 같은 구: '서울 마포구' ↔ '서울 마포구' (구·동·읍·면 단위 토큰 일치)
-     * - 같은 공항 터미널: 인천공항 T1↔T1, T2↔T2, 김포 국내선↔국내선, 국제선↔국제선
-     * - 같은 시/도만 겹치거나(서울↔서울) 공항 단위만 겹치는(인천공항 T1↔T2) 연결은 일반 추천이다.
+     * - 같은 공항: 인천공항 T1↔T1·T1↔T2, 김포 국내선↔국내선·국내선↔국제선 (터미널·선 무관)
      */
     private function strongRegionMatch(string $dropoff, string $pickup): bool
     {
-        $dropoffTerminal = $this->airportTerminal($dropoff);
-        $pickupTerminal = $this->airportTerminal($pickup);
-
-        // 양쪽 모두 터미널이 명시된 공항이면 터미널이 같아야 강력추천 (T1↔T2는 일반)
-        if ($dropoffTerminal !== null && $pickupTerminal !== null) {
-            return $dropoffTerminal === $pickupTerminal;
+        // 같은 공항(터미널·선 무관)이면 강력추천
+        if ($this->sameAirport($dropoff, $pickup)) {
+            return true;
         }
 
-        // 같은 구/상세 구역 — 구 단위 토큰이 겹쳐야 강력추천.
-        // '인천공항' 같은 공항 단위 토큰만 겹치는 경우는 강력으로 보지 않는다.
+        // 같은 구/상세 구역 — 구 단위 토큰이 겹치면 강력추천.
+        // ('인천공항' 같은 공항 단위 토큰만 겹치는 경우는 위에서 이미 처리된다.)
         $overlap = array_intersect($this->locationTokens($pickup), $this->locationTokens($dropoff));
 
         foreach ($overlap as $token) {
@@ -1029,19 +1373,6 @@ class OrderListService
         }
 
         return false;
-    }
-
-    /**
-     * 위치 문자열의 공항 터미널 식별자 — '인천공항 T1' → '인천공항T1', '김포공항 국내선' → '김포공항국내선'.
-     * 터미널·선이 명시되지 않은 위치는 null을 반환한다.
-     */
-    private function airportTerminal(string $location): ?string
-    {
-        if (preg_match('/([\p{Hangul}]*공항)\s*(T\d|국내선|국제선)/u', $location, $matches)) {
-            return $matches[1].$matches[2];
-        }
-
-        return null;
     }
 
     /**
@@ -1096,39 +1427,7 @@ class OrderListService
      */
     private function locationTokens(string $location): array
     {
-        $normalized = preg_replace('/(\bT\d\b|국내선|국제선)/u', '', str_replace('국제', '', $location));
-        $parts = preg_split('/[\s>→\-·,()（）\/]+/u', $normalized);
-
-        $tokens = [];
-
-        foreach ($parts as $part) {
-            $part = trim($part);
-
-            if (mb_strlen($part) < 2) {
-                continue;
-            }
-
-            $tokens[] = mb_strtolower($part);
-
-            // '강남구' → '강남' — 상세 구역만으로도 겹치게
-            $stripped = preg_replace('/(구|동|읍|면|리)$/u', '', mb_strtolower($part));
-
-            if (mb_strlen($stripped) >= 2) {
-                $tokens[] = $stripped;
-            }
-        }
-
-        $blocklist = [
-            '서울', '서울특별시', '부산', '부산광역시', '인천', '인천광역시',
-            '대구', '대전', '광주', '울산', '세종',
-            '경기', '경기도', '강원', '강원도',
-            '충북', '충청북도', '충남', '충청남도',
-            '전북', '전라북도', '전남', '전라남도',
-            '경북', '경상북도', '경남', '경상남도',
-            '제주', '제주도',
-        ];
-
-        return array_values(array_unique(array_diff($tokens, $blocklist)));
+        return LocationTokens::tokens($location);
     }
 
     /**
@@ -1155,6 +1454,188 @@ class OrderListService
         unset($row);
 
         return $rows;
+    }
+
+    /**
+     * 추천 근거 + 조건 일치율 점수 — 홈/마켓 카드의 '조건 N%'와 ✓ 체크리스트.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @param  Collection<int, Order>  $orderMap  keyBy('id')된 운행 모델
+     * @return array<int, array<string, mixed>>
+     */
+    private function attachMatchScores(array $rows, Collection $orderMap, User $user): array
+    {
+        $preferences = $user->matchPreferences()->where('is_active', true)->get();
+        $signals = $this->driverHistorySignals($user);
+        $activeVehicle = Vehicle::activeVehicleFor($user->id);
+
+        foreach ($rows as &$row) {
+            if (($row['kind'] ?? '') === 'set') {
+                continue; // 셋트 그룹은 개별 운행 점수 생략
+            }
+
+            $order = $orderMap[$row['id']] ?? null;
+
+            if ($order === null) {
+                continue;
+            }
+
+            $isChain = ($row['recommend_reason'] ?? null) === '연결 운행';
+            $profile = $this->matchProfile($user, $order, $preferences, $signals, $activeVehicle, $isChain);
+
+            $row['match_score'] = $profile['score'];
+            $row['match_reasons'] = $profile['reasons'];
+        }
+        unset($row);
+
+        return $rows;
+    }
+
+    /**
+     * 운행 하나에 대한 조건 일치율 점수와 추천 근거 체크리스트를 계산한다.
+     *
+     * 점수 구성(합계 100):
+     * - 매칭 설정 완전 일치(또는 앞·뒤 연결) 25점
+     * - 차량 조건 일치 20점
+     * - 태그/지역 조건(선호 태그/선호 지역/자주 다니는 노선) 20점
+     * - 시간대 조건(선호 시간대/자주 운행한 시간대) 15점
+     * - 금액 조건(최소 금액 이상) 10점
+     * - 동선/연결(다음 운행과 이어짐) 10점
+     *
+     * @param  Collection<int, MatchPreference>  $preferences
+     * @param  array{areas: array<int, string>, hours: array<int, int>}  $signals
+     * @return array{score: int, reasons: array<int, string>}
+     */
+    private function matchProfile(
+        User $user,
+        Order $order,
+        Collection $preferences,
+        array $signals,
+        ?Vehicle $activeVehicle,
+        bool $isChain = false,
+    ): array {
+        $score = 0;
+        $reasons = [];
+
+        // 1) 매칭 설정 완전 일치(또는 앞·뒤 연결) — 조건이 실제로 설정된 경우만
+        foreach ($preferences as $preference) {
+            if ($this->hasConstraints($preference)
+                && ($this->matchService->isMatch($preference, $order)
+                    || $this->matchService->isFrontLink($preference, $order)
+                    || $this->matchService->isBackLink($preference, $order))) {
+                $score += 25;
+                $reasons[] = '매칭 설정에 맞는 운행';
+                break;
+            }
+        }
+
+        // 2) 차량 조건 — 내 차량과 운행 차량이 일치
+        if ($activeVehicle !== null && $this->vehicleMatches($activeVehicle, $order)) {
+            $score += 20;
+            $reasons[] = '차량 조건 일치';
+        }
+
+        // 3) 태그/지역 조건 — 선호 태그(설정) 우선, 선호 지역(구 설정), 자주 다니는 노선(이력) 차선
+        $areaMatched = false;
+
+        foreach ($preferences as $preference) {
+            if (! empty($preference->tags) && $this->matchService->tagsMatch($preference, $order)) {
+                $score += 20;
+                $reasons[] = '선호 태그 운행';
+                $areaMatched = true;
+                break;
+            }
+        }
+
+        if (! $areaMatched) {
+            foreach ($preferences as $preference) {
+                if (filled(trim((string) $preference->area)) && $this->matchService->areaMatches($preference, $order)) {
+                    $score += 20;
+                    $reasons[] = '선호 지역 운행';
+                    $areaMatched = true;
+                    break;
+                }
+            }
+        }
+
+        if (! $areaMatched && $this->matchesAnyArea((string) $order->pickup_location, $signals['areas'])) {
+            $score += 20;
+            $reasons[] = '자주 다니는 노선';
+        }
+
+        // 4) 시간대 조건 — 선호 시간대(설정) 우선, 자주 운행한 시간대(이력) 차선
+        $timeMatched = false;
+
+        foreach ($preferences as $preference) {
+            if (filled($preference->start_time) && $this->matchService->timeMatches($preference, $order)) {
+                $score += 15;
+                $reasons[] = '선호 시간대 운행';
+                $timeMatched = true;
+                break;
+            }
+        }
+
+        if (! $timeMatched && $order->service_time) {
+            $hour = (int) substr($order->service_time, 0, 2);
+
+            if (in_array($hour, $signals['hours'], true)) {
+                $score += 15;
+                $reasons[] = '자주 운행한 시간대';
+            }
+        }
+
+        // 5) 금액 조건 — 최소 금액 이상 (설정된 경우만)
+        foreach ($preferences as $preference) {
+            if ($preference->min_revenue > 0 && $this->matchService->revenueMatches($preference, $order)) {
+                $score += 10;
+                $reasons[] = '최소 금액 이상';
+                break;
+            }
+        }
+
+        // 6) 동선/연결 — 연결 운행 체인 (다음 운행과 이어짐)
+        if ($isChain) {
+            $score += 10;
+            $reasons[] = '현재 운행과 동선이 좋음';
+        }
+
+        // 공항 운행 — 점수 없이 근거만
+        if (mb_stripos((string) $order->pickup_location, '공항') !== false
+            || mb_stripos((string) $order->dropoff_location, '공항') !== false) {
+            $reasons[] = '공항 운행';
+        }
+
+        return ['score' => min(100, $score), 'reasons' => $reasons];
+    }
+
+    /**
+     * 설정이 실제로 조건을 좁히고 있는지 — 비어 있는 설정(조건 없음)은 일치로 치지 않는다.
+     */
+    private function hasConstraints(MatchPreference $preference): bool
+    {
+        return filled(trim((string) $preference->area))
+            || ! empty($preference->tags)
+            || filled($preference->start_time)
+            || $preference->min_revenue > 0
+            || filled($preference->date_range)
+            || ! empty($preference->days)
+            || ($preference->max_passengers ?? 0) > 0;
+    }
+
+    /**
+     * 내 차량과 운행 차량이 일치하는지 — 종류명 부분 일치(예: '스타리아' vs '스타리아 9인승').
+     */
+    private function vehicleMatches(Vehicle $vehicle, Order $order): bool
+    {
+        $orderVehicle = trim((string) $order->vehicle_type);
+        $driverVehicle = trim((string) $vehicle->type);
+
+        if ($orderVehicle === '' || $driverVehicle === '') {
+            return false;
+        }
+
+        return mb_stripos($orderVehicle, $driverVehicle) !== false
+            || mb_stripos($driverVehicle, $orderVehicle) !== false;
     }
 
     private function paginate(Builder $query, Request $request, int $perPage): LengthAwarePaginator

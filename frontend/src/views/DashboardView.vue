@@ -65,7 +65,7 @@ onBeforeUnmount(() => clearInterval(timer));
 </script>
 
 <template>
-    <div>
+    <div class="page-shell">
         <div class="page-head">
             <n-radio-group v-model:value="days" size="large" @update:value="changeDays">
                 <n-radio-button :value="7">7일</n-radio-button>
@@ -227,7 +227,7 @@ onBeforeUnmount(() => clearInterval(timer));
                 <div class="dash-card dash-block">
                     <div class="dash-card__head">
                         <strong>정산 현황</strong>
-                        <!-- 정산은 등록자(관리자)만 처리 — 드라이버(진행자)는 '정산 진행중'으로 대기 -->
+                        <!-- 정산은 등록자(관리자)만 처리 — 드라이버(진행자)는 '정산 대기중'으로 대기 -->
                         <n-button
                             v-if="!isDriver"
                             type="primary"
@@ -242,7 +242,7 @@ onBeforeUnmount(() => clearInterval(timer));
                     </div>
                     <div class="settle-grid">
                         <div class="settle-item">
-                            <span class="settle-item__label">정산 진행중</span>
+                            <span class="settle-item__label">정산 대기중</span>
                             <strong class="settle-item__value">{{ formatWon(summary.settlementPending) }}원</strong>
                         </div>
                         <div class="settle-item">
@@ -385,7 +385,7 @@ onBeforeUnmount(() => clearInterval(timer));
 
 .dash-block {
     margin-bottom: 16px;
-    border-radius: 16px;
+    border-radius: var(--card-radius);
 }
 
 .dash-body {
@@ -405,8 +405,8 @@ onBeforeUnmount(() => clearInterval(timer));
     display: flex;
     flex-direction: column;
     gap: 6px;
-    padding: 18px;
-    border-radius: 16px;
+    padding: var(--card-pad);
+    border-radius: var(--card-radius);
     border: 1px solid var(--border);
     background: var(--surface);
     color: var(--text);
@@ -526,8 +526,8 @@ html.dark .mini-list__empty {
 .dash-card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 18px;
+    border-radius: var(--card-radius);
+    padding: var(--card-pad);
 }
 
 .dash-card--accent {
@@ -659,7 +659,7 @@ html.dark .mini-list__empty {
 
 .bar-chart__bar--revenue {
     width: 14px;
-    background: #18a058;
+    background: var(--status-completed);
 }
 
 .bar-chart__date {
@@ -757,7 +757,7 @@ html.dark .settle-bar {
     display: block;
     height: 100%;
     border-radius: 5px;
-    background: #18a058;
+    background: var(--status-completed);
     transition: width 0.3s ease;
 }
 

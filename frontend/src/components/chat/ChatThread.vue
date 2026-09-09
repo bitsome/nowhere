@@ -9,7 +9,8 @@ import MessageBubble from './MessageBubble.vue';
 import ChatRequestEvent from './ChatRequestEvent.vue';
 import ChatRequestSheet from './ChatRequestSheet.vue';
 import ChatImageSheet from './ChatImageSheet.vue';
-import { getChatTimestamp, isSameDay, formatDayLabel } from '../../utils/chatTime';
+import ReportDialog from '../reports/ReportDialog.vue';
+import { useChatRows } from '../../composables/useChatRows';
 import { statusColorVar } from '../../utils/colors';
 import BaseIcon from '../common/BaseIcon.vue';
 
@@ -24,6 +25,17 @@ const sending = ref(false);
 const requestOpen = ref(false);
 const imageOpen = ref(false);
 
+// ── 채팅 신고 — 상대방·대화 내용 문제를 운영팀에 접수 (관리자는 신고하지 않음) ──
+const reportOpen = ref(false);
+
+const canReportChat = computed(() => Boolean(activeConversation.value && auth.user && !auth.isAdmin));
+
+const reportSubject = computed(() => {
+    const counterpart = activeConversation.value?.counterpart?.name;
+
+    return counterpart ? `${counterpart}님과의 채팅` : '채팅';
+});
+
 const activeConversation = computed(() => store.activeConversation);
 
 // 연결된 운행 상태 색상 — 중앙 팔레트(utils/colors.js) 참조
@@ -31,68 +43,18 @@ const orderStatusColor = computed(
     () => statusColorVar[activeConversation.value?.order?.status] ?? 'var(--status-draft)',
 );
 
-// 메시지 목록 + 날짜/유형 카테고리 + 그룹 메타
-// - 날짜 카테고리: 날짜가 바뀔 때마다 '오늘/어제/8월 17일' 구분선
-// - 유형 카테고리: 요청 이벤트(승인/시간변경/경로변경/요금협의/취소)를 유형별로 구분
-// - 그룹 = 같은 상대 + 같은 분(HH:MM) 연속 메시지 (아바타·이름·시간 노출 규칙)
-const minuteKeyOf = (msg) => {
-    const ts = getChatTimestamp(msg.created_at_iso ?? msg.created_at);
+// 상태 태그 글자색 — 밝은 상태색(공개·요금 협의·운행중·완료 등) 위 흰 글자는 대비가 약해 어두운 글자 사용
+// (운행 기록 화면 RideHistoryView statusTextColor와 동일 규칙)
+const orderStatusTextColor = computed(() => {
+    const status = activeConversation.value?.order?.status;
 
-    return ts ? `${ts.getFullYear()}-${ts.getMonth()}-${ts.getDate()}-${ts.getHours()}-${ts.getMinutes()}` : null;
-};
-
-const typeLabelOf = (type) => ({
-    approval: '승인 요청',
-    time_change: '시간 변경 요청',
-    route_change: '경로 변경 요청',
-    payment_change: '요금 협의 요청',
-    cancel: '운행 취소 요청',
-}[type] ?? '요청');
-
-const messageRows = computed(() => {
-    const rows = [];
-    let prevDayKey = null;
-    let prevUserId = null;
-    let prevMinuteKey = null;
-    let prevTypeLabel = '';
-    const now = new Date();
-
-    for (let i = 0; i < store.messages.length; i++) {
-        const msg = store.messages[i];
-        const next = store.messages[i + 1];
-        const ts = getChatTimestamp(msg.created_at_iso ?? msg.created_at);
-        const dayKey = ts ? `${ts.getFullYear()}-${ts.getMonth()}-${ts.getDate()}` : null;
-        const minuteKey = minuteKeyOf(msg);
-        const showSep = Boolean(ts && dayKey && dayKey !== prevDayKey);
-
-        // 요청 이벤트는 말풍선 그룹에 섞이지 않도록 항상 단독 행으로 처리한다
-        const isEvent = (msg.type ?? 'text') !== 'text';
-        const typeLabel = isEvent ? typeLabelOf(msg.type) : '';
-        const showTypeSep = isEvent && typeLabel !== prevTypeLabel;
-        const isGroupStart = isEvent || !(msg.user_id === prevUserId && minuteKey && minuteKey === prevMinuteKey);
-        const isGroupEnd = isEvent || !(next && next.user_id === msg.user_id && minuteKey && minuteKeyOf(next) === minuteKey);
-
-        rows.push({
-            msg,
-            showSep,
-            dayLabel: showSep ? (isSameDay(ts, now) ? '오늘' : formatDayLabel(ts)) : '',
-            showTypeSep,
-            typeLabel,
-            isFirst: isGroupStart,
-            isLast: isGroupEnd,
-            isEvent,
-        });
-
-        if (dayKey) {
-            prevDayKey = dayKey;
-        }
-        prevUserId = msg.user_id;
-        prevMinuteKey = minuteKey;
-        prevTypeLabel = typeLabel;
-    }
-
-    return rows;
+    return ['published', 'trading', 'driving', 'completed', 'acceptance_pending'].includes(status)
+        ? '#101418'
+        : '#ffffff';
 });
+
+// 메시지 목록 → 렌더 행 (날짜 구분선·이벤트 유형 구분·같은 분 그룹 규칙) — 공용 컴포저블 사용
+const messageRows = useChatRows(store.messages);
 
 const scrollToBottom = async () => {
     await nextTick();
@@ -219,7 +181,7 @@ onMounted(() => {
                 <span class="chat-order-card__meta">
                     <span
                         class="chat-order-card__status"
-                        :style="{ background: orderStatusColor, borderColor: orderStatusColor }"
+                        :style="{ background: orderStatusColor, borderColor: orderStatusColor, color: orderStatusTextColor }"
                     >
                         {{ activeConversation.order.statusLabel }}
                     </span>
@@ -227,6 +189,14 @@ onMounted(() => {
                 </span>
                 <span class="chat-order-card__amount">{{ Number(activeConversation.order.amount).toLocaleString() }}원</span>
             </button>
+
+            <!-- 채팅 신고 — 상대방과의 대화 문제를 운영팀에 접수 (대화 내용은 운영팀만 확인) -->
+            <div v-if="canReportChat" class="chat-thread__guard">
+                <button type="button" class="chat-thread__report" @click="reportOpen = true">
+                    <BaseIcon name="warning" :size="12" />
+                    신고
+                </button>
+            </div>
 
             <template v-for="row in messageRows" :key="row.msg.id">
                 <div v-if="row.showSep" class="chat-day-sep">{{ row.dayLabel }}</div>
@@ -315,6 +285,14 @@ onMounted(() => {
             v-model:show="imageOpen"
             @sent="onRequestSent"
         />
+
+        <!-- 채팅 신고 — 상대방·대화 내용 문제 접수 -->
+        <ReportDialog
+            v-model:show="reportOpen"
+            target-type="chat"
+            :target-id="store.activeId"
+            :subject-text="reportSubject"
+        />
     </div>
 </template>
 
@@ -325,23 +303,23 @@ onMounted(() => {
 .chat-thread{position:fixed;inset:0;z-index:9;display:flex;flex-direction:column;padding-top:54px;background:var(--bg)}
 .chat-thread__messages{flex:1;overflow-y:auto;padding:12px 14px 16px;display:flex;flex-direction:column;gap:6px;-webkit-overflow-scrolling:touch}
 
-/* 날짜 구분선 — 양쪽 라인 + 가운데 날짜 */
-.chat-day-sep{display:flex;align-items:center;gap:10px;margin:14px 0 8px;color:var(--text-muted);font-size: 11px;font-weight:600;flex-shrink:0}
-.chat-day-sep::before,.chat-day-sep::after{content:'';flex:1;height:1px;background:var(--border)}
-
-/* 채팅 유형 카테고리 — 요청 이벤트 유형별 구분 라벨 */
-.chat-type-sep{align-self:center;margin:6px 0 2px;padding:3px 12px;border-radius:999px;background:color-mix(in srgb,var(--status-accepted) 10%,transparent);border:1px solid color-mix(in srgb,var(--status-accepted) 28%,transparent);color:var(--status-accepted);font-size: 11px;font-weight:700;flex-shrink:0}
+/* 날짜/유형 구분선은 전역 공용(base.css) — ChatThread·OrderDetailChat 동일 스타일 */
 
 /* 연결된 운행 카드 — 대화방 상단 */
 .chat-order-card{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;width:100%;text-align:left;margin-bottom:8px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:var(--surface);cursor:pointer;box-shadow:0 1px 6px rgba(0,0,0,.05)}
 .chat-order-card:hover{border-color:var(--brand)}
-.chat-order-card__tag{flex-shrink:0;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--brand) 14%,transparent);color:var(--brand);font-size: 11px;font-weight:700}
+.chat-order-card__tag{flex-shrink:0;padding:1px 6px;border-radius:999px;background:color-mix(in srgb,var(--brand) 14%,transparent);color:var(--brand);font-size: 10px;font-weight:400}
 .chat-order-card__route{flex:1;min-width:120px;font-size: 11px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chat-order-card__meta{width:100%;font-size: 11px;color:var(--text-muted)}
-/* 운행 상태 색상 태그 — 상태별 팔레트 색상 */
-.chat-order-card__status{display:inline-flex;align-items:center;margin-right:6px;padding:2px 8px;border-radius:999px;color:#fff;font-size: 11px;font-weight:700;white-space:nowrap}
-html.dark .chat-order-card__status{color:#101418}
+/* 운행 상태 색상 태그 — 배경은 상태별 팔레트 색상, 글자색은 상태 밝기에 따라 인라인 지정
+   (RideHistoryView 운행 기록 배지와 동일 — 밝은 상태는 #101418, 나머지는 흰 글자) */
+.chat-order-card__status{display:inline-flex;align-items:center;margin-right:6px;padding:1px 6px;border-radius:999px;font-size: 10px;font-weight:400;white-space:nowrap}
 .chat-order-card__amount{flex-shrink:0;font-size: 11px;font-weight:700;color:var(--text)}
+
+/* 채팅 신고 — 메시지 상단 우측 작은 유틸 버튼 */
+.chat-thread__guard{display:flex;justify-content:flex-end;margin-bottom:4px}
+.chat-thread__report{display:inline-flex;align-items:center;gap:4px;padding:2px 6px;border:0;border-radius:999px;background:none;color:var(--text-muted);font-size: 10px;font-weight:500;cursor:pointer;opacity:.75;transition:color .15s ease,background .15s ease,opacity .15s ease}
+.chat-thread__report:hover{color:var(--danger);background:color-mix(in srgb,var(--danger) 8%,transparent);opacity:1}
 
 /* 입력 영역 — 입력줄을 감싼다 */
 .chat-thread__composer{border-top:1px solid var(--border);background:var(--surface)}
@@ -365,7 +343,7 @@ html.dark .chat-order-card__status{color:#101418}
 .chat-thread__input input{flex:1;border:1px solid var(--border);border-radius:20px;padding:10px 16px;font-size: 11px;background:var(--bg);color:var(--text);outline:none}
 .chat-thread__input input:focus{border-color:var(--brand)}
 
-/* 새 메시지 도착 배지 */
-.chat-thread__jump{position:absolute;bottom:calc(64px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:10;display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:0;border-radius:999px;background:var(--brand);color:#fff;font-size: 11px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px color-mix(in srgb,var(--brand) 40%,transparent)}
+/* 새 메시지 도착 배지 — brand 채움에는 어두운 글자(#07120e) 표준 적용 */
+.chat-thread__jump{position:absolute;bottom:calc(64px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);z-index:10;display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:0;border-radius:999px;background:var(--brand);color:#07120e;font-size: 11px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px color-mix(in srgb,var(--brand) 40%,transparent)}
 .chat-thread__jump svg{width:16px;height:16px}
 </style>

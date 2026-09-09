@@ -88,13 +88,22 @@ class OrderOfferController extends Controller
     }
 
     /**
-     * 등록자가 제안을 거절한다 — 운행은 마켓에 남는다.
+     * 등록자가 제안을 거절한다 — 운행은 마켓에 남는다. 거절 사유(선택)는 기사에게 전달된다.
      *
      * @return JsonResponse{data: array<string, mixed>}
      */
     public function reject(Request $request, Order $order, OrderOffer $offer, OrderOfferService $offerService): JsonResponse
     {
-        $offerService->reject($request->user(), $order, $offer);
+        $data = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $offerService->reject(
+            $request->user(),
+            $order,
+            $offer,
+            isset($data['reason']) ? trim($data['reason']) ?: null : null,
+        );
 
         return response()->json([
             'data' => ['ok' => true],

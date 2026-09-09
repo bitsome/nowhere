@@ -9,9 +9,9 @@ import { useNotificationsStore } from './stores/notifications';
 import { useThemeStore } from './stores/theme';
 import { useUiStore } from './stores/ui';
 import { naiveThemeOverrides } from './utils/colors';
-import ChatListener from './components/ChatListener.vue';
-import HeaderBar from './components/HeaderBar.vue';
-import NotificationListener from './components/NotificationListener.vue';
+import ChatListener from './components/layout/ChatListener.vue';
+import HeaderBar from './components/layout/HeaderBar.vue';
+import NotificationListener from './components/layout/NotificationListener.vue';
 import BaseIcon from './components/common/BaseIcon.vue';
 import ScrollTopButton from './components/common/ScrollTopButton.vue';
 import { connectEventStream } from './utils/eventStream';
@@ -39,9 +39,15 @@ const isFocusedScreen = computed(() =>
 // 채팅 화면을 벗어나면(뒤로가기 등) 대화방을 닫아 하단 메뉴를 복원한다
 watch(
     () => route.name,
-    (name) => {
+    (name, prevName) => {
         if (name !== 'chat' && chats.activeId) {
             chats.close();
+        }
+
+        // 채팅을 읽고 다른 탭으로 나가면 하단 채팅 배지가 옛 안 읽음 수를
+        // 계속 보여주지 않도록, 채팅 화면을 벗어난 직후 목록을 한 번 갱신한다.
+        if (prevName === 'chat' && name !== 'chat' && chats.conversations.length > 0) {
+            chats.loadConversations().catch(() => {});
         }
     },
 );
@@ -109,26 +115,63 @@ const navItems = [
 ];
 
 // 더보기 탭의 활성 판정 — 더보기 페이지 및 그 메뉴가 열리는 화면들
-const moreActive = computed(() => ['more', 'dashboard', 'my-market', 'profile', 'admin', 'history', 'reviews', 'settlements'].includes(route.name));
+const moreActive = computed(() => ['more', 'dashboard', 'profile', 'admin', 'history', 'reviews'].includes(route.name));
+
+// 탭 활성 판정 — 내 마켓은 '마켓' 탭 소속으로 본다
+const tabActive = (item) => {
+    if (item.name === 'market') {
+        return ['market', 'my-market'].includes(route.name);
+    }
+
+    return route.name === item.name;
+};
 
 // 탭 전환 시 다시 마운트·재조회하는 버벅임을 없애기 위해 캐시할 화면
 // (상세/수정/채팅 쓰레드 등 상태가 복잡한 화면은 매번 새로 만든다)
-const keepAliveViews = ['HomeView', 'MarketView', 'MatchView', 'NotificationsView', 'ProfileView', 'CommunityView', 'MyMarketView', 'MoreView'];
+const keepAliveViews = ['HomeView', 'MarketView', 'NotificationsView', 'ProfileView', 'CommunityView', 'MyMarketView', 'MoreView'];
 
-// 탭 화면 청크를 미리 내려받아 첫 전환 시 다운로드 지연을 없앤다
+// 탭 화면 청크를 우선순위에 따라 미리 내려받아 첫 전환 시 다운로드 지연을 없앤다.
+// 자주 열리는 핵심 화면만 즉시 받고, 나머지는 브라우저가 한가할 때 하나씩 순차적으로 받아
+// 초기 동시 다운로드로 인한 첫 화면 부하를 줄인다.
 const preloadTabViews = () => {
-    Promise.all([
+    const preload = (loader) => loader().catch(() => {});
+
+    const core = [
         import('./views/HomeView.vue'),
         import('./views/MarketView.vue'),
-        import('./views/MatchView.vue'),
-        import('./views/OrderCreateView.vue'),
-        import('./views/NotificationsView.vue'),
-        import('./views/ProfileView.vue'),
-        import('./views/MyMarketView.vue'),
-        import('./views/CommunityView.vue'),
-        import('./views/ChatView.vue'),
+        import('./views/orders/MyMarketView.vue'),
         import('./views/MoreView.vue'),
-    ]).catch(() => {});
+    ];
+
+    const rest = [
+        () => import('./views/orders/OrderCreateView.vue'),
+        () => import('./views/NotificationsView.vue'),
+        () => import('./views/ProfileView.vue'),
+        () => import('./views/community/CommunityView.vue'),
+        () => import('./views/ChatView.vue'),
+    ];
+
+    // 브라우저 유휴 시 한 번만 실행 (없으면 setTimeout 폴백)
+    const idle = (callback) => {
+        if ('requestIdleCallback' in window) {
+            window.requestIdleCallback(callback, { timeout: 4000 });
+        } else {
+            setTimeout(callback, 1500);
+        }
+    };
+
+    Promise.all(core.map(preload)).finally(() => {
+        const schedule = () => {
+            const next = rest.shift();
+
+            if (next) {
+                preload(next);
+                idle(schedule);
+            }
+        };
+
+        idle(schedule);
+    });
 };
 
 // 헤더 emit 액션 처리
@@ -223,7 +266,7 @@ let driverTimer = null;
                 <div class="app-shell" :class="{ 'app-shell--ready': initReady || !auth.token }">
 
                 <HeaderBar
-                    v-if="route.name !== 'login' && route.name !== 'register'"
+                    v-if="!['login', 'register', 'password-reset'].includes(route.name)"
                     @action="handleHeaderAction"
                 />
 
@@ -240,7 +283,11 @@ let driverTimer = null;
 
                 <main
                     class="app-content"
-                    :class="{ 'app-content--full': isChatThread || route.name === 'login' }"
+                    :class="{
+                        'app-content--full':
+                            isChatThread
+                            || ['login', 'register', 'password-reset'].includes(route.name),
+                    }"
                 >
                     <!-- keep-alive만 사용: 트랜지션은 iOS에서 사라지는 화면이 남아 클릭을 막는 문제가 있어 제거 -->
                     <router-view v-slot="{ Component }">
@@ -259,7 +306,7 @@ let driverTimer = null;
                         :key="item.name"
                         :to="{ name: item.name }"
                         class="bottom-nav__item"
-                        :class="{ 'bottom-nav__item--active': route.name === item.name }"
+                        :class="{ 'bottom-nav__item--active': tabActive(item) }"
                     >
                         <n-badge
                             :value="item.name === 'chat' ? chats.unreadTotal : 0"
@@ -267,7 +314,7 @@ let driverTimer = null;
                             class="nav-badge"
                             :show="item.name === 'chat' && chats.unreadTotal > 0 && route.name !== 'chat'"
                         >
-                            <BaseIcon class="bottom-nav__icon" :name="item.name" :size="22" />
+                            <BaseIcon class="bottom-nav__icon" :name="item.icon ?? item.name" :size="22" />
                         </n-badge>
                         <span>{{ item.label }}</span>
                     </router-link>
@@ -293,15 +340,6 @@ let driverTimer = null;
 </template>
 
 <style>
-/* ── 하단 네비 '더보기' 버튼 — 링크와 동일한 모양 ── */
-.bottom-nav__item--button {
-    border: 0;
-    background: transparent;
-    cursor: pointer;
-    font-family: inherit;
-    text-align: center;
-}
-
 /* ── 대화방 전체 화면 — 상·하단 패딩 제거, window 스크롤 제거 ── */
 /* 특이도를 높여(0-1-1) base.css의 .app-content 패딩/폭 제한을 확실히 덮어쓴다 */
 main.app-content--full {

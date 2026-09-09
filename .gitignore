@@ -57,3 +57,7 @@ Thumbs.db
 /frontend/verify_*.cjs
 /frontend/vite.config.deploy.js
 /frontend/*.tar.gz
+
+# ── 로컬 Edge 프로필/개발 탐색 파일 (커밋 대상 아님) ──
+/.edge-ride-profile2/
+/frontend/edge-probe.html

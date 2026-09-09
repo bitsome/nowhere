@@ -2,7 +2,14 @@ import { apiClient } from './client';
 
 export const apiChats = () => apiClient.get('/chats');
 
+// 내 모든 대화의 안 읽은 메시지를 읽음 처리 (목록 '모두 읽음')
+export const apiMarkAllChatsRead = () => apiClient.post('/chats/read-all');
+
 export const apiChatMessages = (id) => apiClient.get(`/chats/${id}`);
+
+// 증분 동기화 — after_id 이후의 새 메시지 + 읽음 처리된 내 메시지 id만 반환 (폴링 경량화)
+export const apiChatMessagesSync = (id, afterId) =>
+    apiClient.get(`/chats/${id}/sync`, { params: { after_id: afterId } });
 
 // 메시지 전송 — 여러 장 이미지는 image_paths(지문) 배열로 한 개 말풍선에 묶어 보낸다.
 // 새 사진은 먼저 apiChatImageUpload로 업로드해 지문을 확보한 뒤 이 함수로 전송한다.
@@ -34,3 +41,7 @@ export const apiChatImageDelete = (messageId, imagePath = '') =>
 // 구조화된 운행 요청 (승인·시간·경로·요금·취소)
 export const apiSendChatRequest = (id, type, payload) =>
     apiClient.post(`/chats/${id}/requests`, { type, payload });
+
+// 받은 요청 카드 확정 — 수락(accept)·거절(reject) 시 운행(시간·경로·금액·취소)에 반영된다
+export const apiResolveChatRequest = (id, messageId, action, reason = '') =>
+    apiClient.post(`/chats/${id}/requests/${messageId}/resolve`, { action, reason });

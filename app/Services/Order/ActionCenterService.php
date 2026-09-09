@@ -4,6 +4,7 @@ namespace App\Services\Order;
 
 use App\Models\Message;
 use App\Models\Order;
+use App\Models\OrderClaim;
 use App\Models\Review;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -32,28 +33,33 @@ class ActionCenterService
     }
 
     /**
-     * 내가 등록한 운행의 가져오기 요청(승인 대기) 목록.
+     * 내가 등록한 운행의 가져오기 요청(승인 대기) 목록 — 신청 건(드라이버) 단위로 나열한다.
+     * 한 운행에 여러 드라이버가 신청했다면 각각의 행으로 노출된다.
      *
      * @return array<int, array<string, mixed>>
      */
     private function claimsFor(User $user): array
     {
-        $orders = Order::query()
-            ->where('user_id', $user->id)
-            ->where('status', Order::STATUS_ACCEPTANCE_PENDING)
-            ->with('claimant')
-            ->orderByDesc('updated_at')
+        $claims = OrderClaim::query()
+            ->pending()
+            ->whereHas('order', function ($q) use ($user) {
+                $q->where('user_id', $user->id)
+                    ->where('status', Order::STATUS_ACCEPTANCE_PENDING);
+            })
+            ->with(['order', 'driver'])
+            ->orderByDesc('created_at')
             ->get();
 
-        return $orders
-            ->map(fn (Order $order) => [
-                'id' => $order->id,
-                'order_number' => $order->order_number ?: '#'.$order->id,
-                'route' => trim(($order->pickup_location ?: '').' → '.($order->dropoff_location ?: '')),
-                'service_date' => $order->service_date,
-                'service_time' => $order->service_time,
-                'requested_at' => $order->claimed_at?->toIso8601String(),
-                'claimant' => $this->userBrief($order->claimant, $order->claimant_user_id),
+        return $claims
+            ->map(fn (OrderClaim $claim) => [
+                'claim_id' => $claim->id,
+                'id' => $claim->order->id,
+                'order_number' => $claim->order->order_number ?: '#'.$claim->order->id,
+                'route' => trim(($claim->order->pickup_location ?: '').' → '.($claim->order->dropoff_location ?: '')),
+                'service_date' => $claim->order->service_date,
+                'service_time' => $claim->order->service_time,
+                'requested_at' => $claim->created_at?->toIso8601String(),
+                'claimant' => $this->userBrief($claim->driver, $claim->driver_id),
             ])
             ->values()
             ->all();
@@ -72,6 +78,11 @@ class ActionCenterService
             ->whereIn('type', $types)
             ->where('user_id', '!=', $user->id)
             ->where('created_at', '>=', now()->subDays(30))
+            // 이미 확정(수락·거절)된 요청은 대기 목록에서 빠진다 — 채팅 기록으로만 남는다
+            ->where(function ($query) {
+                $query->whereNull('payload->status')
+                    ->orWhere('payload->status', 'pending');
+            })
             ->whereHas('conversation', fn ($query) => $query->whereHas('users', fn ($q) => $q->where('users.id', $user->id)))
             ->with(['conversation.order', 'user'])
             ->latest()

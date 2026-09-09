@@ -17,9 +17,9 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 16px;
+    padding: var(--card-pad);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: var(--card-radius);
     background: var(--surface);
     overflow: hidden;
 }

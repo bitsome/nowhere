@@ -343,6 +343,7 @@ const send = async () => {
 .rq-reasons button { padding: 12px 0; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); color: var(--text-muted); font-size: 11px; font-weight: 600; cursor: pointer; }
 .rq-reasons button.active { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
 
-.rq-form__send { margin-top: 8px; padding: 13px 0; border: 0; border-radius: 12px; background: var(--brand); color: #fff; font-size: 11px; font-weight: 700; cursor: pointer; }
+/* brand는 라이트(#36adff)·다크(#63e2b7) 모두 밝은 색 — 흰 글자 대비가 약해 어두운 글자를 쓴다 (ChatRequestEvent와 동일) */
+.rq-form__send { margin-top: 8px; padding: 13px 0; border: 0; border-radius: 12px; background: var(--brand); color: #07120e; font-size: 11px; font-weight: 700; cursor: pointer; }
 .rq-form__send:disabled { opacity: 0.6; cursor: not-allowed; }
 </style>

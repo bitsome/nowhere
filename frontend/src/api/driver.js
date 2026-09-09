@@ -10,9 +10,6 @@ export const apiSetDriverMatchEnabled = (enabled) => apiClient.patch('/me/driver
 
 export const apiDriverStats = () => apiClient.get('/me/driver/stats');
 
-// 정산 내역 — 기간별 완료 운행 + 합계 (from/to: YYYY-MM-DD)
-export const apiSettlements = (params) => apiClient.get('/me/settlements', { params });
-
 export const apiMyVehicles = () => apiClient.get('/me/vehicles');
 
 export const apiCreateVehicle = (payload) => apiClient.post('/me/vehicles', payload);

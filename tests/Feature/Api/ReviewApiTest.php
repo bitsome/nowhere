@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Order;
+use App\Models\OrderClaim;
 use App\Models\Review;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -28,8 +29,10 @@ beforeEach(function () {
         Sanctum::actingAs($this->performer);
         $this->postJson("/api/orders/{$order->id}/claim")->assertOk();
 
+        $claim = OrderClaim::query()->where('order_id', $order->id)->pending()->first();
+
         Sanctum::actingAs($this->owner);
-        $this->postJson("/api/orders/{$order->id}/claim/approve")->assertOk();
+        $this->postJson("/api/orders/{$order->id}/claim/{$claim->id}/approve")->assertOk();
 
         Sanctum::actingAs($this->performer);
         $this->postJson("/api/orders/{$order->id}/status", ['status' => 'driving'])->assertOk();
@@ -58,7 +61,8 @@ test('claim은 원 등록자를 original_owner_id로 기록한다', function () 
 
     // 등록자가 승인하면 수행자에게 운행이 넘어간다
     Sanctum::actingAs($this->owner);
-    $this->postJson("/api/orders/{$order->id}/claim/approve")->assertOk();
+    $claim = OrderClaim::query()->where('order_id', $order->id)->pending()->first();
+    $this->postJson("/api/orders/{$order->id}/claim/{$claim->id}/approve")->assertOk();
 
     expect($order->fresh()->user_id)->toBe($this->performer->id)
         ->and($order->fresh()->status)->toBe(Order::STATUS_ACCEPTED);

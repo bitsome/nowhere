@@ -10,7 +10,8 @@ defineProps({
 
 <template>
     <div class="ui-section">
-        <div class="ui-section__head">
+        <!-- 제목/액션이 없는 섹션은 헤더(여백)를 만들지 않는다 — 칩 등 바로 아래 콘텐츠가 붙도록 -->
+        <div v-if="title || $slots.action" class="ui-section__head">
             <span class="ui-section__title">{{ title }}</span>
             <span v-if="$slots.action" class="ui-section__action"><slot name="action" /></span>
         </div>

@@ -1,0 +1,72 @@
+name: CI
+
+# Q-3 검증 인프라 — 로컬 verify_all.ps1과 동일 단계를 CI에서 수행.
+# Pint(스타일) → Pest(백엔드 테스트) → vitest(프런트 테스트) → 빌드 → check:refs
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+
+permissions:
+    contents: read
+
+jobs:
+    tests:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            # ── PHP ──
+            - name: Setup PHP
+              uses: shivammathur/setup-php@v2
+              with:
+                  php-version: '8.3'
+                  extensions: mbstring, dom, intl, pdo_sqlite
+                  tools: composer:v2
+                  coverage: none
+
+            - name: Cache Composer
+              uses: actions/cache@v4
+              with:
+                  path: ~/.cache/composer
+                  key: composer-${{ runner.os }}-${{ hashFiles('composer.lock') }}
+                  restore-keys: composer-${{ runner.os }}-
+
+            - name: Install backend dependencies
+              run: composer install --no-interaction --prefer-dist --no-progress --no-scripts
+
+            - name: Prepare environment
+              run: |
+                  cp .env.example .env
+                  php artisan key:generate
+                  touch database/database.sqlite
+
+            - name: Pint (code style)
+              run: vendor/bin/pint --test
+
+            - name: Pest (backend tests)
+              run: php artisan test --compact
+
+            # ── Node(frontend) ──
+            - name: Setup Node
+              uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: npm
+                  cache-dependency-path: frontend/package-lock.json
+
+            - name: Install frontend dependencies
+              working-directory: frontend
+              run: npm ci
+
+            - name: Vitest (frontend tests)
+              working-directory: frontend
+              run: npm test
+
+            - name: Vite build
+              working-directory: frontend
+              run: npm run build
+
+            - name: check:refs (template references)
+              run: npm run check:refs --prefix frontend

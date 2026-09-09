@@ -1,13 +1,14 @@
 import { computed, ref } from 'vue';
 import {
     apiAcceptOffer, apiApproveClaim, apiClaimOrder, apiCreateOffer, apiDeleteOffer, apiDetachOrder,
-    apiOrder, apiOrderOffers, apiRejectClaim, apiRejectOffer, apiReviewOrder, apiTransitionOrder,
+    apiOrder, apiOrderOffers, apiRejectClaim, apiRejectOffer, apiRequestOrderDetails, apiReviewOrder, apiTransitionOrder,
 } from '../api/orders';
 import { getApiErrorMessage } from '../api/client';
 import { statusColorVar } from '../utils/colors';
 
 const SERVICE_LABELS = { pickup: '픽업', sending: '공항샌딩', landing: '공항랜딩' };
-const CLAIMABLE_STATUSES = ['published', 'trading'];
+// 가져오기(claim) 대상 상태 — 승인 대기 중이어도 다른 드라이버는 추가 신청할 수 있다 (멀티 신청)
+const CLAIMABLE_STATUSES = ['published', 'trading', 'acceptance_pending'];
 
 // 상태 진행 순서 (취소는 흐름 밖, 거래중은 과거 데이터용으로 흐름에서 제외)
 const STATUS_FLOW = ['draft', 'published', 'accepted', 'driving', 'completed', 'settled'];
@@ -27,6 +28,8 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
     const group = ref(null);
     const statusOptions = ref({});
     const nextTransitions = ref([]);
+    // 운행 타임라인 — 상태·단계 변경 이력 (최신이 위)
+    const timeline = ref([]);
     const loading = ref(true);
     const error = ref('');
     const acting = ref(false);
@@ -142,6 +145,22 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
     // 본인 운행 여부 — 내가 가져온/등록한 운행은 가져오기 대상이 아니다
     const isMine = computed(() => Boolean(order.value && auth.user && order.value.user_id === auth.user.id));
 
+    // 가져오기/제안은 기사(Driver) 역할만 가능하다 — 일반 관람자는 요청을 보낼 수 없다
+    const isDriver = computed(() => Boolean(auth.user && auth.user.role === 'Driver'));
+
+    // 내가 이미 대기 중인 신청이 있는지 — 있으면 중복 신청 버튼을 숨긴다
+    const hasPendingClaimByMe = computed(() => claims.value.some((claim) => claim.driver_id === auth.user?.id));
+
+    // 마켓 운행 가져오기 — 기사만, 남의 운행만, 이미 신청하지 않은 운행만 전체 넓이 버튼으로 노출
+    const canClaim = computed(() =>
+        Boolean(order.value && isClaimable.value && !isMine.value && isDriver.value && !hasPendingClaimByMe.value),
+    );
+
+    // 일반 관람자 안내 — 가져올 수 있는 운행이지만 기사가 아니라서 버튼 대신 안내를 보여준다
+    const showDriverOnlyNotice = computed(() =>
+        Boolean(order.value && isClaimable.value && !isMine.value && !isDriver.value),
+    );
+
     // 내가 이 운행의 등록자(원 등록자)인지 — 완료 후 정산 처리 권한 판별
     const isRegistrant = computed(() => {
         const o = order.value;
@@ -153,7 +172,7 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         return o.original_owner_id === auth.user.id || (o.original_owner_id == null && o.user_id === auth.user.id);
     });
 
-    // 내가 수행자(가져온 운행 진행자)인지 — 완료되면 '정산 진행중'으로 대기
+    // 내가 수행자(가져온 운행 진행자)인지 — 완료되면 '정산 대기중'으로 대기
     const isPerformer = computed(() =>
         Boolean(
             order.value && auth.user
@@ -163,21 +182,54 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         ),
     );
 
-    // 상태 라벨 — 완료(정산 전)는 '정산 진행중'으로 표시
+    // 상태 전이 가능 여부 — 운행 진행(예약→운행중→완료)은 운행자·수행자만, 정산은 등록자만.
+    // 수행 기사는 완료가 마지막이고, 완료 후 정산은 등록자(원 등록자)가 처리한다.
+    const canManageStatus = computed(() => {
+        const o = order.value;
+
+        if (!o || !auth.user) {
+            return false;
+        }
+
+        // 승인 대기 중에는 전이 버튼을 노출하지 않는다 — 승인/거절은 처리할 일에서 진행
+        if (o.status === 'acceptance_pending') {
+            return false;
+        }
+
+        if (o.user_id === auth.user.id || o.claimant_user_id === auth.user.id) {
+            return true;
+        }
+
+        // 완료 → 정산 전이는 등록자(원 등록자)만 가능
+        return o.status === 'completed' && isRegistrant.value;
+    });
+
+    // 상태 라벨 — 완료(정산 전)는 '정산 대기중'으로 표시.
+    // 승인 대기 상태는 요청을 보낸 기사(claimant)와 등록자에게만 '수락대기'로 보여주고,
+    // 그 외 드라이버/관람자에게는 아직 가져올 수 있는 운행으로 안내한다.
     const statusLabel = computed(() => {
         const status = order.value?.status;
 
         if (status === 'completed') {
-            return '정산 진행중';
+            return '정산 대기중';
+        }
+
+        if (status === 'acceptance_pending' && !isClaimantPending.value && !isRegistrantPending.value) {
+            return '가져오기 가능';
         }
 
         return statusOptions.value[status] ?? status ?? '-';
     });
 
-    // 리뷰 — 운행 완료/정산 후 작성 가능. 이미 작성했으면 더 이상 표시하지 않는다
+    // 리뷰 — 운행 완료/정산 후, 운행 당사자(등록자·수행자)만 작성 가능. 이미 작성했으면 더 이상 표시하지 않는다
     const myReview = ref(null);
     const canReview = computed(() =>
-        Boolean(order.value && ['completed', 'settled'].includes(order.value.status) && !myReview.value),
+        Boolean(
+            order.value
+            && ['completed', 'settled'].includes(order.value.status)
+            && !myReview.value
+            && (isRegistrant.value || order.value.user_id === auth.user?.id),
+        ),
     );
     const reviewOpen = ref(false);
     const reviewRating = ref(5);
@@ -214,8 +266,8 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         }
     };
 
-    // 채팅 상대 — 운행 참여자(등록자·소유자·가져오기 요청자) 중 나와 다른 사람.
-    // 승인으로 소유권이 넘어가도 대화는 계속 유지한다.
+    // 채팅 상대 — 운행 참여자(등록자·소유자·가져오기 신청자들) 중 나와 다른 사람.
+    // 승인으로 소유권이 넘어가도 대화는 계속 유지한다. 멀티 신청 시 모든 신청자도 참여자로 본다.
     const chatTargetId = computed(() => {
         const o = order.value;
 
@@ -228,50 +280,95 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         const registrantId = o.original_owner_id ?? o.user_id;
         const claimantId = o.claimant_user_id ?? null;
 
-        const involved = new Set([ownerId, registrantId, claimantId].filter(Boolean));
+        // 승인 대기 중에는 모든 신청자(드라이버)도 참여자로 취급한다
+        const applicantIds = claims.value.map((claim) => claim.driver_id).filter(Boolean);
+
+        const involved = new Set([ownerId, registrantId, claimantId, ...applicantIds].filter(Boolean));
 
         // 내가 참여자이고, 나와 대화할 상대가 있어야 한다
         if (!involved.has(me) || involved.size < 2) {
             return null;
         }
 
-        return [ownerId, registrantId, claimantId].find((id) => id && id !== me) ?? null;
+        return [ownerId, registrantId, claimantId, ...applicantIds].find((id) => id && id !== me) ?? null;
     });
 
     // 채팅: 운행 참여자(타인)와 대화 가능할 때만 버튼 노출
     const canChat = computed(() => Boolean(chatTargetId.value));
 
-    // 채팅 상대가 보낸 안 읽은 채팅이 있으면 채팅 버튼에 빨간점을 표시한다
+    // 채팅 상대가 보낸 안 읽은 채팅이 있으면 채팅 버튼에 빨간점을 표시한다.
+    // 같은 운행에 대화가 여러 개 생길 수 있어(이전 수행자 등) 현재 채팅 상대와 일치하는 대화만 본다.
     const hasRegistrantChat = computed(() => {
         if (!order.value?.id || !chatTargetId.value) {
             return false;
         }
 
-        const conversation = chats.conversations.find((c) => c.order_id === order.value.id);
+        const conversation = chats.conversations.find(
+            (c) => c.order_id === order.value.id && c.counterpart?.id === chatTargetId.value,
+        );
 
         if (!conversation) {
             return false;
         }
 
         // 대화 상대(등록자 등)가 보낸 안 읽은 메시지가 있을 때
-        return (conversation.unread_count ?? 0) > 0 && conversation.counterpart?.id === chatTargetId.value;
+        return (conversation.unread_count ?? 0) > 0;
     });
 
-    // 수정: 초안/공개 상태에서만
-    const canEdit = computed(() => Boolean(order.value && ['draft', 'published'].includes(order.value.status)));
+    // 수정: 운행 등록자(원 등록자)만, 초안/공개 상태에서만
+    const canEdit = computed(() => Boolean(
+        order.value
+        && isRegistrant.value
+        && ['draft', 'published'].includes(order.value.status),
+    ));
 
     const goEdit = () => router.push({ name: 'order-edit', params: { id: order.value.id } });
 
-    // ── 가져오기 승인 대기 — 등록자는 승인/거절, 요청자는 대기 상태 ──
+    // ── 가져오기 승인 대기 — 등록자는 신청자별 승인/거절, 요청자는 대기 상태 ──
     const isClaimPending = computed(() => order.value?.status === 'acceptance_pending');
+    // 내가 등록한 운행에 쌓인 가져오기 요청(신청 건) 목록 — 여러 드라이버가 동시에 신청할 수 있다
+    const claims = ref([]);
     // 내가 등록한 운행의 가져오기 요청이 대기 중인 경우
     const isRegistrantPending = computed(() =>
         Boolean(isClaimPending.value && order.value.user_id === auth.user?.id),
     );
-    // 내가 가져오기를 요청하고 등록자 승인을 기다리는 경우
+    // 내가 가져오기를 요청하고 등록자 승인을 기다리는 경우 — 신청 목록 중 내 신청이 있는지로 판별.
+    // 신청 건 기록이 없는 레거시(마이그레이션 이전) 신청도 claimant_user_id로 판별한다.
     const isClaimantPending = computed(() =>
-        Boolean(isClaimPending.value && order.value.claimant_user_id === auth.user?.id),
+        Boolean(
+            isClaimPending.value
+            && auth.user
+            && (
+                claims.value.some((claim) => claim.driver_id === auth.user.id)
+                || (
+                    claims.value.length === 0
+                    && order.value?.claimant_user_id === auth.user.id
+                )
+            ),
+        ),
     );
+
+    // 상태 관리 카드 노출 여부 — 운행 참여자(등록자·운행자·수행자·신청자)만 보고,
+    // 일반 관람 유저에게는 노출하지 않는다.
+    const canSeeStatusManagement = computed(() => {
+        // 수행 기사는 하단 스테퍼로 운행을 진행하므로 상태 관리 UI는 노출하지 않는다
+        if (isPerformer.value) {
+            return false;
+        }
+
+        // 승인 대기 중에는 상태 관리가 필요 없다 — 요청 승인 전에는 상태 전이가 없기 때문이다
+        if (order.value?.status === 'acceptance_pending') {
+            return false;
+        }
+
+        return Boolean(
+            canManageStatus.value
+            || canEdit.value
+            || canChat.value
+            || isRegistrantPending.value
+            || isClaimantPending.value,
+        );
+    });
 
     // 요청 대기중 배지 — 내 가져오기 요청이 승인 대기 중일 때
     const isWaitingClaims = isClaimantPending;
@@ -296,10 +393,16 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         }
     };
 
-    const approveClaim = () => {
+    // 가져오기 거절 사유 모달 — 등록자가 사유(선택)와 함께 신청을 거절
+    const rejectOpen = ref(false);
+    const rejectReason = ref('');
+    const rejectTarget = ref(null);
+    const rejectSubmitting = ref(false);
+
+    const approveClaim = (claim) => {
         askConfirm({
             title: '가져오기 승인',
-            message: '드라이버가 이 운행을 가져오기 요청했습니다.\n승인하면 운행이 드라이버에게 넘어가고 진행할 수 있습니다.',
+            message: `${claim.driver_name}님이 이 운행을 가져오기 요청했습니다.\n승인하면 운행이 기사에게 넘어가고 진행할 수 있습니다. 다른 신청은 자동으로 거절됩니다.`,
             confirmText: '승인',
             type: 'primary',
             onConfirm: async () => {
@@ -307,8 +410,8 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
                 message.value = '';
 
                 try {
-                    await apiApproveClaim(order.value.id);
-                    message.value = '가져오기를 승인했습니다. 드라이버가 운행을 진행할 수 있습니다.';
+                    await apiApproveClaim(order.value.id, claim.claim_id);
+                    message.value = '가져오기를 승인했습니다. 기사가 운행을 진행할 수 있습니다.';
                     messageType.value = 'success';
                     await refresh();
                 } catch (e) {
@@ -321,29 +424,34 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         });
     };
 
-    const rejectClaim = () => {
-        askConfirm({
-            title: '가져오기 거절',
-            message: '가져오기 요청을 거절할까요?\n거절하면 운행은 마켓에 그대로 남습니다.',
-            confirmText: '거절',
-            type: 'error',
-            onConfirm: async () => {
-                acting.value = true;
-                message.value = '';
+    const rejectClaim = (claim) => {
+        rejectOpen.value = true;
+        rejectTarget.value = claim;
+        rejectReason.value = '';
+    };
 
-                try {
-                    await apiRejectClaim(order.value.id);
-                    message.value = '가져오기를 거절했습니다. 운행은 마켓에 그대로 남습니다.';
-                    messageType.value = 'success';
-                    await refresh();
-                } catch (e) {
-                    message.value = getApiErrorMessage(e, '거절에 실패했습니다.');
-                    messageType.value = 'error';
-                } finally {
-                    acting.value = false;
-                }
-            },
-        });
+    // 거절 사유(선택)를 기록해 기사에게 전달 — 입력 없이 바로 거절할 수도 있다
+    const submitRejectClaim = async () => {
+        const claim = rejectTarget.value;
+
+        if (!claim) return;
+
+        rejectSubmitting.value = true;
+        message.value = '';
+
+        try {
+            const reason = rejectReason.value.trim();
+            await apiRejectClaim(order.value.id, claim.claim_id, reason ? { reason } : {});
+            message.value = '가져오기를 거절했습니다.';
+            messageType.value = 'success';
+            rejectOpen.value = false;
+            await refresh();
+        } catch (e) {
+            message.value = getApiErrorMessage(e, '거절에 실패했습니다.');
+            messageType.value = 'error';
+        } finally {
+            rejectSubmitting.value = false;
+        }
     };
 
     // 가져오기 요청을 내가 직접 철회 — 등록자 승인 전에 마음을 바꿀 수 있다
@@ -357,12 +465,52 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         });
     };
 
+    // 상세 정보 요청 — 운행 정보가 부족할 때 사유·메모를 골라 등록자에게 요청한다
+    const detailRequestOpen = ref(false);
+    const detailRequestReason = ref('');
+    const detailRequestMessage = ref('');
+    const detailRequestSubmitting = ref(false);
+
+    const requestDetails = () => {
+        detailRequestReason.value = '';
+        detailRequestMessage.value = '';
+        detailRequestOpen.value = true;
+    };
+
+    const submitDetailRequest = async () => {
+        if (!detailRequestReason.value.trim() && !detailRequestMessage.value.trim()) {
+            naiveMessage.warning('요청 사유 또는 메모를 입력해 주세요.');
+
+            return;
+        }
+
+        detailRequestSubmitting.value = true;
+
+        try {
+            await apiRequestOrderDetails(order.value.id, {
+                reason: detailRequestReason.value.trim() || null,
+                message: detailRequestMessage.value.trim() || null,
+            });
+            naiveMessage.success('등록자에게 상세 정보 입력을 요청했습니다.');
+            detailRequestOpen.value = false;
+        } catch (e) {
+            naiveMessage.error(getApiErrorMessage(e, '요청을 보내지 못했습니다.'));
+        } finally {
+            detailRequestSubmitting.value = false;
+        }
+    };
+
     // ── 요금 제안(오퍼) — 기사가 운임을 제안하면 등록자가 비교 후 수락/거절 ──
     const offers = ref([]);
     const offersLoading = ref(false);
 
-    // 공개/거래중 운행만 제안 대상 (본인 운행 제외)
-    const canOffer = computed(() => Boolean(order.value && isClaimable.value && !isMine.value));
+    // 공개/거래중 운행만 제안 대상 (본인 운행·비기사 제외) — 요금 제안은 기사만, 승인 대기 제외
+    const canOffer = computed(() => Boolean(
+        order.value
+        && ['published', 'trading'].includes(order.value.status)
+        && !isMine.value
+        && isDriver.value,
+    ));
 
     // 나의 대기 제안 — 기사가 이미 제안했으면 철회 가능
     const myPendingOffer = computed(
@@ -515,31 +663,22 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         }
     };
 
-    // 하단 액션 바의 주 동작 — 가져오기 요청 철회(요청자) > 가져오기(남의 운행만) > 다음 상태 전이 > 리뷰
+    // 하단 액션 바의 주 동작 — 가져오기 요청 철회(요청자) > 다음 상태 전이 > 리뷰
     const primaryAction = computed(() => {
-        // 승인 대기 중인 가져오기 요청은 내가 직접 철회할 수 있다
+        // 승인 대기 중인 가져오기 요청은 '수락대기중' 표시 버튼으로 안내한다
         if (isClaimantPending.value) {
-            return { label: '가져오기 요청 철회', handler: withdrawClaim };
+            return { label: '수락대기중', indicator: true, handler: null };
         }
-        if (isClaimable.value && !isMine.value) {
-            return { label: '내 운행으로 가져오기', handler: claim };
-        }
-        if (nextTransitions.value.length) {
+        if (nextTransitions.value.length && canManageStatus.value) {
             const next = nextTransitions.value[0];
 
-            // 완료 → 정산은 등록자만 — 진행자는 '정산 진행중'으로 대기 (버튼 숨김)
+            // 완료 → 정산은 등록자만 — 수행 기사는 완료가 마지막 (버튼 숨김)
             if (next === 'settled' && order.value?.status === 'completed' && !isRegistrant.value) {
-                if (canReview.value) {
-                    return { label: '리뷰 남기기', handler: openReview };
-                }
-
+                // 리뷰 남기기는 박스 밖 내용 하단 버튼으로 제공
                 return null;
             }
 
             return { label: `→ ${statusOptions.value[next] ?? next}`, handler: () => requestTransition(next) };
-        }
-        if (canReview.value) {
-            return { label: '리뷰 남기기', handler: openReview };
         }
 
         return null;
@@ -549,16 +688,21 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
     const primaryActionStatus = computed(() => nextTransitions.value[0] ?? null);
 
     // naive-ui 버튼의 color prop은 CSS var를 직접 받지 못하므로 실제 색상으로 변환한다.
-    const statusButtonColor = (status) => {
-        const cssVar = statusColorVar[status];
-
+    // CSS var 문자열('var(--x)')이 아닌 값은 그대로 반환한다.
+    const resolveCssVarColor = (cssVar) => {
         if (!cssVar || !cssVar.startsWith('var(')) {
-            return undefined;
+            return cssVar || undefined;
         }
 
         const name = cssVar.slice(4, -1).trim();
 
         return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || undefined;
+    };
+
+    const statusButtonColor = (status) => {
+        const cssVar = statusColorVar[status];
+
+        return resolveCssVarColor(cssVar);
     };
 
     // 그룹 일정 행으로 변환 (셋트 운행일 때 그룹 내 모든 운행)
@@ -631,7 +775,9 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         group.value = data.data.group;
         statusOptions.value = data.data.statusOptions;
         nextTransitions.value = data.data.nextTransitions;
+        timeline.value = data.data.timeline ?? [];
         myReview.value = data.data.my_review ?? null;
+        claims.value = data.data.claims ?? [];
     };
 
     const refresh = async () => {
@@ -649,6 +795,16 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
 
         // 등록자 채팅 여부(빨간점)를 최신으로 갱신
         await chats.loadConversations().catch(() => {});
+    };
+
+    // 승인 대기 상태 폴링/SSE용 — 로딩 플래시 없이 조용히 최신 상태만 반영한다
+    const refreshSilently = async () => {
+        try {
+            await load();
+            await loadOffers();
+        } catch (e) {
+            // 조용히 실패 — 다음 갱신에서 재시도
+        }
     };
 
     const run = async (action, successText) => {
@@ -708,7 +864,7 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
     const cancelOpen = ref(false);
     const cancelReason = ref('');
 
-    // ── 운행 완료 시 실제 수익 입력 ──
+    // ── 운행 완료 시 실제 수익 입력 (상태 관리 카드 경로) ──
     const completionOpen = ref(false);
     const completionRevenue = ref(null);
 
@@ -720,9 +876,10 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
     const confirmComplete = async () => {
         const revenue = completionRevenue.value == null ? null : Number(completionRevenue.value);
         completionOpen.value = false;
+        const revenueArg = Number.isFinite(revenue) ? revenue : null;
 
         await run(
-            () => apiTransitionOrder(order.value.id, 'completed', '', Number.isFinite(revenue) ? revenue : null),
+            () => apiTransitionOrder(order.value.id, 'completed', '', revenueArg),
             '운행이 완료되었습니다.',
         );
     };
@@ -732,6 +889,7 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
             cancelReason.value = '';
             cancelOpen.value = true;
         } else if (status === 'completed') {
+            // 상태 관리 카드/주동작 경로 — 단계 기록 없이 바로 완료 전이
             openCompletion();
         } else {
             transition(status);
@@ -755,6 +913,7 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         group,
         statusOptions,
         nextTransitions,
+        timeline,
         loading,
         error,
         acting,
@@ -773,6 +932,9 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         serviceDatetimeLabel,
         isClaimable,
         isMine,
+        isDriver,
+        canClaim,
+        showDriverOnlyNotice,
         isRegistrant,
         isPerformer,
         statusLabel,
@@ -785,10 +947,14 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         openReview,
         submitReview,
         canChat,
+        chatTargetId,
         hasRegistrantChat,
         canEdit,
         goEdit,
+        canManageStatus,
+        canSeeStatusManagement,
         isClaimPending,
+        claims,
         isRegistrantPending,
         isClaimantPending,
         isWaitingClaims,
@@ -798,7 +964,17 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         doConfirm,
         approveClaim,
         rejectClaim,
+        rejectOpen,
+        rejectReason,
+        rejectSubmitting,
+        submitRejectClaim,
         withdrawClaim,
+        requestDetails,
+        detailRequestOpen,
+        detailRequestReason,
+        detailRequestMessage,
+        detailRequestSubmitting,
+        submitDetailRequest,
         offers,
         offersLoading,
         canOffer,
@@ -817,6 +993,7 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         primaryAction,
         primaryActionStatus,
         statusButtonColor,
+        resolveCssVarColor,
         groupOrderRows,
         groupTotalAmount,
         stepStyle,
@@ -826,6 +1003,7 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         STATUS_FLOW,
         load,
         refresh,
+        refreshSilently,
         run,
         claim,
         transition,
@@ -835,7 +1013,6 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         confirmCancel,
         completionOpen,
         completionRevenue,
-        confirmComplete,
-        detach,
+        confirmComplete, detach,
     };
 }

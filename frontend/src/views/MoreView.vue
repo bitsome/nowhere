@@ -4,10 +4,11 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useUiStore } from '../stores/ui';
 import { apiDriverStats } from '../api/driver';
+import { roleLabel } from '../data/roles';
 import UiCard from '../components/ui/UiCard.vue';
 import UiSection from '../components/ui/UiSection.vue';
 import UiListRow from '../components/ui/UiListRow.vue';
-import LevelBadge from '../components/LevelBadge.vue';
+import LevelBadge from '../components/common/LevelBadge.vue';
 
 // keep-alive 캐시 매칭용 이름
 defineOptions({ name: 'MoreView' });
@@ -16,12 +17,8 @@ const router = useRouter();
 const auth = useAuthStore();
 const ui = useUiStore();
 
-// 프로필 카드 — 이름·역할·레벨 표시
-const roleLabel = computed(() => {
-    const role = auth.user?.role ?? '';
-
-    return { Admin: '관리자', 'Super Admin': '슈퍼 관리자', Driver: '기사', Market: '마켓 운영자' }[role] ?? role;
-});
+// 프로필 카드 — 이름·역할·레벨 표시 (라벨은 data/roles.js 단일 소스)
+const roleLabelText = computed(() => roleLabel(auth.user?.role));
 
 const initial = computed(() => (auth.user?.name ?? 'N').charAt(0));
 const level = computed(() => auth.user?.level ?? null);
@@ -67,7 +64,7 @@ const logout = async () => {
 </script>
 
 <template>
-    <div class="more-page">
+    <div class="more-page page-shell">
         <!-- 프로필 히어로 -->
         <div class="more-hero">
             <div class="more-hero__top">
@@ -78,7 +75,7 @@ const logout = async () => {
                         <LevelBadge v-if="level" :level="level.level" size="sm" />
                         <span v-if="auth.user?.is_vip" class="more-hero__vip">VIP</span>
                     </div>
-                    <div class="more-hero__role">{{ roleLabel }}</div>
+                    <div class="more-hero__role">{{ roleLabelText }}</div>
                 </div>
                 <button type="button" class="more-hero__edit" @click="go('profile')">회원정보</button>
             </div>
@@ -94,8 +91,8 @@ const logout = async () => {
             </div>
         </div>
 
-        <!-- 오늘 통계 -->
-        <div class="more-stats">
+        <!-- 오늘 통계 — 기사 전용 데이터(드라이버 통계 API)이므로 기사에게만 노출 -->
+        <div v-if="isDriver" class="more-stats">
             <div class="more-stats__card">
                 <span class="more-stats__label">진행 중</span>
                 <span class="more-stats__value">{{ todayStats?.active_count ?? 0 }}</span>
@@ -113,19 +110,18 @@ const logout = async () => {
             </div>
         </div>
 
-        <!-- 내 운행 — 운행 메뉴 -->
+        <!-- 내 운행 — 활성 운행·히스토리·내 마켓 메뉴 -->
         <UiSection title="내 운행">
             <UiCard :padded="false" class="more-list">
-                <UiListRow tag="button" icon="dashboard" arrow @click="go('dashboard')">대시보드</UiListRow>
+                <UiListRow tag="button" icon="order-create" arrow @click="go('order-create')">내 운행</UiListRow>
+                <UiListRow tag="button" icon="history" arrow @click="go('history')">운행 기록</UiListRow>
+                <UiListRow v-if="isDriver" tag="button" icon="coin" arrow @click="go('settlement')">정산</UiListRow>
                 <UiListRow tag="button" icon="my-market" arrow @click="go('my-market')">내 마켓</UiListRow>
                 <UiListRow tag="button" icon="cash" arrow @click="go('actions')">처리할 일</UiListRow>
-                <UiListRow tag="button" icon="history" arrow @click="go('history')">운행 기록</UiListRow>
-                <UiListRow tag="button" icon="settlements" arrow @click="go('settlements')">정산 내역</UiListRow>
-                <UiListRow tag="button" icon="reviews" arrow @click="go('reviews')">받은 리뷰</UiListRow>
             </UiCard>
         </UiSection>
 
-        <!-- 커뮤니티 — 커뮤니티 관련 항목 -->
+        <!-- 커뮤니티 — 내가 등록한 글 등 커뮤니티 관련 항목 (커뮤니티 탭은 하단 메뉴로 이동) -->
         <UiSection title="커뮤니티">
             <UiCard :padded="false" class="more-list">
                 <UiListRow tag="button" icon="my-posts" arrow @click="go('more:my-posts')">내가 등록한 글</UiListRow>
@@ -146,6 +142,13 @@ const logout = async () => {
             </UiCard>
         </UiSection>
 
+        <!-- 고객지원 — 공지·FAQ·1:1 문의 -->
+        <UiSection title="고객지원">
+            <UiCard :padded="false" class="more-list">
+                <UiListRow tag="button" icon="help" arrow @click="go('support')">공지·FAQ·1:1 문의</UiListRow>
+            </UiCard>
+        </UiSection>
+
         <!-- 계정 — 로그인/탈퇴 관련 -->
         <UiSection title="계정">
             <UiCard :padded="false" class="more-list">
@@ -157,25 +160,12 @@ const logout = async () => {
 
 <style scoped>
 .more-page {
-    width: 100%;
-    max-width: 880px;
-    margin: 0 auto;
-    padding: 8px 20px 24px;
-}
-
-/* 모바일 — 홈과 동일하게 좌우 여백 없이 화면 폭을 꽉 채운다 */
-@media (max-width: 480px) {
-    .more-page {
-        width: calc(100% + 40px);
-        margin: 0 -20px;
-        padding: 8px 14px 24px;
-        max-width: none;
-    }
+    /* 상단 시작은 공용 .page-shell 기준으로 통일 — 하단 여백만 페이지가 관리한다 */
+    padding-bottom: 24px;
 }
 
 /* ── 프로필 히어로 ── */
 .more-hero {
-    margin-top: 6px;
     padding: 18px 16px 16px;
     border-radius: 18px;
     background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 22%, var(--surface)), color-mix(in srgb, var(--brand) 6%, var(--surface)));
@@ -227,12 +217,12 @@ const logout = async () => {
 
 .more-hero__vip {
     flex-shrink: 0;
-    padding: 2px 7px;
+    padding: 1px 6px;
     border-radius: 999px;
     background: linear-gradient(135deg, #f7b731, #f2994a);
     color: #fff;
-    font-size: 11px;
-    font-weight: 800;
+    font-size: 10px;
+    font-weight: 400;
 }
 
 .more-hero__role {

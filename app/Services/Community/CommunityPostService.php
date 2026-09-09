@@ -188,12 +188,7 @@ class CommunityPostService
             'email' => $user->email,
             'profile_photo_path' => $user->profile_photo_path,
             'role' => $user->role,
-            'roleLabel' => [
-                'Super Admin' => '최고 관리자',
-                'Admin' => '관리자',
-                'Operator' => '운영자',
-                'Driver' => '드라이버',
-            ][$user->role] ?? $user->role,
+            'roleLabel' => User::roleLabel($user->role),
             'is_vehicle_verified' => (bool) $user->is_vehicle_verified,
             'is_license_verified' => (bool) $user->is_license_verified,
             'is_vip' => (bool) $user->is_vip,

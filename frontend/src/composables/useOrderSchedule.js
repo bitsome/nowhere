@@ -16,26 +16,24 @@ export function useOrderSchedule({ error }) {
     const page = ref(1);
     const pagination = ref(null);
 
-    // 내 운행은 내가 운행할(받은) 운행만 보여준다 — 등록 운행은 프로필의 '내 마켓'에서 관리
+    // 내 운행은 내가 운행할(받은) 운행만 보여준다 — 등록 운행은 '내 마켓', 끝난 운행은 '히스토리'에서 관리
     const listTab = ref('진행중');
     const listSearch = ref('');
     const STATUS_TABS = [
         { label: '진행중', value: '진행중' },
-        { label: '완료', value: '완료' },
-        { label: '취소', value: '취소' },
-        { label: '초안', value: '초안' },
+        { label: '예약', value: '예약' },
+        { label: '운행중', value: '운행중' },
     ];
 
     // 날짜별 그룹 열림/펼침 — 기본은 전부 닫힘, 오늘(이번 달/올해) 스케줄만 펼침
     const collapsedGroups = ref(new Set());
     let collapsedInitialized = false;
 
-    // 묶음 단위: 'day'(일별) / 'month'(월별) / 'year'(연별)
+    // 묶음 단위: 'day'(일별) / 'month'(월별)
     const groupUnit = ref('day');
     const GROUP_UNITS = [
         { label: '일별', value: 'day' },
         { label: '월별', value: 'month' },
-        { label: '연별', value: 'year' },
     ];
 
     const setGroupUnit = (unit) => {
@@ -254,15 +252,16 @@ export function useOrderSchedule({ error }) {
 
     const calTitle = computed(() => `${calCursor.value.getFullYear()}년 ${calCursor.value.getMonth() + 1}월`);
 
-    // 월 그리드 셀 — 앞/뒤 빈(이월) 셀 포함, 일요일 시작 6주
+    // 월 그리드 셀 — 앞/뒤 빈(이월) 셀 포함, 월요일 시작 6주
     const calDays = computed(() => {
         const y = calCursor.value.getFullYear();
         const m = calCursor.value.getMonth();
-        const startIdx = new Date(y, m, 1).getDay();
+        // 월요일 시작 — 일요일(0)이 마지막 열이 되도록 앞 여유 계산
+        const leading = (new Date(y, m, 1).getDay() + 6) % 7;
         const daysInMonth = new Date(y, m + 1, 0).getDate();
         const cells = [];
 
-        for (let i = startIdx - 1; i >= 0; i--) {
+        for (let i = leading - 1; i >= 0; i--) {
             cells.push({ date: '', day: new Date(y, m, -i).getDate(), muted: true });
         }
         for (let day = 1; day <= daysInMonth; day++) {

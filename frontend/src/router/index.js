@@ -1,38 +1,41 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import { ADMIN_ROLES } from '../data/roles';
 
 // 라우트별 lazy import — 초기 번들을 분할해 첫 로딩을 줄인다
-const LoginView = () => import('../views/LoginView.vue');
-const RegisterView = () => import('../views/RegisterView.vue');
+const LoginView = () => import('../views/auth/LoginView.vue');
+const RegisterView = () => import('../views/auth/RegisterView.vue');
+const ForgotPasswordView = () => import('../views/auth/ForgotPasswordView.vue');
 const HomeView = () => import('../views/HomeView.vue');
 const DashboardView = () => import('../views/DashboardView.vue');
 const MarketView = () => import('../views/MarketView.vue');
-const OrderDetailView = () => import('../views/OrderDetailView.vue');
-const OrderCreateView = () => import('../views/OrderCreateView.vue');
+const OrderDetailView = () => import('../views/orders/OrderDetailView.vue');
+const OrderCreateView = () => import('../views/orders/OrderCreateView.vue');
 const NotificationsView = () => import('../views/NotificationsView.vue');
 const ChatView = () => import('../views/ChatView.vue');
-const CommunityView = () => import('../views/CommunityView.vue');
-const CommunityPostView = () => import('../views/CommunityPostView.vue');
-const UserPageView = () => import('../views/UserPageView.vue');
+const CommunityView = () => import('../views/community/CommunityView.vue');
+const CommunityPostView = () => import('../views/community/CommunityPostView.vue');
+const UserPageView = () => import('../views/community/UserPageView.vue');
 const ProfileView = () => import('../views/ProfileView.vue');
-const SettingsView = () => import('../views/SettingsView.vue');
-const SettingsProfileView = () => import('../views/SettingsProfileView.vue');
-const SettingsVehiclesView = () => import('../views/SettingsVehiclesView.vue');
-const SettingsNotificationsView = () => import('../views/SettingsNotificationsView.vue');
-const SettingsVerificationView = () => import('../views/SettingsVerificationView.vue');
-const SettingsAppearanceView = () => import('../views/SettingsAppearanceView.vue');
-const MyMarketView = () => import('../views/MyMarketView.vue');
-const ActionCenterView = () => import('../views/ActionCenterView.vue');
-const MatchView = () => import('../views/MatchView.vue');
+const SettingsView = () => import('../views/settings/SettingsView.vue');
+const SettingsProfileView = () => import('../views/settings/SettingsProfileView.vue');
+const SettingsVehiclesView = () => import('../views/settings/SettingsVehiclesView.vue');
+const SettingsNotificationsView = () => import('../views/settings/SettingsNotificationsView.vue');
+const SettingsVerificationView = () => import('../views/settings/SettingsVerificationView.vue');
+const SettingsAppearanceView = () => import('../views/settings/SettingsAppearanceView.vue');
+const MyMarketView = () => import('../views/orders/MyMarketView.vue');
+const ActionCenterView = () => import('../views/orders/ActionCenterView.vue');
 const AdminView = () => import('../views/AdminView.vue');
 const MoreView = () => import('../views/MoreView.vue');
-const NotFoundView = () => import('../views/NotFoundView.vue');
-const RideHistoryView = () => import('../views/RideHistoryView.vue');
-const ReviewsView = () => import('../views/ReviewsView.vue');
 const SettlementView = () => import('../views/SettlementView.vue');
+const NotFoundView = () => import('../views/NotFoundView.vue');
+const RideHistoryView = () => import('../views/orders/RideHistoryView.vue');
+const ReviewsView = () => import('../views/ReviewsView.vue');
+const SupportView = () => import('../views/SupportView.vue');
 
 const routes = [
     { path: '/login', name: 'login', component: LoginView },
     { path: '/register', name: 'register', component: RegisterView },
+    { path: '/password/reset', name: 'password-reset', component: ForgotPasswordView },
     { path: '/', name: 'home', component: HomeView, meta: { requiresAuth: true } },
     { path: '/market', name: 'market', component: MarketView, meta: { requiresAuth: true } },
     { path: '/dashboard', name: 'dashboard', component: DashboardView, meta: { requiresAuth: true } },
@@ -52,9 +55,9 @@ const routes = [
     { path: '/actions', name: 'actions', component: ActionCenterView, meta: { requiresAuth: true } },
     { path: '/more', name: 'more', component: MoreView, meta: { requiresAuth: true } },
     { path: '/history', name: 'history', component: RideHistoryView, meta: { requiresAuth: true } },
+    { path: '/settlement', name: 'settlement', component: SettlementView, meta: { requiresAuth: true } },
     { path: '/reviews', name: 'reviews', component: ReviewsView, meta: { requiresAuth: true } },
-    { path: '/settlements', name: 'settlements', component: SettlementView, meta: { requiresAuth: true } },
-    { path: '/match', name: 'match', component: MatchView, meta: { requiresAuth: true } },
+    { path: '/support', name: 'support', component: SupportView, meta: { requiresAuth: true } },
     { path: '/admin', name: 'admin', component: AdminView, meta: { requiresAuth: true, adminOnly: true } },
     { path: '/orders/create', name: 'order-create', component: OrderCreateView, meta: { requiresAuth: true } },
     { path: '/orders/:id(\\d+)/edit', name: 'order-edit', component: OrderCreateView, meta: { requiresAuth: true } },
@@ -82,7 +85,7 @@ router.beforeEach((to) => {
         return { name: 'login' };
     }
 
-    if (to.name === 'login' || to.name === 'register') {
+    if (['login', 'register', 'password-reset'].includes(to.name)) {
         if (token) {
             return { name: 'market' };
         }
@@ -91,9 +94,8 @@ router.beforeEach((to) => {
     // 관리자 전용 화면 — 역할이 Admin/Super Admin이 아니면 마켓으로
     if (to.meta.adminOnly) {
         const role = localStorage.getItem('auth_user_role') ?? '';
-        const isAdmin = ['Admin', 'Super Admin'].includes(role);
 
-        if (!isAdmin) {
+        if (!ADMIN_ROLES.includes(role)) {
             return { name: 'market' };
         }
     }

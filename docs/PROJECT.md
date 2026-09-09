@@ -1,10 +1,12 @@
 # PROJECT
 
+> 상태: 🔶 부분 구식 — 초기(Blade/Foundation) 문구 잔존, 현재는 Laravel API + 독립 SPA 구조
+
 ## 개요
 - 프로젝트명: `nowhere`
 - 서비스 성격: 배차 관리 시스템 `NoWhere`
 - 스택: Laravel 13, PHP 8.3+, Vue 3, JavaScript (ES6), Vite, Axios, Plain CSS
-- 현재 기본 DB 연결: `sqlite`
+- 로컬 개발 기본 DB: `sqlite` / 서버 DB: MariaDB(`nowhere`, MySQL 호환)
 - 목적: Foundation과 Business Foundation을 먼저 완성한 뒤 `Order`, `Dispatch`, `Settlement` 비즈니스 모듈로 확장 가능한 운영 시스템 구축
 
 ## 프로젝트 목적
@@ -76,7 +78,7 @@
 ## 현재 상태
 - 로그인/로그아웃 기능 구현
 - 랜딩 페이지 및 대시보드 UI 구성
-- 기본 사용자 모델 및 세션 기반 인증 사용
+- Sanctum Bearer 토큰 인증(SPA API) 사용
 - `docs/` 기반 설계 문서 구조 구성
 - 공통 `DataTable`, `Form`, `Toast UI Editor / Viewer`, `Toast`, `Dropdown` 구조 정리
 - `Board`, `File Manager`, `Notification` 테스트 및 공통 모듈 연동 반영
@@ -86,8 +88,8 @@
 ### Backend
 - Laravel 13
 - PHP 8.3+
-- SQLite (현재 기본)
-- MySQL 8 (확장 가능)
+- SQLite (로컬 개발 기본)
+- MariaDB (서버, MySQL 호환)
 - Redis (2차)
 - Spatie Media Library
 - Spatie Permission (설계 반영 단계)

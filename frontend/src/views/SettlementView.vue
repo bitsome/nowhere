@@ -1,489 +1,563 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useMessage } from 'naive-ui';
-import { apiOrders } from '../api/orders';
-import { apiSettlements } from '../api/driver';
-import { useBatchSettle } from '../composables/useBatchSettle';
+import { apiMyPayouts, apiRequestPayout, apiSaveBankAccount, apiSettlementSummary } from '../api/settlement';
 import { getApiErrorMessage } from '../api/client';
-import { statusColorVar } from '../utils/colors';
-import { useAuthStore } from '../stores/auth';
-import EmptyState from '../components/common/EmptyState.vue';
 import BaseIcon from '../components/common/BaseIcon.vue';
+import EmptyState from '../components/common/EmptyState.vue';
+import UiSection from '../components/ui/UiSection.vue';
 
-const router = useRouter();
+// keep-alive 캐시 매칭용 이름
+defineOptions({ name: 'SettlementView' });
+
 const message = useMessage();
-const auth = useAuthStore();
 
-// 정산 관리 — '내역'(완료/정산 조회) / '대기'(정산 처리 전 운행 일괄 정산)
-const viewTab = ref('history');
-
-// 정산 대기 — 등록자만 처리할 수 있다 (진행자는 등록자가 정산하면 '정산 완료'로 전환됨)
-const isRegistrant = computed(() => auth.user?.role !== 'Driver');
-const pendingRows = ref([]);
-const pendingLoading = ref(false);
-const settle = useBatchSettle({ load: () => loadPending() });
-const { settling, settleMessage, settleAll } = settle;
-
-const loadPending = async () => {
-    pendingLoading.value = true;
-
-    try {
-        const { data } = await apiOrders({ scope: 'mine', tab: '정산', per_page: 100 });
-        const rows = Array.isArray(data.data) ? data.data : data.data?.data ?? [];
-        pendingRows.value = rows.filter((row) => row.status === 'completed');
-    } catch (e) {
-        message.error(getApiErrorMessage(e, '정산 대기 목록을 불러오지 못했습니다.'));
-    } finally {
-        pendingLoading.value = false;
-    }
-};
-
-const switchTab = (key) => {
-    viewTab.value = key;
-
-    if (key === 'pending') {
-        loadPending();
-    }
-};
-
-// 정산 내역 — 기간별 완료 운행과 금액
-const RANGES = [
-    { label: '이번 주', value: 'week' },
-    { label: '이번 달', value: 'month' },
-    { label: '지난 달', value: 'last-month' },
-    { label: '전체', value: 'all' },
-];
-
-const range = ref('week');
-const rows = ref([]);
 const summary = ref(null);
-const loading = ref(false);
+const payouts = ref([]);
+const loading = ref(true);
+const submitting = ref(false);
+const accountBusy = ref(false);
+const accountOpen = ref(false);
 
-const toIso = (d) => d.toISOString().slice(0, 10);
+const form = reactive({ bank_name: '', account_number: '', account_holder: '' });
 
-// 선택 기간을 from/to(YYYY-MM-DD)로 변환
-const rangeParams = (key) => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = now.getMonth();
-
-    if (key === 'week') {
-        const start = new Date(now);
-        start.setDate(now.getDate() - ((now.getDay() + 6) % 7)); // 월요일 시작
-        start.setHours(0, 0, 0, 0);
-
-        return { from: toIso(start) };
-    }
-    if (key === 'month') {
-        return { from: toIso(new Date(y, m, 1)) };
-    }
-    if (key === 'last-month') {
-        return { from: toIso(new Date(y, m - 1, 1)), to: toIso(new Date(y, m, 0)) };
-    }
-
-    return {};
-};
-
-const totalAmount = computed(() => summary.value?.total_amount ?? 0);
-const avgAmount = computed(() => {
-    const count = summary.value?.count ?? 0;
-
-    return count ? Math.round(totalAmount.value / count) : 0;
-});
+const formatWon = (v) => `${Number(v ?? 0).toLocaleString('ko-KR')}원`;
 
 const load = async () => {
     loading.value = true;
 
     try {
-        const { data } = await apiSettlements(rangeParams(range.value));
-        rows.value = data.data?.data ?? [];
-        summary.value = data.data?.summary ?? null;
+        const [summaryRes, payoutRes] = await Promise.all([apiSettlementSummary(), apiMyPayouts()]);
+        summary.value = summaryRes.data.data;
+        payouts.value = payoutRes.data.data ?? [];
+
+        // 계좌 정보를 폼에 미리 채운다 (수정 대비)
+        const account = summary.value.account;
+
+        if (account) {
+            form.bank_name = account.bank_name ?? '';
+            form.account_number = account.account_number ?? '';
+            form.account_holder = account.account_holder ?? '';
+        }
     } catch (e) {
-        message.error(getApiErrorMessage(e, '정산 내역을 불러오지 못했습니다.'));
+        message.error(getApiErrorMessage(e, '정산 정보를 불러오지 못했습니다.'));
     } finally {
         loading.value = false;
     }
 };
 
-const switchRange = (key) => {
-    range.value = key;
-    load();
-};
+// 출금 계좌 등록/갱신
+const saveAccount = async () => {
+    if (!form.bank_name.trim() || !form.account_number.trim() || !form.account_holder.trim()) {
+        message.warning('은행명·계좌번호·예금주를 모두 입력해 주세요.');
+        return;
+    }
 
-// 정산된 운행 상세로 이동
-const openOrder = (row) => {
-    if (row.id) {
-        router.push({ name: 'order-detail', params: { id: row.id } });
+    accountBusy.value = true;
+
+    try {
+        await apiSaveBankAccount({
+            bank_name: form.bank_name.trim(),
+            account_number: form.account_number.trim(),
+            account_holder: form.account_holder.trim(),
+        });
+        message.success('출금 계좌가 등록되었습니다.');
+        await load();
+    } catch (e) {
+        message.error(getApiErrorMessage(e, '계좌 등록에 실패했습니다.'));
+    } finally {
+        accountBusy.value = false;
     }
 };
 
-const statusColor = (row) => statusColorVar[row.status] ?? 'var(--status-completed)';
+// 처리 대기 중인 출금 신청 여부 — 있으면 중복 신청을 막는다
+const hasPendingPayout = computed(() => payouts.value.some((p) => p.status === 'pending'));
 
-// 정산 대기 목록의 금액 — expected_revenue가 있으면 원화, 없으면 amount 텍스트 그대로
-const formatPendingAmount = (row) => {
-    const revenue = Number(row.expected_revenue);
-
-    if (revenue > 0) {
-        return `${revenue.toLocaleString()}원`;
+// 출금 신청 — 출금 가능 금액 전체
+const requestPayout = async () => {
+    if (!summary.value?.account) {
+        message.warning('출금 계좌를 먼저 등록해 주세요.');
+        return;
+    }
+    if (hasPendingPayout.value) {
+        message.warning('이미 처리 대기 중인 출금 신청이 있습니다.');
+        return;
+    }
+    if (!summary.value.pending_total) {
+        message.info('출금할 정산 금액이 없습니다.');
+        return;
     }
 
-    const raw = row.amount_text ?? row.amount ?? '';
+    submitting.value = true;
 
-    return raw ? String(raw) : '';
+    try {
+        await apiRequestPayout();
+        message.success(`출금 신청 완료 — ${formatWon(summary.value.pending_total)} 지급 대기`);
+        await load();
+    } catch (e) {
+        message.error(getApiErrorMessage(e, '출금 신청에 실패했습니다.'));
+    } finally {
+        submitting.value = false;
+    }
+};
+
+const PAYOUT_STATUS = {
+    pending: { label: '처리 대기', className: 'pending' },
+    paid: { label: '지급 완료', className: 'paid' },
+    rejected: { label: '거절됨', className: 'rejected' },
 };
 
 onMounted(load);
 </script>
 
 <template>
-    <div class="settle-page">
-        <div class="page-head">
+    <div class="settle-page page-shell">
+        <div class="settle-head">
             <div>
-                <p class="page-head__desc">완료 운행의 정산 내역을 확인하고, 정산 대기 운행을 처리합니다.</p>
+                <h1 class="settle-head__title">정산</h1>
+                <p class="settle-head__desc">정산된 운행의 금액과 출금을 관리합니다.</p>
             </div>
-            <div class="page-head__actions">
-                <n-button quaternary round title="새로고침" @click="viewTab === 'history' ? load() : loadPending()">
-                    <BaseIcon name="refresh" :size="18" />
-                </n-button>
+            <button type="button" class="settle-head__refresh" title="새로고침" @click="load">
+                <BaseIcon name="refresh" :size="16" />
+            </button>
+        </div>
+
+        <!-- 로딩 스켈레톤 -->
+        <div v-if="loading" class="settle-list">
+            <div v-for="n in 3" :key="n" class="settle-card settle-card--skeleton">
+                <div class="sk-line" style="width: 50%;" />
+                <div class="sk-line" style="width: 70%;" />
             </div>
         </div>
 
-        <!-- 정산 관리 탭 — 내역 / 대기 -->
-        <div class="settle-tabs">
-            <n-radio-group v-model:value="viewTab" size="small" @update:value="switchTab">
-                <n-radio-button value="history">정산 내역</n-radio-button>
-                <n-radio-button value="pending">정산 대기</n-radio-button>
-            </n-radio-group>
-        </div>
-
-        <!-- ── 정산 내역 — 기간별 완료 운행 조회 ── -->
-        <template v-if="viewTab === 'history'">
-            <div class="settle-tabs">
-                <n-radio-group v-model:value="range" size="small" @update:value="switchRange">
-                    <n-radio-button v-for="r in RANGES" :key="r.value" :value="r.value">
-                        {{ r.label }}
-                    </n-radio-button>
-                </n-radio-group>
-            </div>
-
-            <!-- 기간 요약 -->
-            <div class="settle-summary">
-                <div class="settle-summary__cell">
-                    <span>총 수익</span>
-                    <strong>{{ totalAmount.toLocaleString() }}원</strong>
+        <template v-else-if="summary">
+            <!-- 출금 가능 — 이번 달 정산 요약 -->
+            <section class="settle-hero">
+                <div class="settle-hero__grid">
+                    <div class="settle-hero__cell">
+                        <span class="settle-hero__label">출금 가능</span>
+                        <strong class="settle-hero__amount">{{ formatWon(summary.pending_total) }}</strong>
+                        <span class="settle-hero__sub">정산 {{ summary.pending_count }}건 대기</span>
+                    </div>
+                    <div class="settle-hero__cell">
+                        <span class="settle-hero__label">이번 달 정산</span>
+                        <strong class="settle-hero__amount">{{ formatWon(summary.this_month.net) }}</strong>
+                        <span class="settle-hero__sub">
+                            {{ summary.this_month.count }}건 · 운행 {{ formatWon(summary.this_month.gross) }} · 수수료 {{ formatWon(summary.this_month.fee) }}
+                        </span>
+                    </div>
                 </div>
-                <div class="settle-summary__cell">
-                    <span>완료 운행</span>
-                    <strong>{{ summary?.count ?? 0 }}건</strong>
-                </div>
-                <div class="settle-summary__cell">
-                    <span>건당 평균</span>
-                    <strong>{{ avgAmount.toLocaleString() }}원</strong>
-                </div>
-            </div>
-
-            <div v-if="loading" class="settle-list">
-                <div v-for="n in 4" :key="n" class="sk-card settle-skeleton">
-                    <div class="sk-line sk-line--md" style="width: 40%" />
-                    <div class="sk-line" style="margin-top: 10px" />
-                    <div class="sk-line" style="margin-top: 8px; width: 55%" />
-                </div>
-            </div>
-
-            <EmptyState
-                v-else-if="!rows.length"
-                icon="wallet"
-                title="정산 내역이 없습니다"
-                hint="완료된 운행의 금액이 여기에 표시됩니다"
-            />
-
-            <div v-else class="settle-list">
-                <article
-                    v-for="row in rows"
-                    :key="row.id"
-                    class="settle-item"
-                    role="button"
-                    tabindex="0"
-                    @click="openOrder(row)"
-                    @keydown.enter="openOrder(row)"
+                <button
+                    type="button"
+                    class="settle-hero__cta"
+                    :disabled="submitting || !summary.pending_total || hasPendingPayout"
+                    @click="requestPayout"
                 >
-                    <div class="settle-item__top">
-                        <span class="settle-item__date">
-                            {{ row.service_date }}<em v-if="row.service_time">{{ row.service_time }}</em>
-                        </span>
-                        <span class="settle-item__amount">{{ row.amount.toLocaleString() }}원</span>
-                    </div>
-                    <div class="settle-item__route">
-                        <BaseIcon name="map" :size="14" class="settle-item__route-icon" />
-                        <span>{{ row.pickup_location || '출발지' }} → {{ row.dropoff_location || '도착지' }}</span>
-                    </div>
-                    <div class="settle-item__meta">
-                        <span class="settle-item__tag" :style="{ background: statusColor(row), borderColor: statusColor(row) }">
-                            {{ row.status_label }}
-                        </span>
-                        <span class="settle-item__order-no">{{ row.order_number }}</span>
-                        <span class="settle-item__more">
-                            운행 보기 <BaseIcon name="arrow-forward" :size="13" />
-                        </span>
-                    </div>
-                </article>
-            </div>
-        </template>
+                    <BaseIcon name="coin" :size="15" />
+                    {{ hasPendingPayout ? '출금 신청 처리 대기 중' : '출금하기' }}
+                </button>
+                <p v-if="!summary.account" class="settle-hero__hint">출금하려면 아래에서 출금 계좌를 먼저 등록해 주세요.</p>
+            </section>
 
-        <!-- ── 정산 대기 — 완료 운행 일괄 정산 ── -->
-        <template v-else>
-            <div class="settle-pending-head">
-                <div>
-                    <strong>정산 대기 {{ pendingRows.length }}건</strong>
-                    <p class="settle-pending-head__desc">
-                        {{ isRegistrant
-                            ? '완료된 운행을 정산 처리하면 드라이버 화면에 정산 완료로 표시됩니다.'
-                            : '등록자가 정산을 처리하면 정산 완료로 전환됩니다.' }}
-                    </p>
+            <!-- 출금 계좌 -->
+            <UiSection title="출금 계좌">
+                <div v-if="summary.account" class="settle-account">
+                    <dl class="settle-account__rows">
+                        <div><dt>은행</dt><dd>{{ summary.account.bank_name }}</dd></div>
+                        <div><dt>계좌번호</dt><dd>{{ summary.account.account_number }}</dd></div>
+                        <div><dt>예금주</dt><dd>{{ summary.account.account_holder }}</dd></div>
+                    </dl>
+                    <button type="button" class="settle-account__edit" @click="accountOpen = !accountOpen">
+                        {{ accountOpen ? '닫기' : '계좌 변경' }}
+                    </button>
+                    <div v-if="accountOpen" class="settle-account__form">
+                        <input v-model="form.bank_name" class="settle-input" placeholder="은행명 (예: 국민은행)" />
+                        <input v-model="form.account_number" class="settle-input" placeholder="계좌번호" />
+                        <input v-model="form.account_holder" class="settle-input" placeholder="예금주" />
+                        <button type="button" class="settle-btn" :disabled="accountBusy" @click="saveAccount">
+                            {{ accountBusy ? '저장 중...' : '계좌 저장' }}
+                        </button>
+                    </div>
                 </div>
-                <n-button
-                    v-if="isRegistrant"
-                    type="primary"
-                    round
-                    :loading="settling"
-                    :disabled="pendingRows.length === 0"
-                    @click="settleAll"
-                >
-                    전체 정산
-                </n-button>
-            </div>
-
-            <p v-if="settleMessage" class="settle-message">{{ settleMessage }}</p>
-
-            <div v-if="pendingLoading" class="settle-list">
-                <div v-for="n in 3" :key="n" class="sk-card settle-skeleton">
-                    <div class="sk-line sk-line--md" style="width: 40%" />
-                    <div class="sk-line" style="margin-top: 10px" />
-                    <div class="sk-line" style="margin-top: 8px; width: 55%" />
+                <div v-else class="settle-account">
+                    <p class="settle-account__empty">출금을 받을 계좌를 등록해 주세요.</p>
+                    <div class="settle-account__form">
+                        <input v-model="form.bank_name" class="settle-input" placeholder="은행명 (예: 국민은행)" />
+                        <input v-model="form.account_number" class="settle-input" placeholder="계좌번호" />
+                        <input v-model="form.account_holder" class="settle-input" placeholder="예금주" />
+                        <button type="button" class="settle-btn" :disabled="accountBusy" @click="saveAccount">
+                            {{ accountBusy ? '저장 중...' : '계좌 등록' }}
+                        </button>
+                    </div>
                 </div>
-            </div>
+            </UiSection>
 
-            <EmptyState
-                v-else-if="!pendingRows.length"
-                icon="wallet"
-                title="정산 대기 운행이 없습니다"
-                hint="완료된 운행이 정산을 기다리면 여기에 표시됩니다"
-            />
+            <!-- 출금 내역 -->
+            <UiSection title="출금 내역">
+                <div v-if="payouts.length" class="settle-payouts">
+                    <div v-for="payout in payouts" :key="payout.id" class="settle-row">
+                        <span class="settle-row__dot" :class="`settle-row__dot--${PAYOUT_STATUS[payout.status]?.className ?? 'pending'}`" />
+                        <div class="settle-row__body">
+                            <p class="settle-row__title">
+                                {{ formatWon(payout.amount) }}
+                                <em v-if="payout.note" class="settle-row__note">{{ payout.note }}</em>
+                            </p>
+                            <p class="settle-row__meta">
+                                {{ PAYOUT_STATUS[payout.status]?.label ?? payout.status }}
+                                · {{ payout.bank_name }} {{ payout.account_number }}
+                                · {{ new Date(payout.created_at_iso).toLocaleDateString('ko-KR') }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <EmptyState v-else icon="coin" title="출금 내역이 없습니다" hint="출금 신청을 하면 여기에 기록됩니다" />
+            </UiSection>
 
-            <div v-else class="settle-list">
-                <article
-                    v-for="row in pendingRows"
-                    :key="row.id"
-                    class="settle-item"
-                    role="button"
-                    tabindex="0"
-                    @click="openOrder(row)"
-                    @keydown.enter="openOrder(row)"
-                >
-                    <div class="settle-item__top">
-                        <span class="settle-item__date">
-                            {{ row.service_date }}<em v-if="row.service_time">{{ row.service_time }}</em>
-                        </span>
-                        <span class="settle-item__amount">{{ formatPendingAmount(row) }}</span>
+            <!-- 최근 정산 내역 -->
+            <UiSection title="정산 내역">
+                <div v-if="summary.recent.length" class="settle-recents">
+                    <div v-for="item in summary.recent" :key="item.id" class="settle-recent">
+                        <div class="settle-recent__head">
+                            <strong class="settle-recent__route">{{ item.route || '운행' }}</strong>
+                            <span
+                                class="settle-recent__status"
+                                :class="item.status === 'paid' ? 'settle-recent__status--paid' : 'settle-recent__status--pending'"
+                            >
+                                {{ item.status === 'paid' ? '지급 완료' : '출금 대기' }}
+                            </span>
+                        </div>
+                        <p class="settle-recent__meta">
+                            {{ item.service_date }} {{ item.service_time || '' }}
+                            · 정산 {{ new Date(item.created_at_iso).toLocaleDateString('ko-KR') }}
+                        </p>
+                        <div class="settle-recent__amounts">
+                            <span>운행 {{ formatWon(item.gross_amount) }}</span>
+                            <span>수수료 {{ formatWon(item.fee_amount) }}</span>
+                            <strong>{{ formatWon(item.net_amount) }}</strong>
+                        </div>
                     </div>
-                    <div class="settle-item__route">
-                        <BaseIcon name="map" :size="14" class="settle-item__route-icon" />
-                        <span>{{ row.pickup_location || '출발지' }} → {{ row.dropoff_location || '도착지' }}</span>
-                    </div>
-                    <div class="settle-item__meta">
-                        <span class="settle-item__order-no">{{ row.order_number }}</span>
-                        <span class="settle-item__more">
-                            운행 보기 <BaseIcon name="arrow-forward" :size="13" />
-                        </span>
-                    </div>
-                </article>
-            </div>
+                </div>
+                <EmptyState v-else icon="inbox" title="정산 내역이 없습니다" hint="정산된 운행이 있으면 여기에 표시됩니다" />
+            </UiSection>
         </template>
     </div>
 </template>
 
 <style scoped>
 .settle-page {
-    min-height: 200px;
+    padding-bottom: 24px;
 }
 
-.settle-tabs {
-    margin-bottom: 12px;
-}
-
-/* 정산 대기 헤더 — 건수 + 일괄 정산 버튼 */
-.settle-pending-head {
+.settle-head {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 12px;
+    margin-top: 6px;
 }
-
-.settle-pending-head strong {
-    font-size: 11px;
+.settle-head__title {
+    margin: 0;
+    font-size: 18px;
     font-weight: 800;
+    letter-spacing: -0.5px;
 }
-
-.settle-pending-head__desc {
-    margin: 5px 0 0;
+.settle-head__desc {
+    margin: 3px 0 0;
+    font-size: 11px;
     color: var(--text-muted);
-    font-size: 11px;
-    line-height: 1.5;
 }
-
-.settle-message {
-    margin: 0 0 12px;
-    padding: 10px 14px;
-    border-radius: 10px;
-    background: color-mix(in srgb, var(--brand) 8%, transparent);
-    color: var(--brand);
-    font-size: 11px;
-    font-weight: 600;
-}
-
-/* 기간 요약 — 3칸 그리드 */
-.settle-summary {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    margin-bottom: 14px;
-}
-
-.settle-summary__cell {
+.settle-head__refresh {
+    width: 32px;
+    height: 32px;
     display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 14px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
     border: 1px solid var(--border);
-    border-radius: 14px;
     background: var(--surface);
-}
-
-.settle-summary__cell span {
     color: var(--text-muted);
-    font-size: 11px;
+    cursor: pointer;
 }
 
-.settle-summary__cell strong {
-    color: var(--brand);
-    font-size: 12px;
-    font-weight: 800;
-}
-
-/* 정산 목록 */
 .settle-list {
     display: flex;
     flex-direction: column;
+    gap: var(--card-gap);
+    margin-top: 16px;
+}
+.settle-card--skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-height: 80px;
+    padding: var(--card-pad);
+    border: 1px solid var(--border);
+    border-radius: var(--card-radius);
+    background: var(--surface);
+}
+
+/* 출금 가능 히어로 */
+.settle-hero {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-top: 16px;
+    padding: 18px var(--card-pad) 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--card-radius);
+    background: var(--surface);
+}
+.settle-hero__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+.settle-hero__cell {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+.settle-hero__label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+.settle-hero__amount {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--text);
+    white-space: nowrap;
+}
+.settle-hero__sub {
+    font-size: 10px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.settle-hero__cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    height: 44px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--brand);
+    color: #07120e;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.settle-hero__cta:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+.settle-hero__hint {
+    margin: -6px 0 0;
+    font-size: 10px;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+/* 계좌 */
+.settle-account {
+    display: flex;
+    flex-direction: column;
     gap: 10px;
 }
-
-.settle-item {
-    padding: 14px 16px;
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    background: var(--surface);
-    cursor: pointer;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.settle-item:hover,
-.settle-item:focus-visible {
-    border-color: var(--brand);
-    box-shadow: 0 4px 16px color-mix(in srgb, var(--brand) 12%, transparent);
-    outline: none;
-}
-
-.settle-item__top {
+.settle-account__rows {
+    margin: 0;
     display: flex;
-    align-items: baseline;
+    flex-direction: column;
+    gap: 6px;
+}
+.settle-account__rows > div {
+    display: flex;
+    gap: 10px;
+}
+.settle-account__rows dt {
+    flex-shrink: 0;
+    width: 56px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+.settle-account__rows dd {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 600;
+}
+.settle-account__edit {
+    align-self: flex-start;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--brand);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.settle-account__empty {
+    margin: 0;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+.settle-account__form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.settle-input {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 11px 14px;
+    font-size: 11px;
+    background: var(--bg);
+    color: var(--text);
+    outline: none;
+    font-family: inherit;
+}
+.settle-input:focus {
+    border-color: var(--brand);
+}
+.settle-btn {
+    padding: 11px 0;
+    border: 0;
+    border-radius: 12px;
+    background: var(--text);
+    color: var(--bg);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+}
+html.dark .settle-btn {
+    background: var(--brand);
+    color: #07120e;
+}
+.settle-btn:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+/* 출금 내역 행 */
+.settle-payouts {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.settle-row {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 10px 2px;
+}
+.settle-row + .settle-row {
+    border-top: 1px solid var(--border);
+}
+.settle-row__dot {
+    width: 8px;
+    height: 8px;
+    margin-top: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.settle-row__dot--pending {
+    background: color-mix(in srgb, var(--brand) 45%, transparent);
+}
+.settle-row__dot--paid {
+    background: var(--status-settled);
+}
+.settle-row__dot--rejected {
+    background: var(--danger);
+}
+.settle-row__body {
+    flex: 1;
+    min-width: 0;
+}
+.settle-row__title {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 700;
+}
+.settle-row__note {
+    font-style: normal;
+    font-weight: 400;
+    color: var(--text-muted);
+}
+.settle-row__meta {
+    margin: 3px 0 0;
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+/* 최근 정산 */
+.settle-recents {
+    display: flex;
+    flex-direction: column;
+    gap: var(--card-gap);
+}
+.settle-recent {
+    padding: var(--card-pad);
+    border: 1px solid var(--border);
+    border-radius: var(--card-radius);
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.settle-recent__head {
+    display: flex;
+    align-items: center;
     justify-content: space-between;
     gap: 8px;
 }
-
-.settle-item__date {
-    color: var(--text);
+.settle-recent__route {
     font-size: 11px;
     font-weight: 700;
-}
-
-.settle-item__date em {
-    margin-left: 6px;
-    color: var(--text-muted);
-    font-size: 11px;
-    font-style: normal;
-    font-weight: 500;
-}
-
-.settle-item__amount {
-    flex-shrink: 0;
-    color: var(--brand);
-    font-size: 11px;
-    font-weight: 800;
-}
-
-.settle-item__route {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin: 6px 0 8px;
-    color: var(--text);
-    font-size: 11px;
-    line-height: 1.5;
-}
-
-.settle-item__route span {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-
-.settle-item__route-icon {
+.settle-recent__status {
     flex-shrink: 0;
-    color: var(--text-muted);
-}
-
-.settle-item__meta {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--text-muted);
-    font-size: 11px;
-}
-
-.settle-item__tag {
-    padding: 2px 8px;
+    padding: 1px 6px;
     border-radius: 999px;
-    color: #fff;
-    font-size: 11px;
-    font-weight: 700;
+    font-size: 10px;
+    font-weight: 400;
 }
-
-.settle-item__order-no {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.settle-item__more {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    margin-left: auto;
-    flex-shrink: 0;
-    color: var(--text-muted);
-    font-weight: 600;
-    white-space: nowrap;
-    transition: color 0.15s ease;
-}
-
-.settle-item:hover .settle-item__more {
+.settle-recent__status--pending {
+    background: color-mix(in srgb, var(--brand) 14%, transparent);
     color: var(--brand);
 }
-
-.settle-skeleton {
+.settle-recent__status--paid {
+    background: color-mix(in srgb, var(--status-settled) 14%, transparent);
+    color: var(--status-settled);
+}
+.settle-recent__meta {
+    margin: 0;
+    font-size: 10px;
+    color: var(--text-muted);
+}
+.settle-recent__amounts {
     display: flex;
-    flex-direction: column;
+    align-items: baseline;
+    gap: 8px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+}
+.settle-recent__amounts span {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+.settle-recent__amounts strong {
+    margin-left: auto;
+    font-size: 12px;
+    font-weight: 800;
 }
 </style>

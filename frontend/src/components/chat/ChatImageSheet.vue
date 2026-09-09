@@ -1013,9 +1013,10 @@ const send = async () => {
 /* 비율 — 추가 70% / 삭제 30% */
 .img-sheet__archive-add { flex: 7; }
 .img-sheet__archive-delete-selected { flex: 3; }
+/* brand는 라이트(#36adff)·다크(#63e2b7) 모두 밝은 색 — 흰 글자 대비가 약해 ChatRequestSheet .rq-form__send와 동일하게 어두운 글자를 쓴다 */
 .img-sheet__archive-add {
     background: var(--brand);
-    color: #fff;
+    color: #07120e;
 }
 .img-sheet__archive-delete-selected {
     background: var(--danger);
@@ -1107,7 +1108,7 @@ const send = async () => {
 .img-sheet__thumb-remove:hover { background: rgba(0, 0, 0, 0.85); }
 .img-sheet__thumb-remove:disabled { opacity: 0.6; cursor: not-allowed; }
 /* 업로드 실패 — 빨간 테두리 + 중앙 다시 시도 버튼 */
-.img-sheet__thumb.is-upload-error { border-color: #e5484d; }
+.img-sheet__thumb.is-upload-error { border-color: var(--status-cancelled); }
 .img-sheet__thumb.is-upload-error img { opacity: 0.4; }
 .img-sheet__thumb-retry {
     position: absolute;
@@ -1123,7 +1124,7 @@ const send = async () => {
     padding: 0;
     border: 0;
     border-radius: 50%;
-    background: rgba(229, 72, 77, 0.9);
+    background: color-mix(in srgb, var(--status-cancelled) 90%, transparent);
     color: #fff;
     cursor: pointer;
 }
@@ -1227,14 +1228,19 @@ const send = async () => {
 .img-sheet__remove { color: var(--danger); }
 .img-sheet__remove:hover { border-color: var(--danger); }
 .img-sheet__remove:disabled { opacity: 0.6; cursor: not-allowed; }
+/* brand 채움은 라이트·다크 모두 밝아 어두운 글자(#07120e) — 위 .img-sheet__archive-add와 동일 표준 */
 .img-sheet__send {
     flex: 1;
     border: 0;
     background: var(--brand);
-    color: #fff;
+    color: #07120e;
     font-weight: 700;
 }
-.img-sheet__send.is-cancel { background: var(--danger); }
+/* 취소 상태는 위험색(의미색) 배경 — 흰 글자로 되돌린다 (앱 관용 .btn--danger와 동일) */
+.img-sheet__send.is-cancel {
+    background: var(--danger);
+    color: #ffffff;
+}
 .img-sheet__send:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* 전송 진행 상태 — 현재 업로드 이미지 위 로딩 */

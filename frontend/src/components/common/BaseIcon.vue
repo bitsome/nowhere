@@ -6,7 +6,6 @@
  * <BaseIcon name="history" :size="18" />
  */
 import { computed } from 'vue';
-import { NIcon } from 'naive-ui';
 import { iconOf } from '../../utils/icons';
 
 const props = defineProps({

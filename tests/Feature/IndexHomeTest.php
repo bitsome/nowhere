@@ -5,12 +5,11 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);
 
-test('index page shows the existing test page for guests', function () {
+test('index page shows the service intro for guests', function () {
     $this->get(route('home'))
         ->assertSuccessful()
-        ->assertSee('NoWhere 운영 시스템 시작 화면')
-        ->assertSee('로그인')
-        ->assertSee('회원가입');
+        ->assertSee('배차 관리 서비스입니다')
+        ->assertSee('로그인');
 });
 
 test('index page redirects authenticated users to the independent frontend (SPA)', function () {

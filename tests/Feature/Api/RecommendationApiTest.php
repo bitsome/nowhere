@@ -9,6 +9,9 @@ use Laravel\Sanctum\Sanctum;
 uses(RefreshDatabase::class);
 
 beforeEach(function () {
+    // 추천 로직(어떤 운행이 추천되는지) 검증에 집중 — 기본 선호도 필터(60%)는 끈다.
+    config(['recommendation.min_match_score' => 0]);
+
     $this->driver = User::factory()->create([
         'id' => 2,
         'role' => User::ROLE_DRIVER,
@@ -425,4 +428,59 @@ test('일정·설정·이력이 모두 없으면 추천이 비어 있다', funct
     $this->getJson('/api/orders/recommendations')
         ->assertOk()
         ->assertJsonCount(0, 'data');
+});
+
+test('선호도(조건 일치율) 60% 미만 운행은 추천에서 제외된다', function () {
+    config(['recommendation.min_match_score' => 60]);
+    $this->travelTo(Carbon::parse('today 08:00 Asia/Seoul'));
+
+    // 지역만 설정한 약한 매칭 — 점수 45%(설정 25 + 지역 20), 차량 미등록이라 60% 미만
+    $this->driver->matchPreferences()->create([
+        'name' => '강남 선호',
+        'area' => '서울 강남',
+        'is_active' => true,
+    ]);
+
+    Order::factory()->create([
+        'user_id' => $this->owner->id,
+        'status' => Order::STATUS_PUBLISHED,
+        'pickup_location' => '서울 강남',
+        'dropoff_location' => '인천공항',
+        'service_date' => now('Asia/Seoul')->format('Y-m-d'),
+        'service_time' => '11:00',
+    ]);
+
+    $this->getJson('/api/orders/recommendations')
+        ->assertOk()
+        ->assertJsonCount(0, 'data');
+});
+
+test('선호도 60% 이상 운행만 추천에 남는다', function () {
+    config(['recommendation.min_match_score' => 60]);
+    $this->travelTo(Carbon::parse('today 08:00 Asia/Seoul'));
+
+    // 조건이 모두 설정된 매칭 — 점수 70%(설정 25 + 지역 20 + 시간 15 + 금액 10)
+    $this->driver->matchPreferences()->create([
+        'name' => '강남 선호',
+        'area' => '서울 강남',
+        'start_time' => '09:00',
+        'end_time' => '18:00',
+        'min_revenue' => 100000,
+        'is_active' => true,
+    ]);
+
+    Order::factory()->create([
+        'user_id' => $this->owner->id,
+        'status' => Order::STATUS_PUBLISHED,
+        'pickup_location' => '서울 강남',
+        'dropoff_location' => '인천공항',
+        'service_date' => now('Asia/Seoul')->format('Y-m-d'),
+        'service_time' => '11:00',
+        'expected_revenue' => 150000,
+    ]);
+
+    $this->getJson('/api/orders/recommendations')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.match_score', 70);
 });

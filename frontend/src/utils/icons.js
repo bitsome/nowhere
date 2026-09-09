@@ -2,12 +2,15 @@
  * 아이콘 매핑 — 앱 전체에서 쓰는 아이콘 이름을 @vicons/ionicons5 컴포넌트로 연결한다.
  * 뷰/컴포넌트는 반드시 이 이름(또는 BaseIcon)으로 참조한다. (모든 아이콘은 폰트아이콘 방식)
  */
+import { defineComponent, h } from 'vue';
 import {
     AddOutline,
     AirplaneOutline,
+    AlarmOutline,
     ArrowBackOutline,
     ArrowForwardOutline,
     ArrowUpOutline,
+    BagHandleOutline,
     BusinessOutline,
     CalendarOutline,
     CallOutline,
@@ -16,7 +19,6 @@ import {
     CashOutline,
     ChatbubbleEllipsesOutline,
     ChatbubbleOutline,
-    ChatbubblesOutline,
     CheckmarkDoneOutline,
     CheckmarkOutline,
     ChevronDownOutline,
@@ -42,6 +44,7 @@ import {
     LogOutOutline,
     MailOutline,
     MapOutline,
+    MoonOutline,
     NotificationsOutline,
     OptionsOutline,
     PeopleOutline,
@@ -68,6 +71,26 @@ import {
     WarningOutline,
 } from '@vicons/ionicons5';
 
+/**
+ * 동전 아이콘 — ionicons에 코인이 없어 직접 그린다.
+ * 금색 원 + 테두리 립 + 하이라이트 링 + '₩' 각인으로 실제 동전처럼 보이게 한다.
+ */
+export const CoinIcon = defineComponent({
+    name: 'CoinIcon',
+    render() {
+        return h('svg', { viewBox: '0 0 512 512', xmlns: 'http://www.w3.org/2000/svg' }, [
+            h('circle', { cx: 256, cy: 256, r: 230, fill: '#f5c542' }),
+            h('circle', { cx: 256, cy: 256, r: 230, fill: 'none', stroke: '#8a4f08', 'stroke-width': 14 }),
+            h('circle', { cx: 256, cy: 256, r: 196, fill: 'none', stroke: 'rgba(255, 255, 255, 0.6)', 'stroke-width': 10 }),
+            h('text', {
+                x: 256, y: 340, 'text-anchor': 'middle',
+                'font-size': 240, 'font-weight': 800, fill: '#8a5a0e',
+                style: 'font-family:inherit;line-height:1',
+            }, '₩'),
+        ]);
+    },
+});
+
 /** @type {Record<string, object>} 이름 → 아이콘 컴포넌트 */
 export const ICONS = {
     // 내비게이션
@@ -83,7 +106,6 @@ export const ICONS = {
     dashboard: SpeedometerOutline,
     'my-market': CarOutline,
     history: TimeOutline,
-    settlements: WalletOutline,
     reviews: StarOutline,
     'my-posts': DocumentTextOutline,
     profile: PersonOutline,
@@ -97,6 +119,7 @@ export const ICONS = {
     'check-done': CheckmarkDoneOutline,
     search: SearchOutline,
     refresh: RefreshOutline,
+    list: ListOutline,
     download: DownloadOutline,
     reorder: ReorderThreeOutline,
     'arrow-back': ArrowBackOutline,
@@ -105,6 +128,10 @@ export const ICONS = {
     'chevron-down': ChevronDownOutline,
     send: SendOutline,
     add: AddOutline,
+    car: CarOutline,
+    alarm: AlarmOutline,
+    moon: MoonOutline,
+    speedometer: SpeedometerOutline,
 
     // 도형/별점
     star: Star,
@@ -157,6 +184,8 @@ export const ICONS = {
     cart: CartOutline,
     options: OptionsOutline,
     help: InformationCircleOutline,
+    bag: BagHandleOutline,
+    coin: CoinIcon,
 };
 
 /**

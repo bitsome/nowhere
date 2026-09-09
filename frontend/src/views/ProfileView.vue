@@ -6,8 +6,9 @@ import { useAuthStore } from '../stores/auth';
 import { useDriverStore } from '../stores/driver';
 import { useProfileSettings } from '../composables/useProfileSettings';
 import { useDriverWorkspace } from '../composables/useDriverWorkspace';
-import LevelBadge from '../components/LevelBadge.vue';
+import LevelBadge from '../components/common/LevelBadge.vue';
 import BaseIcon from '../components/common/BaseIcon.vue';
+import { formatTime } from '../utils/formatTime';
 
 defineOptions({ name: 'ProfileView' });
 
@@ -27,7 +28,7 @@ const profileTab = ref('summary');
 
 const {
     error, success, myStats, loadMyStats, form,
-    roleLabel, initials, level, formatWon,
+    roleLabel, initials, level, formatWon, isCustomer,
 } = settings;
 
 const {
@@ -59,7 +60,7 @@ watch(
 </script>
 
 <template>
-    <div class="profile-page">
+    <div class="profile-page page-shell">
         <n-alert v-if="error" type="error" :show-icon="true" class="profile-block">
             {{ error }}
         </n-alert>
@@ -109,14 +110,6 @@ watch(
             </div>
         </n-card>
 
-        <!-- 내 실적 — '요약' 탭으로 이동 -->
-
-        <!-- 상세 탭 — 유형별로 분리 (요약 / 차량·근무 / 활동 / 설정) -->
-
-        <!-- 인증 상태 — '설정' 탭으로 이동 -->
-        <!-- 바로가기 — '요약' 탭으로 이동 -->
-
-        <!-- 상세 탭 — 차량·근무 / 활동 / 설정 -->
         <n-tabs
             v-model:value="profileTab"
             type="segment"
@@ -186,6 +179,30 @@ watch(
                     </div>
                 </n-card>
 
+                <!-- 업체 인증 — 등록자 전용 상태 요약 (Q-4, 관리는 설정에서) -->
+                <n-card v-if="isCustomer" :bordered="true" class="profile-block">
+                    <div class="verify-head">
+                        <strong>업체 인증</strong>
+                        <span class="verify-hint">인증 신청·관리는 설정에서</span>
+                    </div>
+                    <div class="verify-row">
+                        <span class="verify-row__label">
+                            사업자 인증
+                            <span v-if="auth.user?.is_business_verified" class="verify-row__done">완료</span>
+                            <span v-else class="verify-row__pending">미인증</span>
+                        </span>
+                        <button type="button" class="verify-row__link" @click="router.push({ name: 'settings-verification' })">관리 <BaseIcon name="arrow-forward" :size="11" /></button>
+                    </div>
+                    <div class="verify-row">
+                        <span class="verify-row__label">
+                            대표 계좌 인증
+                            <span v-if="auth.user?.is_account_verified" class="verify-row__done">완료</span>
+                            <span v-else class="verify-row__pending">미인증</span>
+                        </span>
+                        <button type="button" class="verify-row__link" @click="router.push({ name: 'settings-verification' })">관리 <BaseIcon name="arrow-forward" :size="11" /></button>
+                    </div>
+                </n-card>
+
                 <n-card :bordered="true" class="profile-block">
                     <div class="verify-head">
                         <strong>바로가기</strong>
@@ -216,8 +233,8 @@ watch(
                             <BaseIcon name="community" :size="22" />
                         </span>
                         <span class="community-entry__text">
-                            <strong>유저 커뮤니티</strong>
-                            <small>드라이버·운영진과 일상을 공유하는 피드</small>
+                            <strong>사용자 커뮤니티</strong>
+                            <small>기사·운영진과 일상을 공유하는 피드</small>
                         </span>
                         <span class="community-entry__arrow"><BaseIcon name="arrow-forward" :size="16" /></span>
                     </button>
@@ -231,7 +248,7 @@ watch(
                         </span>
                         <span class="community-entry__text">
                             <strong>내가 올린 글</strong>
-                            <small>내 프로필·글·운행을 다른 유저에게 보여주는 공개 페이지</small>
+                            <small>내 프로필·글·운행을 다른 사용자에게 보여주는 공개 페이지</small>
                         </span>
                         <span class="community-entry__arrow"><BaseIcon name="arrow-forward" :size="16" /></span>
                     </button>
@@ -298,7 +315,7 @@ watch(
                                 <n-rate :value="review.rating" readonly size="small" color="#ffa940" />
                             </div>
                             <p class="profile-review__content" v-text="review.content" />
-                            <span class="profile-review__time">{{ review.created_at }}</span>
+                            <span class="profile-review__time">{{ formatTime(review.created_at) }}</span>
                         </article>
                     </div>
                 </n-card>
@@ -356,26 +373,14 @@ watch(
 </template>
 
 <style scoped>
-/* 페이지 폭 — 홈·더보기와 동일 패턴 */
 .profile-page {
-    width: 100%;
-    max-width: 880px;
-    margin: 0 auto;
-    padding: 8px 20px 24px;
-}
-
-@media (max-width: 480px) {
-    .profile-page {
-        width: calc(100% + 40px);
-        margin: 0 -20px;
-        padding: 8px 14px 24px;
-        max-width: none;
-    }
+    /* 상단 시작은 공용 .page-shell 기준으로 통일 — 하단 여백만 페이지가 관리한다 */
+    padding-bottom: 24px;
 }
 
 .profile-block {
     margin-bottom: 14px;
-    border-radius: 16px;
+    border-radius: var(--card-radius);
 }
 
 /* ── 프로필 히어로 ── */
@@ -497,9 +502,10 @@ watch(
 }
 
 /* 세그먼트 탭 — 활성 탭 색상 명시 (다크모드에서도 동일하게 보이도록) */
+/* brand는 라이트(#36adff)·다크(#63e2b7) 모두 밝아 흰 글자 대비가 약함 — 앱 표준 #07120e를 두 모드 공통 사용 */
 .profile-tabs :deep(.n-tabs-nav--segment-type .n-tabs-tab.n-tabs-tab--active) {
     background: var(--brand);
-    color: #ffffff;
+    color: #07120e;
     box-shadow: none;
     font-weight: 700;
 }
@@ -619,6 +625,10 @@ watch(
     border-radius: 5px;
     background: rgba(0, 0, 0, 0.06);
     overflow: hidden;
+}
+
+html.dark .level-bar {
+    background: rgba(255, 255, 255, 0.1);
 }
 
 .level-bar__fill {

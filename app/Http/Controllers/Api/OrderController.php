@@ -4,7 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Models\OrderClaim;
+use App\Models\OrderEvent;
 use App\Models\Review;
+use App\Models\User;
+use App\Models\Vehicle;
+use App\Notifications\OrderNotification;
 use App\Services\Order\OrderClaimService;
 use App\Services\Order\OrderCreator;
 use App\Services\Order\OrderListService;
@@ -67,7 +72,7 @@ class OrderController extends Controller
      */
     public function show(Request $request, Order $order): JsonResponse
     {
-        $order->load(['user', 'claimant.vehicles', 'lineItems', 'group.orders.lineItems', 'group.orders.user']);
+        $order->load(['user', 'claimant.vehicles', 'originalOwner', 'lineItems', 'group.orders.lineItems', 'group.orders.user']);
 
         // 내가 이 운행에 남긴 리뷰 — 프론트에서 작성 여부를 알기 위해 함께 내려준다
         $myReview = Review::query()
@@ -78,6 +83,34 @@ class OrderController extends Controller
         return response()->json([
             'data' => [
                 'order' => $order->toArray(),
+                // 운행 타임라인 — 상태·단계 변경 이력을 시간순(최신이 위)으로 내려준다
+                'timeline' => $order->orderEvents()
+                    ->with('user:id,name')
+                    ->get()
+                    ->map(fn (OrderEvent $event) => [
+                        'id' => $event->id,
+                        'event' => $event->event,
+                        'from_status' => $event->from_status,
+                        'to_status' => $event->to_status,
+                        'note' => $event->note,
+                        'user_name' => $event->user?->name ?? '',
+                        'created_at_iso' => $event->created_at?->toISOString(),
+                    ]),
+                'claims' => $order->pendingClaims()
+                    ->with('driver')
+                    ->get()
+                    ->map(fn (OrderClaim $claim) => [
+                        'claim_id' => $claim->id,
+                        'driver_id' => $claim->driver_id,
+                        'driver_name' => $claim->driver?->name ?? '',
+                        // 기사 평점·리뷰 수 — 신청 카드에서 한눈에 확인하도록 함께 내려준다
+                        'rating' => $this->driverRating($claim->driver_id),
+                        'review_count' => (int) Review::query()
+                            ->where('reviewee_id', $claim->driver_id)
+                            ->count(),
+                        'vehicle' => Vehicle::brief(Vehicle::activeVehicleFor($claim->driver_id)),
+                        'requested_at' => $claim->created_at?->toIso8601String(),
+                    ]),
                 'my_review' => $myReview === null ? null : [
                     'id' => $myReview->id,
                     'rating' => $myReview->rating,
@@ -107,13 +140,71 @@ class OrderController extends Controller
     }
 
     /**
-     * 가져오기 요청을 등록자가 승인한다 — 요청한 드라이버에게 운행이 넘어간다.
+     * 보낸 가져오기 요청들의 현재 상태 요약 — 홈 일괄요청중 카드에서
+     * 남은 시간·승인/거절 개수를 세는 데 사용한다.
+     *
+     * @return JsonResponse{data: array<int, array<string, mixed>>}
+     */
+    public function claimSummary(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'order_ids' => ['required', 'array', 'max:20'],
+            'order_ids.*' => ['integer'],
+        ]);
+
+        $rows = Order::query()
+            ->whereIn('id', array_unique(array_filter($data['order_ids'])))
+            ->get(['id', 'status', 'claimed_at', 'claim_batch_id'])
+            ->map(fn (Order $order) => [
+                'id' => $order->id,
+                'status' => $order->status,
+                'claimedAt' => $order->claimed_at?->toISOString(),
+                'claimBatchId' => $order->claim_batch_id,
+            ])
+            ->values();
+
+        return response()->json(['data' => $rows]);
+    }
+
+    /**
+     * 왕복 체인의 여러 운행을 등록자들에게 일괄로 가져오기 요청한다.
+     *
+     * @return JsonResponse{data: array<int, array<string, mixed>>, summary: array<string, int>}
+     */
+    public function batchClaim(Request $request, OrderClaimService $claimService): JsonResponse
+    {
+        $data = $request->validate([
+            'order_ids' => ['required', 'array', 'max:10'],
+            'order_ids.*' => ['integer'],
+        ]);
+
+        // 일괄 요청 전체가 실패 목록으로 흘러가지 않도록 기사 여부는 요청 시점에 가른다
+        abort_unless($request->user()->role === User::ROLE_DRIVER, 403, '기사만 운행을 가져올 수 있습니다.');
+
+        $results = $claimService->claimBatch($request->user(), $data['order_ids']);
+
+        $succeeded = count(array_filter($results, fn (array $result) => $result['ok']));
+
+        return response()->json([
+            'data' => $results,
+            'summary' => [
+                'requested' => count($results),
+                'succeeded' => $succeeded,
+                'failed' => count($results) - $succeeded,
+            ],
+        ]);
+    }
+
+    /**
+     * 가져오기 요청을 요청자(드라이버)가 철회한다 — 남은 대기 신청이 없으면 운행이 마켓으로 돌아간다.
      *
      * @return JsonResponse{data: array<string, mixed>}
      */
-    public function approveClaim(Request $request, Order $order, OrderClaimService $claimService): JsonResponse
+    public function withdrawClaim(Request $request, Order $order, OrderClaimService $claimService): JsonResponse
     {
-        $claimService->approve($request->user(), $order);
+        abort_unless($order->hasPendingClaimBy($request->user()->id), 403, '요청한 드라이버만 철회할 수 있습니다.');
+
+        $claimService->withdraw($order, $request->user());
 
         return response()->json([
             'data' => [
@@ -124,18 +215,134 @@ class OrderController extends Controller
     }
 
     /**
-     * 가져오기 요청을 등록자가 거절한다 — 운행이 마켓으로 돌아간다.
+     * 만료된 가져오기 요청을 자동 철회한다 — 홈 일괄요청중 카드가
+     * 30분이 지나면 호출해 운행을 마켓으로 돌려 다시 요청할 수 있게 한다.
      *
      * @return JsonResponse{data: array<string, mixed>}
      */
-    public function rejectClaim(Request $request, Order $order, OrderClaimService $claimService): JsonResponse
+    public function withdrawExpiredClaim(Request $request, Order $order, OrderClaimService $claimService): JsonResponse
     {
-        $claimService->reject($request->user(), $order);
+        abort_unless($order->hasPendingClaimBy($request->user()->id), 403, '요청한 드라이버만 철회할 수 있습니다.');
+
+        $claimService->withdrawExpired($order, $request->user());
 
         return response()->json([
             'data' => [
                 'id' => $order->id,
                 'status' => $order->status,
+            ],
+        ]);
+    }
+
+    /**
+     * 가져오기 요청을 등록자가 승인한다 — 해당 신청자의 드라이버에게 운행이 넘어간다.
+     * 같은 운행의 다른 신청자들은 자동 거절된다.
+     *
+     * @return JsonResponse{data: array<string, mixed>}
+     */
+    public function approveClaim(Request $request, Order $order, OrderClaim $claim, OrderClaimService $claimService): JsonResponse
+    {
+        $claimService->approve($request->user(), $order, $claim);
+
+        return response()->json([
+            'data' => [
+                'id' => $order->id,
+                'status' => $order->status,
+            ],
+        ]);
+    }
+
+    /**
+     * 가져오기 요청을 등록자가 거절한다 — 남은 대기 신청이 없으면 운행이 마켓으로 돌아간다.
+     * 거절 사유(선택)는 기사에게 전달된다.
+     *
+     * @return JsonResponse{data: array<string, mixed>}
+     */
+    public function rejectClaim(Request $request, Order $order, OrderClaim $claim, OrderClaimService $claimService): JsonResponse
+    {
+        $data = $request->validate([
+            'reason' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $claimService->reject(
+            $request->user(),
+            $order,
+            $claim,
+            isset($data['reason']) ? trim($data['reason']) ?: null : null,
+        );
+
+        return response()->json([
+            'data' => [
+                'id' => $order->id,
+                'status' => $order->status,
+            ],
+        ]);
+    }
+
+    /**
+     * 운행 정보가 부족할 때 등록자에게 더 자세한 입력을 요청한다.
+     * 요청 사유(선택)·메모(선택)를 함께 받아 등록자에게 DB/웹 푸시 알림으로 전달된다.
+     *
+     * @return JsonResponse{data: array<string, bool>}
+     */
+    public function requestDetails(Request $request, Order $order): JsonResponse
+    {
+        $data = $request->validate([
+            'reason' => ['nullable', 'string', 'max:100'],
+            'message' => ['nullable', 'string', 'max:500'],
+        ]);
+
+        $registrantId = $order->original_owner_id ?? $order->user_id;
+
+        abort_unless($registrantId !== null, 404, '등록자를 찾을 수 없습니다.');
+
+        // 등록자 본인이 스스로에게 요청하는 것은 막는다
+        abort_if($registrantId === $request->user()->id, 422, '본인 운행에는 상세 정보를 요청할 수 없습니다.');
+
+        $registrant = User::query()->find($registrantId);
+
+        if ($registrant !== null) {
+            $requestText = implode(' / ', array_filter([
+                trim((string) ($data['reason'] ?? '')),
+                trim((string) ($data['message'] ?? '')),
+            ]));
+
+            $message = "{$order->rideSummary()} 운행의 정보가 부족합니다. 더 자세한 내용을 입력해 주세요.";
+
+            if ($requestText !== '') {
+                $message .= " 요청 내용: {$requestText}";
+            }
+
+            $registrant->notify(new OrderNotification(
+                '상세 정보 요청',
+                $message,
+                $order->id,
+            ));
+        }
+
+        return response()->json(['data' => ['ok' => true]]);
+    }
+
+    /**
+     * 운행중 세부 단계를 다음 단계로 진행한다 — 카드 단계 스테퍼(운행시작→픽업 도착→승객 도착→출발→이동중→도착지 도착)용.
+     * 마지막 '도착지 도착'을 기록하면 운행이 자동 완료 처리된다 (실제 수익은 선택 입력).
+     *
+     * @return JsonResponse{data: array<string, mixed>}
+     */
+    public function advanceRideStep(Request $request, Order $order, OrderTransitionService $transitionService): JsonResponse
+    {
+        $data = $request->validate([
+            'actual_revenue' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        $rideStep = $transitionService->advanceRideStep($request->user(), $order, $data['actual_revenue'] ?? null);
+
+        return response()->json([
+            'data' => [
+                'id' => $order->id,
+                'status' => $order->status,
+                'ride_step' => $rideStep,
+                'ride_step_times' => $order->ride_step_times ?? [],
             ],
         ]);
     }
@@ -165,6 +372,8 @@ class OrderController extends Controller
             'data' => [
                 'id' => $order->id,
                 'status' => $order->status,
+                'ride_step' => $order->ride_step,
+                'ride_step_times' => $order->ride_step_times ?? [],
             ],
         ]);
     }
@@ -247,7 +456,10 @@ class OrderController extends Controller
             'orders.*.expected_revenue' => ['nullable', 'integer', 'min:0'],
             'orders.*.vehicle_type' => ['nullable', 'string', 'max:50'],
             'orders.*.customer_name' => ['nullable', 'string', 'max:100'],
+            'orders.*.customer_phone' => ['nullable', 'string', 'max:40'],
             'orders.*.reservation_company' => ['nullable', 'string', 'max:100'],
+            'orders.*.tags' => ['nullable', 'array', 'max:20'],
+            'orders.*.tags.*' => ['string', 'max:30'],
             'orders.*.line_items' => ['array'],
         ]);
 
@@ -353,12 +565,27 @@ class OrderController extends Controller
     }
 
     /**
+     * 기사 평점 — 리뷰 평균을 소수 첫째 자리로 반올림해 반환한다 (리뷰 없으면 0).
+     */
+    private function driverRating(int $userId): float
+    {
+        $rating = Review::query()
+            ->where('reviewee_id', $userId)
+            ->selectRaw('COUNT(*) as cnt, AVG(rating) as avg')
+            ->groupBy('reviewee_id')
+            ->first();
+
+        return $rating ? round((float) $rating->avg, 1) : 0;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function validateOrderPayload(Request $request): array
     {
         return $request->validate([
             'customer_name' => ['nullable', 'string', 'max:100'],
+            'customer_phone' => ['nullable', 'string', 'max:40'],
             'vehicle_type' => ['nullable', 'string', 'max:50'],
             'service_type' => ['nullable', 'string', 'in:pickup,sending,landing'],
             'service_date' => ['nullable', 'string', 'max:20'],
@@ -373,6 +600,8 @@ class OrderController extends Controller
             'reservation_company' => ['nullable', 'string', 'max:100'],
             'reservation_channel' => ['nullable', 'string', 'max:50'],
             'is_priority' => ['nullable', 'boolean'],
+            'tags' => ['nullable', 'array', 'max:20'],
+            'tags.*' => ['string', 'max:30'],
             'line_items' => ['array'],
             'line_items.*.scheduled_time' => ['nullable', 'string'],
             'line_items.*.service_type' => ['nullable', 'string'],

@@ -1,5 +1,7 @@
 # 독립 프론트엔드 · 백엔드 API 분리 설계 (API SPLIT)
 
+> 상태: 🔵 이행 완료된 설계 — 현재 구현은 [ARCHITECTURE.md](./ARCHITECTURE.md)·[API.md](./API.md) 참조
+
 ## 1. 목적
 
 비즈니스 모델의 독립 프론트엔드를 만들기 위해, 현재 모놀리식(Blade + Vue 마운트) 구조를 **백엔드 API + 완전 분리 SPA** 구조로 전환한다.
@@ -70,28 +72,28 @@ nowhere/
 'allowed_headers' => ['*'],
 ```
 
-## 4. API 설계 — Phase 1 (오더 중심)
+## 4. API 설계 — Phase 1 (운행 중심)
 
-기존 비즈니스 흐름(마켓 → 가져오기 → 상태 전이 → 내가 받은 오더)을 그대로 API로 이전한다.
+기존 비즈니스 흐름(마켓 → 가져오기 → 상태 전이 → 내가 받은 운행)을 그대로 API로 이전한다.
 
-### 오더 목록 — `GET /api/orders`
+### 운행 목록 — `GET /api/orders`
 
 | 파라미터 | 값 | 설명 |
 |---|---|---|
-| `scope` | `market`(기본) / `mine` | market: 가져올 수 있는 남의 오더, mine: 내가 받은 오더 |
+| `scope` | `market`(기본) / `mine` | market: 가져올 수 있는 남의 운행, mine: 내가 받은 운행 |
 | `tab` | `진행중` / `완료` / `취소` | scope=mine일 때 상태 그룹 필터 |
-| `search` | 문자열 | 오더번호·고객명·노선 LIKE |
+| `search` | 문자열 | 운행번호·고객명·노선 LIKE |
 | `page` | 정수 | 페이지네이션 (기본 20) |
 
 - `market` 필터: `status IN (published, trading, acceptance_pending)` + `user_id != me`
 - `mine` 필터: `user_id = me` + `claimed_at IS NOT NULL`
 - 응답 행은 기존 `OrderListRowBuilder` 계약 재사용 (카드/테이블 공용)
 
-### 오더 상세 — `GET /api/orders/{order}`
+### 운행 상세 — `GET /api/orders/{order}`
 
 - `lineItems` 포함, 셋트면 그룹 전체 일정 포함 (기존 show 로직 재사용)
 
-### 오더 등록/수정
+### 운행 등록/수정
 
 | Method | URI | 설명 |
 |---|---|---|
@@ -103,7 +105,7 @@ nowhere/
 
 | Method | URI | 설명 |
 |---|---|---|
-| POST | `/api/orders/{order}/claim` | 내 오더로 가져오기 (user_id=me, status=accepted, claimed_at=now) |
+| POST | `/api/orders/{order}/claim` | 내 운행으로 가져오기 (user_id=me, status=accepted, claimed_at=now) |
 | POST | `/api/orders/{order}/status` | 상태 전이 `{ status }` (STATUS_FLOW + OrderPolicy) |
 
 ### 옵션 — `GET /api/options/orders`
@@ -179,8 +181,8 @@ frontend/src/
 │   └── index.js               # 라우트 + 인증 가드
 ├── views/
 │   ├── LoginView.vue
-│   ├── MarketView.vue         # 가져올 수 있는 오더 (마켓)
-│   ├── ReceivedOrdersView.vue # 내가 받은 오더 (진행중/완료/취소 탭)
+│   ├── MarketView.vue         # 가져올 수 있는 운행 (마켓)
+│   ├── ReceivedOrdersView.vue # 내가 받은 운행 (진행중/완료/취소 탭)
 │   ├── OrderDetailView.vue    # 상세 + 가져오기 + 상태 전이
 │   └── OrderCreateView.vue    # 등록 (AI 구조화 포함)
 └── components/
@@ -190,10 +192,10 @@ frontend/src/
 ### 화면 흐름
 
 ```
-로그인 → 마켓(가져올 수 있는 오더)
-       → 상세 → "내 오더로 가져오기" → 수락 → [상태 전이: 운행중→완료→정산]
-       → 내가 받은 오더 (진행중/완료/취소 탭 + 검색)
-       → 오더 등록
+로그인 → 마켓(가져올 수 있는 운행)
+       → 상세 → "내 운행으로 가져오기" → 수락 → [상태 전이: 운행중→완료→정산]
+       → 내가 받은 운행 (진행중/완료/취소 탭 + 검색)
+       → 운행 등록
 ```
 
 ### 공용 컴포넌트 이전
@@ -235,17 +237,17 @@ export default defineConfig({
 |---|---|---|---|
 | **M1** | Sanctum 설치, `/api/auth/*`, `/api/orders`(목록/상세/claim/status), 정책 적용, API 테스트 | — | `php artisan test` 통과 (API Feature Test) |
 | **M2** | — | SPA 골격 (Vite+Router+Pinia+client), 로그인, 마켓 목록, 상세+가져오기, 상태 전이 | 마켓→가져오기→상태전이 E2E 동작 |
-| **M3** | `/api/orders` 페이지네이션·검색·mine 스코프 정리 | 내가 받은 오더 탭(진행중/완료/취소) + 검색 | 탭/검색 동작 |
+| **M3** | `/api/orders` 페이지네이션·검색·mine 스코프 정리 | 내가 받은 운행 탭(진행중/완료/취소) + 검색 | 탭/검색 동작 |
 | **M4** | `/api/orders` 등록/수정 + structure API | 등록/수정 폼 (AI 구조화 포함) | 등록→마켓 반영 |
 | **M5** | — | 기능 이전 완료 → 운영 화면 라우트 폐쇄, **SPA만 서비스** (Blade는 테스트 도구로 유지) | 운영 전환 |
 
-**현재 단계**: M1 (백엔드 API) — Sanctum 설치 + 인증/오더 API 구현.
+**현재 단계**: M1 (백엔드 API) — Sanctum 설치 + 인증/운행 API 구현.
 
 ## 11. 기존 앱 전환 전략 (독립형)
 
 독립형(SPA)에서는 **모든 프론트엔드가 분리**된다. 운영 UI는 SPA 하나만 존재한다.
 
-- **운영 화면 = SPA 전부** — 마켓/오더/관리자 화면 모두 SPA로 이전한다. Blade 화면은 운영에 사용하지 않는다.
+- **운영 화면 = SPA 전부** — 마켓/운행/관리자 화면 모두 SPA로 이전한다. Blade 화면은 운영에 사용하지 않는다.
 - 기존 Blade 앱은 **테스트·검증 도구로만 남긴다.**
   - SPA 화면이 API 데이터를 기대한 대로 보여주는지 대조·확인하는 용도
   - 기능 이전이 끝나면 운영 경로(`routes/web.php` 화면 라우트)를 닫아 SPA만 서비스한다.

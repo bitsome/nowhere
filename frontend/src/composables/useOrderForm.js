@@ -3,6 +3,7 @@ import { apiCreateOrder, apiOrder, apiStructureOrder, apiTransitionOrder, apiUpd
 import { apiCreateTemplate, apiDeleteTemplate, apiTemplates } from '../api/templates';
 import { getApiErrorMessage } from '../api/client';
 import { SERVICE_OPTIONS, SERVICE_LABELS, toIsoDate, toServiceCode, VEHICLE_OPTIONS, weekdayOf } from '../utils/orderCreate';
+import { ORDER_TAGS } from '../utils/tags';
 
 /**
  * 운행 등록/수정 폼 — AI 구조화, 저장, 수정 로드, 운행 템플릿을 담당한다.
@@ -30,6 +31,7 @@ export function useOrderForm({ route, screen, error, success, saving, loadMyOrde
 
     const form = reactive({
         customer_name: '',
+        customer_phone: '',
         vehicle_type: '',
         service_type: 'pickup',
         service_date: null,
@@ -42,9 +44,47 @@ export function useOrderForm({ route, screen, error, success, saving, loadMyOrde
         expected_revenue: null,
         reservation_company: '직접예약',
         is_priority: false,
+        tags: [],
     });
 
     const weekdayLabel = computed(() => weekdayOf(form.service_date));
+
+    const customTag = ref('');
+
+    // 태그 — 프리셋/직접 입력 공용 토글 (이미 있으면 제거)
+    const toggleTag = (tag) => {
+        const list = form.tags;
+        const index = list.indexOf(tag);
+
+        if (index >= 0) {
+            list.splice(index, 1);
+        } else {
+            list.push(tag);
+        }
+    };
+
+    // 직접 입력 태그 추가 — 빈 값·중복 방지
+    const addCustomTag = () => {
+        const tag = customTag.value.trim();
+
+        if (!tag) {
+            return;
+        }
+
+        if (!form.tags.includes(tag)) {
+            form.tags.push(tag);
+        }
+
+        customTag.value = '';
+    };
+
+    const removeTag = (tag) => {
+        const index = form.tags.indexOf(tag);
+
+        if (index >= 0) {
+            form.tags.splice(index, 1);
+        }
+    };
 
     const applyStructured = (s) => {
         form.service_type = toServiceCode(s.service_type);
@@ -177,6 +217,7 @@ export function useOrderForm({ route, screen, error, success, saving, loadMyOrde
             const orderData = data.order;
 
             form.customer_name = orderData.customer_name ?? '';
+            form.customer_phone = orderData.customer_phone ?? '';
             form.vehicle_type = orderData.vehicle_type ?? '';
             form.service_type = orderData.service_type ?? 'pickup';
             form.service_date = toIsoDate(orderData.service_date ?? '') || null;
@@ -189,6 +230,7 @@ export function useOrderForm({ route, screen, error, success, saving, loadMyOrde
             form.expected_revenue = orderData.expected_revenue ?? orderData.amount_value ?? null;
             form.reservation_company = orderData.reservation_company ?? '직접예약';
             form.is_priority = orderData.is_priority ?? false;
+            form.tags = Array.isArray(orderData.tags) ? [...orderData.tags] : [];
 
             lineItems.value = (orderData.line_items ?? []).map((item) => {
                 const isoDate = toIsoDate(item.service_date ?? '');
@@ -291,6 +333,11 @@ export function useOrderForm({ route, screen, error, success, saving, loadMyOrde
         weekdayLabel,
         structuredPreview,
         lineItemRows,
+        ORDER_TAGS,
+        customTag,
+        toggleTag,
+        addCustomTag,
+        removeTag,
         structure,
         save,
         loadForEdit,

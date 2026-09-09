@@ -33,7 +33,13 @@ class RandomOrderSeeder extends Seeder
         $flights = ['KE101', 'KE217', 'OZ102', 'OZ352', '7C1101', 'TW203', 'JL93', 'NH862', 'MU5051', 'CZ313'];
         $names = ['김민수', '이지은', '박서준', '최수아', '정다온', '왕하오', '장웨이', '리안', '陳小美', '王磊'];
         $reservations = ['직접예약', 'KLOOK', '카카오T', '네이버예약', '마이리얼트립'];
-        $statuses = ['published', 'published', 'published', 'published', 'trading'];
+        $statuses = [
+            Order::STATUS_PUBLISHED,
+            Order::STATUS_PUBLISHED,
+            Order::STATUS_PUBLISHED,
+            Order::STATUS_PUBLISHED,
+            Order::STATUS_TRADING,
+        ];
 
         for ($i = 0; $i < 25; $i++) {
             $serviceType = ['pickup', 'sending', 'landing'][random_int(0, 2)];

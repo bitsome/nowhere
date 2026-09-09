@@ -1,1 +1,0 @@
-// Shared plugins entry point.

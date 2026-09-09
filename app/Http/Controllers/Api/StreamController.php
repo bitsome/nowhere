@@ -41,7 +41,7 @@ class StreamController extends Controller
             $this->emit('state', $knownNotifications, $knownMessages);
 
             // 기사 상태 변경 이벤트 — 운영자/관리자에게 (최근 10분 내 변경분)
-            if (in_array($user->role, [User::ROLE_ADMIN, User::ROLE_SUPER_ADMIN], true)) {
+            if (in_array($user->role, User::ADMIN_ROLES, true)) {
                 $this->emitDrivers();
             }
 

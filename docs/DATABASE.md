@@ -1,5 +1,7 @@
 # DATABASE
 
+> 상태: ⚪ 미갱신 — SPA 테이블(conversations·messages·community_posts·reviews·notifications·vehicles·order_timelines 등) 미반영
+
 ## DB 설계 원칙
 - 현재 프로젝트의 기본 DB 연결은 `sqlite`다.
 - 구조 설계는 Laravel Migration 기준으로 관리한다.
@@ -155,7 +157,7 @@
   - `content`는 Markdown 기반 문서형 본문 저장 용도다.
 
 ### orders
-- 용도: 오더(예약/운행) 핵심 테이블
+- 용도: 예약/운행 핵심 테이블
 - 컬럼
   - `id`
   - `group_id` (nullable FK → `order_groups.id`, nullOnDelete)
@@ -216,7 +218,7 @@
   - Set이 비어있으면 자동으로 삭제한다.
 
 ### order_line_items
-- 용도: 오더의 복수 일정(line item) 저장
+- 용도: 운행의 복수 일정(line item) 저장
 - 컬럼
   - `id`
   - `order_id` (foreignId → `orders.id`, cascadeOnDelete)
@@ -360,5 +362,5 @@ users / boards / orders / other models
 - `settlements`
 
 ## 비고
-- 현재 DB는 Laravel 기본 인프라 + 사용자/게시판/파일관리 + 오더/오더그룹/일정 중심 구조다.
+- 현재 DB는 Laravel 기본 인프라 + 사용자/게시판/파일관리 + 운행/운행그룹/일정 중심 구조다.
 - 향후 Business Foundation(`Customer`, `Company`, `Vehicle`, `Driver`, `Common Code`) 진입 시 관련 테이블을 추가한다.

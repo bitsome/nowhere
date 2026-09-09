@@ -21,6 +21,7 @@ import { getApiErrorMessage } from '../api/client';
 export function useCommunityFeed({ message, auth, ui }) {
     const posts = ref([]);
     const popularPosts = ref([]);
+    const categoryCounts = ref({});
     const pagination = ref(null);
     const page = ref(1);
     const loading = ref(true);
@@ -61,6 +62,7 @@ export function useCommunityFeed({ message, auth, ui }) {
 
             const { data } = await apiCommunityPosts(page.value, params);
             posts.value = reset ? data.data : [...posts.value, ...data.data];
+            categoryCounts.value = data.meta?.category_counts ?? {};
             pagination.value = data.meta.pagination;
         } catch (e) {
             error.value = getApiErrorMessage(e, '커뮤니티 글을 불러오지 못했습니다.');
@@ -310,6 +312,7 @@ export function useCommunityFeed({ message, auth, ui }) {
     return {
         posts,
         popularPosts,
+        categoryCounts,
         pagination,
         page,
         loading,

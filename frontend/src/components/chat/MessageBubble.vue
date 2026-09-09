@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue';
 import { useDialog } from 'naive-ui';
 import { getChatTimestamp, formatClock } from '../../utils/chatTime';
-import { useImageStatus } from '../../utils/useImageStatus';
+import { useImageStatus } from '../../composables/useImageStatus';
 import ImageGallery from '../common/ImageGallery.vue';
 import BaseIcon from '../common/BaseIcon.vue';
 
@@ -180,7 +180,8 @@ const onPressMove = (e) => {
 .cb-row--mine .cb-col{align-items:flex-end}
 .cb-name{font-size: 11px;color:var(--text-muted);margin:0 6px 3px;font-weight:600}
 .cb-bubble{padding:10px 14px;border-radius:16px;background:var(--surface);border:1px solid var(--border)}
-.cb-bubble--mine{background:var(--brand);color:#fff;border-color:var(--brand)}
+/* 내 말풍선 — 라이트(#36adff)·다크(#63e2b7) 모두 밝은 brand 채움이라 어두운 글자(#07120e) 표준 적용 */
+.cb-bubble--mine{background:var(--brand);color:#07120e;border-color:var(--brand)}
 
 /* 그룹 연결 — 1개: 전부 라운드 / 첫: 하단만 각짐 / 마지막: 상단만 각짐 / 중간: 상하 각짐 */
 .cb-row:not(.cb-row--mine) .cb-bubble--tail-top{border-bottom-left-radius:0}

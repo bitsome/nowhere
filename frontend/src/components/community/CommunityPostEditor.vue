@@ -4,6 +4,7 @@ import { useMessage } from 'naive-ui';
 import { apiUpdateCommunityPost } from '../../api/community';
 import { getApiErrorMessage } from '../../api/client';
 import { COMMUNITY_CATEGORIES } from '../../utils/communityCategories';
+import { resizeImage } from '../../utils/imageResize';
 import BaseIcon from '../common/BaseIcon.vue';
 
 /**
@@ -63,49 +64,6 @@ const pickImage = async (event) => {
     draftImage.value = resized ?? file;
     draftPreviewUrl.value = URL.createObjectURL(draftImage.value);
 };
-
-/**
- * 이미지를 canvas로 리사이즈해 JPEG Blob으로 변환한다.
- * 실패(비이미지 등)하면 null — 원본 그대로 사용.
- */
-const resizeImage = (file, maxSize) =>
-    new Promise((resolve) => {
-        const url = URL.createObjectURL(file);
-        const img = new Image();
-
-        img.onload = () => {
-            const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
-            const width = Math.max(1, Math.round(img.width * scale));
-            const height = Math.max(1, Math.round(img.height * scale));
-            const canvas = document.createElement('canvas');
-
-            canvas.width = width;
-            canvas.height = height;
-            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-            URL.revokeObjectURL(url);
-
-            canvas.toBlob(
-                (blob) => {
-                    if (!blob) {
-                        resolve(null);
-
-                        return;
-                    }
-
-                    resolve(new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' }));
-                },
-                'image/jpeg',
-                0.82,
-            );
-        };
-
-        img.onerror = () => {
-            URL.revokeObjectURL(url);
-            resolve(null);
-        };
-
-        img.src = url;
-    });
 
 const submit = async () => {
     const content = draftContent.value.trim();
@@ -172,7 +130,7 @@ const submit = async () => {
             <n-input
                 v-model:value="draftVideoUrl"
                 type="text"
-                placeholder="영상/숏츠 URL (예: https://youtube.com/shorts/...) 선택"
+                placeholder="영상/숏츠 링크 (예: https://youtube.com/shorts/...) 선택"
                 clearable
                 class="editor__video"
             />

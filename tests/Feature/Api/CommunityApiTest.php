@@ -148,7 +148,8 @@ test('feed filters by period', function () {
     expect($todayFeed->json('data.0.content'))->toBe('오늘 글');
 
     $month = $this->getJson('/api/community/posts?period=month')->assertOk();
-    expect($month->json('data'))->toHaveCount(2);
+    // 'month'는 달력 기준(이번 달 1일 이후). 5일 전 글이 전달로 넘어가면(매달 1~5일) month는 1건만 남는다.
+    expect($month->json('data'))->toHaveCount(now()->subDays(5)->gte(now()->startOfMonth()) ? 2 : 1);
 });
 
 test('community actions grant xp to the right users', function () {

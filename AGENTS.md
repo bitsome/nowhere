@@ -160,4 +160,16 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 - Run tests: `php artisan test --compact` or filter: `php artisan test --compact --filter=testName`.
 - Do NOT delete tests without approval.
 
+=== project direction rules ===
+
+# NoWhere 프로젝트 방향성 (반드시 준수)
+
+- **제품 방향성 단일 소스**: [docs/PRODUCT_VISION.md](docs/PRODUCT_VISION.md) — 운영 기획은 [docs/OPERATIONS.md](docs/OPERATIONS.md)를 따른다.
+- **핵심 정체성**: 단순 운행 게시판이 아니라 **"오늘 받을 운행을 앱이 먼저 골라주는 운행 최적화 플랫폼"** 이다. 운행을 많이 보여주지 말고 필요한 선택지를 줄여 판단 피로도를 낮춘다.
+- **용어**: UI·문서·코드 주석에서 "오더(Order)" 대신 **"운행"** 을 사용한다. (코드 식별자 `order/Order`는 유지)
+- **UI 미니멀 원칙**: 한 화면 Primary 버튼 하나 / 현재 행동을 가장 크게 / 정보 → 추천 이유 → 행동 순서 / 색상은 의미가 있을 때만.
+- **홈 추천**: 연결고리 / 단일 / 셋트 3개 섹션. 추천 카드에는 조건%(`match_score`) + 근거 체크리스트(`match_reasons`)를 노출한다. 선호도가 `recommendation.min_match_score`(기본 60%) 미만이면 추천에서 제외한다.
+- **상태 흐름 단일 소스**: [docs/ORDER_FLOW.md](docs/ORDER_FLOW.md) — `draft→published→acceptance_pending→accepted→driving→completed→settled`. 주요 상태 변경은 타임라인으로 기록한다.
+- **운영 원칙**: 정상 운행은 자동 처리, 문제 운행만 관리자가 개입한다.
+
 </laravel-boost-guidelines>

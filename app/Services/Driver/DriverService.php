@@ -155,8 +155,8 @@ class DriverService
             'amount' => (int) ($order->expected_revenue ?? $order->amount_value ?? 0),
             'status' => $order->status,
             'status_label' => match ($order->status) {
-                // 완료(정산 전) → '정산 진행중', 정산 완료 → '정산 완료' (진행자 화면 기준)
-                Order::STATUS_COMPLETED => '정산 진행중',
+                // 완료(정산 전) → '정산 대기중', 정산 완료 → '정산 완료' (진행자 화면 기준)
+                Order::STATUS_COMPLETED => '정산 대기중',
                 Order::STATUS_SETTLED => '정산 완료',
                 default => Order::statusOptions()[$order->status] ?? $order->status,
             },

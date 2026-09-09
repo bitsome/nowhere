@@ -7,6 +7,7 @@ import { apiMyReviews, apiReviews } from '../api/reviews';
 import { getApiErrorMessage } from '../api/client';
 import EmptyState from '../components/common/EmptyState.vue';
 import BaseIcon from '../components/common/BaseIcon.vue';
+import { formatTime } from '../utils/formatTime';
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -84,7 +85,7 @@ watch(
 </script>
 
 <template>
-    <div class="reviews-page">
+    <div class="reviews-page page-shell">
         <div class="page-head">
             <div>
                 <p class="page-head__desc">운행 완료 후 남긴 리뷰를 확인합니다.</p>
@@ -163,7 +164,7 @@ watch(
                                     <BaseIcon v-for="n in 5 - review.rating" :key="`o${n}`" name="star-o" :size="12" />
                                 </span>
                             </div>
-                            <span class="review-item__time">{{ review.created_at }}</span>
+                            <span class="review-item__time">{{ formatTime(review.created_at) }}</span>
                         </div>
                         <p v-if="review.content" class="review-item__content">{{ review.content }}</p>
                         <button
@@ -173,7 +174,7 @@ watch(
                             @click="openOrder(review)"
                         >
                             <BaseIcon name="truck" :size="14" />
-                            운행 {{ review.order.order_number ?? '#' + review.order.id }}
+                            운행 보기
                             <BaseIcon name="arrow-forward" :size="14" class="review-item__order-arrow" />
                         </button>
                     </div>
@@ -208,7 +209,7 @@ watch(
                                     <BaseIcon v-for="n in 5 - review.rating" :key="`e${n}`" name="star-o" :size="12" />
                                 </span>
                             </div>
-                        <span class="review-item__time">{{ review.created_at }}</span>
+                        <span class="review-item__time">{{ formatTime(review.created_at) }}</span>
                     </div>
                     <p v-if="review.content" class="review-item__content">{{ review.content }}</p>
                     <button
@@ -218,7 +219,7 @@ watch(
                         @click="openOrder(review)"
                     >
                         <BaseIcon name="truck" :size="14" />
-                        운행 {{ review.order.order_number ?? '#' + review.order.id }}
+                        운행 보기
                         <BaseIcon name="arrow-forward" :size="14" class="review-item__order-arrow" />
                     </button>
                 </div>
@@ -265,6 +266,12 @@ watch(
     color: #fff;
 }
 
+/* 다크 모드 — --accent가 밝은 틸(#63e2b7)로 바뀌어 흰 글자 대비가 약해짐.
+   라이트는 어두운(#1f1f1f) 채움이라 흰 글자 유지, 다크만 채움 위 어두운 글자(#07120e) 표준 적용 */
+html.dark .reviews-tabs__item--active {
+    color: #07120e;
+}
+
 .reviews-tabs__count {
     padding: 1px 7px;
     border-radius: 999px;
@@ -279,10 +286,16 @@ watch(
     color: #fff;
 }
 
+/* 다크 — 위와 동일하게 어두운 글자·어두운 반투명 필로 전환 */
+html.dark .reviews-tabs__item--active .reviews-tabs__count {
+    background: rgba(7, 18, 14, 0.14);
+    color: #07120e;
+}
+
 .reviews-skeleton {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: var(--card-gap);
 }
 
 .reviews-skeleton__item {
@@ -375,13 +388,13 @@ watch(
 .review-list {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: var(--card-gap);
 }
 
 .review-item {
-    padding: 14px 16px;
+    padding: var(--card-pad);
     border: 1px solid var(--border);
-    border-radius: 14px;
+    border-radius: var(--card-radius);
     background: var(--surface);
 }
 

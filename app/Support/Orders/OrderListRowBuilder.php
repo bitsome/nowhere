@@ -3,6 +3,7 @@
 namespace App\Support\Orders;
 
 use App\Models\Order;
+use App\Services\Order\OrderClaimService;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -49,13 +50,18 @@ class OrderListRowBuilder
             'key' => 'order-'.$order->id,
             'kind' => 'single',
             'id' => $order->id,
+            // 수행자(운행 소유자) 사용자 id — 카드 단계 스테퍼는 기사 본인에게만 보여준다
+            'userId' => $order->user_id,
             'orderNumber' => $order->order_number ?: '#'.$order->id,
             'customerName' => $order->customer_name ?: '',
             'serviceIcon' => $this->serviceIcon($order),
             'serviceLabel' => $this->serviceLabel($order),
+            'serviceType' => $order->service_type,
             'vehicle' => $order->vehicle_type ?: '-',
             'flightNumber' => $order->flight_number ?: '',
+            'tags' => $order->tags ?? [],
             'passengerCount' => $order->passenger_count ?: 0,
+            'luggageCount' => $order->luggage_count ?: 0,
             'date' => $this->formatDate($order),
             'time' => $this->formatTime($order),
             'pickupDateTime' => $this->formatPickupDateTime($order),
@@ -65,19 +71,29 @@ class OrderListRowBuilder
             'statusLabel' => $this->statusOptions[$order->status] ?? $order->status,
             'claimantName' => $order->claimant_user_id !== null ? ($order->claimant?->name ?? '') : '',
             'claimantUserId' => $order->claimant_user_id,
+            // 일괄 요청 그룹 키 — 같은 추천1 체인에서 한 번에 보낸 요청끼리 묶는다
+            'claimBatchId' => $order->claim_batch_id,
+            // 가져오기 요청 시점·자동 만료 여부 — 요청보냄에서 30분 경과 시 휴지통으로 이동
+            'claimedAt' => $order->claimed_at?->toISOString(),
+            'claimExpired' => $order->claimed_at !== null
+                && $order->claimed_at->addSeconds(OrderClaimService::CLAIM_EXPIRE_SECONDS)->isPast(),
+            // 배차 승인(수락) 시점 — 진행중 목록의 '승인받은 시간'에 사용
+            'approvedAt' => $order->approved_at?->toISOString(),
+            // 운행중 세부 단계 — 카드 단계 스테퍼(운행시작→…→도착지 도착)의 현재 위치
+            'rideStep' => $order->ride_step,
             'isToday' => $this->isToday($order),
             'isTomorrow' => $this->isTomorrow($order),
             'isNew' => $this->isNew($order),
             'isUrgent' => $this->isUrgent($order),
             'isPriority' => (bool) $order->is_priority,
-            'showUrl' => route('dashboard.business.order.show', $order),
             'sortDate' => $order->service_date ?: '',
             'sortTime' => $order->service_time ?: '',
             'sortCreatedAt' => $order->created_at?->toISOString() ?? '',
             'amountValue' => (int) ($order->expected_revenue ?? $order->amount_value ?? 0),
             'estimatedDurationMinutes' => $order->estimated_duration_minutes,
-            // 랜딩(공항 픽업) 대기 시간(분) — 체인 하차 시각 계산에 사용. 항공기 도착 후 승객 퇴장 대기
-            'landingWaitMinutes' => ($order->service_type === 'landing' || str_contains((string) $order->pickup_location, '공항'))
+            // 랜딩(공항 픽업) 대기 시간(분) — 체인 하차 시각 계산에 사용. 항공기 도착 후 승객 퇴장 대기.
+            // 출발지가 공항이면 랜딩 (service_type은 부정확할 수 있어 방향만으로 판단)
+            'landingWaitMinutes' => str_contains((string) $order->pickup_location, '공항')
                 ? (int) config('recommendation.landing_wait_minutes', 60)
                 : 0,
         ];

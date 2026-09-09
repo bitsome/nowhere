@@ -22,6 +22,7 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 #[Fillable([
     'name',
+    'company_name',
     'email',
     'phone',
     'password',
@@ -33,10 +34,16 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
     'login_count',
     'is_vehicle_verified',
     'is_license_verified',
+    'is_business_verified',
+    'is_account_verified',
     'is_vip',
     'vehicle_info',
     'xp',
     'channels',
+    'moderation_status',
+    'moderation_note',
+    'moderation_by',
+    'moderation_at',
 ])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable implements HasMedia
@@ -51,11 +58,59 @@ class User extends Authenticatable implements HasMedia
 
     public const ROLE_DRIVER = 'Driver';
 
+    public const ROLE_CUSTOMER = 'Customer'; // 운행 등록자(마켓 이용)
+
+    // 역할값의 단일 소스 — DB role 컬럼·라벨·순위는 전부 이 상수를 기준으로 사용한다.
+    // (마이그레이션 기본값·원시 SQL 등 리터럴 잔존은 Q-1/Q-4에서 정리 대상)
+
+    /**
+     * 관리자 기능에 접근할 수 있는 역할(Admin/Super Admin) — 단일 소스.
+     *
+     * @var array<int, string>
+     */
+    public const ADMIN_ROLES = [self::ROLE_ADMIN, self::ROLE_SUPER_ADMIN];
+
+    // 시스템 루트 사용자 id — role과 무관하게 전체 접근(권한 상속 특례) 허용.
+    public const ROOT_USER_ID = 1;
+
     public const STATUS_ACTIVE = 'active';
 
     public const STATUS_INACTIVE = 'inactive';
 
     public const STATUS_SUSPENDED = 'suspended';
+
+    // 관리 제재 상태(B-2) — 정상/주의/운행 제한/정지. 기사·등록자 공통 적용
+    public const MODERATION_ACTIVE = 'active';
+
+    public const MODERATION_WATCH = 'watch';
+
+    public const MODERATION_RESTRICTED = 'restricted';
+
+    public const MODERATION_SUSPENDED = 'suspended';
+
+    /**
+     * @return array<string, string>
+     */
+    public static function moderationOptions(): array
+    {
+        return [
+            self::MODERATION_ACTIVE => '정상',
+            self::MODERATION_WATCH => '주의',
+            self::MODERATION_RESTRICTED => '운행 제한',
+            self::MODERATION_SUSPENDED => '정지',
+        ];
+    }
+
+    /**
+     * 운행을 가져오기·수행할 수 있는 상태인지 — 제한/정지는 운행 활동이 막힌다.
+     */
+    public function canOperate(): bool
+    {
+        return in_array($this->moderation_status ?? self::MODERATION_ACTIVE, [
+            self::MODERATION_ACTIVE,
+            self::MODERATION_WATCH,
+        ], true);
+    }
 
     /**
      * @return array<string, int>
@@ -64,6 +119,7 @@ class User extends Authenticatable implements HasMedia
     {
         return [
             self::ROLE_DRIVER => 10,
+            self::ROLE_CUSTOMER => 10,
             self::ROLE_OPERATOR => 20,
             self::ROLE_ADMIN => 30,
             self::ROLE_SUPER_ADMIN => 40,
@@ -86,9 +142,39 @@ class User extends Authenticatable implements HasMedia
         return $this->hasOne(Driver::class);
     }
 
+    /**
+     * 출금 계좌 — 기사별 1개.
+     *
+     * @return HasOne<UserBankAccount, $this>
+     */
+    public function bankAccount(): HasOne
+    {
+        return $this->hasOne(UserBankAccount::class);
+    }
+
     public function vehicles(): HasMany
     {
         return $this->hasMany(Vehicle::class);
+    }
+
+    public function verificationRequests(): HasMany
+    {
+        return $this->hasMany(VerificationRequest::class);
+    }
+
+    public function supportTickets(): HasMany
+    {
+        return $this->hasMany(SupportTicket::class);
+    }
+
+    /**
+     * 최근 증빙 심사 요청 — 차량·면허별 현재(최신) 상태 조회용.
+     *
+     * @return HasMany<VerificationRequest, $this>
+     */
+    public function latestVerificationRequests(): HasMany
+    {
+        return $this->verificationRequests()->orderByDesc('id');
     }
 
     public function matchPreferences(): HasMany
@@ -168,6 +254,7 @@ class User extends Authenticatable implements HasMedia
             self::ROLE_ADMIN,
             self::ROLE_OPERATOR,
             self::ROLE_DRIVER,
+            self::ROLE_CUSTOMER,
         ];
     }
 
@@ -177,15 +264,31 @@ class User extends Authenticatable implements HasMedia
     public static function permissionOptions(): array
     {
         return [
-            'board.view',
-            'board.create',
-            'board.update',
-            'board.delete',
-            'board.comment',
             'order.create',
             'order.status.update',
             'dispatch.assign',
         ];
+    }
+
+    /**
+     * 역할 한글 라벨 — UI·알림·관리 화면 공통 표기 (단일 소스).
+     *
+     * @return array<string, string>
+     */
+    public static function roleLabels(): array
+    {
+        return [
+            self::ROLE_SUPER_ADMIN => '최고 관리자',
+            self::ROLE_ADMIN => '관리자',
+            self::ROLE_OPERATOR => '운영자',
+            self::ROLE_DRIVER => '기사',
+            self::ROLE_CUSTOMER => '등록자',
+        ];
+    }
+
+    public static function roleLabel(string $role): string
+    {
+        return self::roleLabels()[$role] ?? $role;
     }
 
     /**
@@ -207,35 +310,33 @@ class User extends Authenticatable implements HasMedia
     {
         return match ($role) {
             self::ROLE_SUPER_ADMIN => self::permissionOptions(),
-            self::ROLE_ADMIN => [
-                'board.view',
-                'board.create',
-                'board.update',
-                'board.delete',
-                'board.comment',
-                'order.create',
-                'order.status.update',
-                'dispatch.assign',
-            ],
+            self::ROLE_ADMIN => self::permissionOptions(),
             self::ROLE_OPERATOR => [
-                'board.view',
-                'board.comment',
                 'order.create',
                 'order.status.update',
                 'dispatch.assign',
             ],
-            self::ROLE_DRIVER => [
-                'board.view',
+            // 기사 — 운행 수행. 등록·관리는 못 하지만 가져오기(claim)·제안은 role 규칙으로 허용
+            self::ROLE_DRIVER => [],
+            // 등록자(사업자) — 운행 등록·관리는 가능하지만 가져오기(claim)·기사 운행은 불가
+            self::ROLE_CUSTOMER => [
+                'order.create',
             ],
-            default => [
-                'board.view',
-            ],
+            default => [],
         };
+    }
+
+    /**
+     * 시스템 루트 사용자 — role과 무관하게 전체 접근(Super Admin 특례 상위).
+     */
+    public function isRootUser(): bool
+    {
+        return (int) $this->id === self::ROOT_USER_ID;
     }
 
     public function roleRank(): int
     {
-        if ((int) $this->id === 1) {
+        if ($this->isRootUser()) {
             return self::roleRanks()[self::ROLE_SUPER_ADMIN];
         }
 
@@ -248,7 +349,7 @@ class User extends Authenticatable implements HasMedia
             return false;
         }
 
-        if ((int) $this->id !== 1 && $role === self::ROLE_ADMIN) {
+        if (! $this->isRootUser() && $role === self::ROLE_ADMIN) {
             return false;
         }
 
@@ -261,7 +362,7 @@ class User extends Authenticatable implements HasMedia
             return false;
         }
 
-        if ((int) $this->id === 1) {
+        if ($this->isRootUser()) {
             return true;
         }
 
@@ -283,7 +384,7 @@ class User extends Authenticatable implements HasMedia
      */
     public function assignablePermissions(): array
     {
-        if ((int) $this->id === 1) {
+        if ($this->isRootUser()) {
             return self::permissionOptions();
         }
 
@@ -307,7 +408,7 @@ class User extends Authenticatable implements HasMedia
 
     public function hasPermission(string $permission): bool
     {
-        if ((int) $this->id === 1) {
+        if ($this->isRootUser()) {
             return true;
         }
 
@@ -339,6 +440,10 @@ class User extends Authenticatable implements HasMedia
             'last_login_at' => 'datetime',
             'password' => 'hashed',
             'permissions' => 'array',
+            'is_vehicle_verified' => 'boolean',
+            'is_license_verified' => 'boolean',
+            'is_business_verified' => 'boolean',
+            'is_account_verified' => 'boolean',
         ];
     }
 }

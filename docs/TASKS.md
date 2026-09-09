@@ -1,5 +1,7 @@
 # Current Task
 
+> 상태: ✅ 현행 (2026-09-08 갱신) — 상세 실행 로드맵·체크리스트는 [IMPROVEMENT_PLAN.md](./IMPROVEMENT_PLAN.md), 일별 이력은 `daily-review/` 참조
+
 ## Completed
 - [x] 프로젝트 생성
 - [x] Laravel 13 설치
@@ -46,7 +48,7 @@
 - [x] 비즈니스/데모 라우트 분리 (dashboard.business.* vs dashboard.modules.*)
 - [x] 비즈니스 프론트엔드 분리 (resources/js/business/*, app.js 모노리스 축소)
 - [x] 권한 검증 Policy 도입 (Board/Order/User Policy + 라우트 can: 미들웨어)
-- [x] 대시보드 공용 컴포넌트 적용 (x-alert 로그인 안내 · Empty State 오더 카드)
+- [x] 대시보드 공용 컴포넌트 적용 (x-alert 로그인 안내 · Empty State 운행 카드)
 
 ### NoWhere 마켓 (SPA + Laravel API, 2026-08)
 - [x] 마켓: 운행 등록/목록/필터/정렬/퀵 칩/긴급 배지
@@ -116,8 +118,21 @@
 - [x] 홈(HomeView)에 '추천일정' 섹션 추가 — OrderCard + 추천 이유 배지, 카드 클릭 시 운행 상세로 이동
 - [x] 추천 API 테스트 4건 추가 (설정/이력/왕복/빈 배열), 전체 285건 통과
 
+### 신뢰·운영·자동화·품질 구현 (2026-08-30 ~ 2026-09-08 — IMPROVEMENT_PLAN Phase A~D/Q)
+- [x] **Phase A(MVP '돈·역할·근거')**: 가입 역할 선택(기사/등록자)+등록자 전용 홈 분기, 채팅 요청(시간·경로·요금·취소) 확정 API·화면, 정산 원장(`settlements`)·수수료·기사 계좌·출금 신청→지급, 상태 타임라인(`order_events`)·운행 상세 세로 타임라인, 홈 추천 카드 근거 ✓ 체크리스트
+- [x] **Phase B-1 신고/분쟁**: 운행·사용자·채팅 신고 접수, 접수→확인→조사→처리→완료 흐름·양방향 알림
+- [x] **Phase B-2 관리자 개입**: 운행 숨김/보류/강제취소, 기사·등록자 제재(주의/제한/정지·`moderation_status`), 채팅 운영(대화 확인/운행·정산 보류/중재 메시지), 일일 운영 화면(🔴>🟡>🟢)
+- [x] **Phase B-3 증빙 심사**: 차량/면허 파일 업로드 → 관리자 심사(대기 우선·사진 확인) → 승인/거절 알림·재신청
+- [x] **Phase B-4 고객지원**: 공지·FAQ(관리자 작성·수정·삭제), 1:1 문의 작성→답변→알림
+- [x] **Phase C 자동화**: 30분 미승인 claim 백그라운드 자동 만료(`orders:expire-claims`), 완료→자동 정산·정산 완료 알림(`orders:auto-settle`), 공개 시 매칭 알림(조건 충족+온라인+비충돌), 알림 반복 방지(`notifyOnce`)
+- [x] **Q-2 행동 데이터**: `behavior_events`(추천 노출/클릭/신청/거절/취소/완료), 홈·마켓 카드 트래킹 전송, 기사 활동 권역(하차지) 집계
+- [x] **채팅**: 목록 '모두 읽음' 일괄 처리, 하단 메뉴 미확인 배지 잔류·즉시 갱신 수정
+- [x] **Q-4 보안·계정**: 비밀번호 찾기/재설정(이메일 6자리 인증코드, 계정 스캔 방지·60초 재전송 제한·만료 60분), 로그인 잠금(계정 단위 연속 5회 실패 → 15분, `login_attempts`), 역할·권한 정리(Spatie **미도입** 결정 — `ADMIN_ROLES`/`roleLabels()`/`ROOT_USER_ID` 단일화, `AuthorizesAdmin` 트레이트로 컨트롤러 인가 통일, 프런트 `data/roles.js`)
+- [x] **Q-1 기술부채**: 빈 `MarketBroadcast.php` 제거, OrderDetail `.status-flow` 데드 CSS 제거, `boards` 테이블·`board.*` 권한 정리(드롭 마이그레이션), `Order::trading` 레거시 문서·코드 정리(상태 유지)
+- [x] 검증: 백엔드 312 passed(1485 assertions)·프런트 vitest 54·vite 빌드·Pint 클린 (2026-09-08 기준)
+
 ## Current
-- [ ] 다음 작업 미지정 (후보: ① GitHub 히스토리 정리 후 리포 private 전환 ② 상용화 준비(고정 도메인·SSL) ③ Settlement 고도화(정산서·세금계산서) ④ CI(GitHub Actions) 도입 ⑤ 프론트 E2E(Playwright) ⑥ 프론트 테스트 커버리지 확대(composables·핵심 뷰))
+- [ ] 다음 작업: **품질 블록 마무리(Q-3 CI·Q-5 모바일·성능·Q-6 문서 동기화 진행 예정)** — 이후 Phase D(개인화 추천·동선 최적화·오늘 수익·배차 엔진)는 운영 데이터 축적 후. 상용화 전환(GitHub 리포 private·고정 도메인·SSL)은 사용자 지시 대기
 
 ## 원칙
 - 이 문서는 현재 작업을 하나만 지정하는 기준 문서다.
@@ -131,19 +146,18 @@
 - NoWhere 마켓 SPA (`frontend/`) + Laravel API (`app/`, `routes/`, `database/`)
 
 ## Step
-- 마켓 기능 개발 완료 · 서버 운영 안정화 완료 · 다음 작업 결정 대기
+- Phase A~C·B(신뢰·운영)·Q-1/Q-2/Q-4 구현 완료 (2026-09-08) · 품질 블록(Q-3·Q-5·Q-6) 진행 · Phase D(장기) 대기
 
 ## Current Work
-- NoWhere 마켓 기능과 서버 운영 안정화(SSH 키 인증·백업 cron·https 터널), SQLite→MySQL(MariaDB) 전환이 완료된 상태. 다음 작업(GitHub 리포 private 전환 / 상용화 준비(고정 도메인·SSL) / Settlement 고도화)은 사용자가 지정할 때까지 대기한다.
+- MVP 기능(운행 등록→가져오기→운행→정산→리뷰)과 신뢰·운영(신고/개입/심사/고객지원)·자동화(자동 만료·정산)·보안(Q-4)·기술부채(Q-1)가 완료된 상태. 상세 체크리스트는 [IMPROVEMENT_PLAN.md](./IMPROVEMENT_PLAN.md). 다음은 품질 인프라(Q-3 CI·Q-5 모바일·성능)와 문서 동기화(Q-6), 이후 Phase D·상용화는 사용자가 지정할 때까지 대기한다.
 
 ## Scope
 - 다음 작업 후보
-  - GitHub 커밋 히스토리에 노출된 구 비밀번호 정리 + 리포 private 전환 검토
-  - 서버 보안 강화: 비밀번호 로그인 비활성화(`PasswordAuthentication no`) — 키 인증만 유지
-  - 상용화 준비: 고정 도메인 확보 + Let's Encrypt SSL (SQLite→MySQL은 완료)
-  - Settlement 고도화 (정산서·세금계산서 등, 필요 시)
-- 개선점 (2026-08-29 발견)
-  - 서버가 HTTPS(443)로는 노출되지 않고 HTTP(80)로만 응답 → vite 프록시 기본 타깃(`https://114.132.240.52`)이 실패하므로 기본값을 `http://114.132.240.52`로 변경하거나 서버 443 오픈을 검토한다.
+  - Q-3 검증 인프라: GitHub Actions CI(Pint→Pest→vitest→빌드→check:refs), 프런트 테스트 확대/E2E(Playwright) 후보
+  - Q-5 모바일·성능: PWA 아이콘·스플래시, 3초 폴링 부하 검토(일괄 sync/WebSocket 여부), 반응형·다크모드 일관성
+  - Q-6 문서 동기화: ROADMAP.md·TASKS.md 갱신(본 문서 갱신 완료), CHANGELOG·노후 문서 정리
+  - Phase D(장기): 행동 데이터 기반 2~3단계 추천, 동선 최적화, 오늘 수익 목표·조합 추천, 배차 엔진
+  - 상용화: GitHub 커밋 히스토리 정리 + 리포 private, 고정 도메인 + Let's Encrypt SSL, 서버 비밀번호 로그인 비활성화
 
 ## Foundation Roadmap
 

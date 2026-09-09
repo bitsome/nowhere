@@ -17,13 +17,27 @@ use App\Notifications\OrderNotification;
 class OrderOfferService
 {
     /**
+     * 대기 요금 제안의 유예 시간 — 운행 시작 시각이 이 시간만큼 지나면 제안은 더 이상
+     * 유효하지 않아 자동 철회한다. 마켓 커트오프(시작 후 2시간)와 같은 기준이라
+     * 등록자가 늦게 봐도 이미 화면에서 사라진 운행 제안만 정리된다.
+     */
+    public const OFFER_EXPIRE_AFTER_HOURS = 2;
+
+    /**
      * 기사가 공개 운행에 운임을 제안한다.
      */
     public function propose(User $driver, Order $order, int $amount, ?string $message): OrderOffer
     {
         abort_unless($driver->role === User::ROLE_DRIVER, 403, '기사만 요금을 제안할 수 있습니다.');
 
+        // 제재 상태 — 운행 제한·정지 계정은 요금 제안도 할 수 없다 (B-2)
+        abort_unless($driver->canOperate(), 403, '정지·제한된 계정으로는 요금을 제안할 수 없습니다.');
+
         abort_unless(in_array($order->status, [Order::STATUS_PUBLISHED, Order::STATUS_TRADING], true), 403, '현재 상태에서는 제안할 수 없습니다.');
+
+        // 관리자 개입(B-2) — 숨김·보류 운행은 새 제안을 받지 않는다
+        abort_if((bool) $order->is_hidden, 403, '숨겨진 운행입니다.');
+        abort_if((bool) $order->admin_hold, 409, '관리자가 보류한 운행입니다.');
 
         abort_unless($order->claimant_user_id === null, 403, '이미 가져오기 요청이 걸린 운행입니다.');
 
@@ -209,21 +223,31 @@ class OrderOfferService
 
     /**
      * 등록자가 제안을 거절한다 — 운행은 마켓에 남는다.
+     * 거절 사유(선택)는 기록되어 기사에게 전달된다.
      */
-    public function reject(User $registrant, Order $order, OrderOffer $offer): void
+    public function reject(User $registrant, Order $order, OrderOffer $offer, ?string $reason = null): void
     {
         abort_unless($order->user_id === $registrant->id, 403, '운행 등록자만 거절할 수 있습니다.');
 
         abort_unless($offer->order_id === $order->id && $offer->status === OrderOffer::STATUS_PENDING, 403, '거절할 수 없는 제안입니다.');
 
-        $offer->forceFill(['status' => OrderOffer::STATUS_REJECTED])->save();
+        $offer->forceFill([
+            'status' => OrderOffer::STATUS_REJECTED,
+            'reject_reason' => $reason,
+        ])->save();
 
         $driver = User::query()->find($offer->driver_id);
 
         if ($driver !== null) {
+            $message = "{$order->rideSummary()} 운행의 요금 제안이 거절되었습니다.";
+
+            if ($reason !== null && $reason !== '') {
+                $message .= ' 사유: '.$reason;
+            }
+
             $driver->notify(new OrderNotification(
                 '요금 제안 거절됨',
-                "{$order->rideSummary()} 운행의 요금 제안이 거절되었습니다.",
+                $message,
                 $order->id,
             ));
         }
@@ -260,6 +284,76 @@ class OrderOfferService
             ->where('order_id', $order->id)
             ->where('status', OrderOffer::STATUS_PENDING)
             ->update(['status' => OrderOffer::STATUS_CANCELLED]);
+    }
+
+    /**
+     * 유효 기간이 지난 대기 요금 제안을 자동 철회하고 제안 기사에게 알린다 (스케줄러).
+     *
+     * 대상: (1) 운행 시작 시각 + 유예(OFFER_EXPIRE_AFTER_HOURS)가 지난 공개/거래중 운행의 대기 제안,
+     * (2) 이미 취소된 운행에 남아 있는 대기 제안(수동 취소 등으로 정리가 누락된 경우).
+     * 관리자 보류(B-2) 운행은 시스템도 건드리지 않는다.
+     */
+    public function autoExpirePastDue(int $limit = 50): int
+    {
+        $cutoff = now('Asia/Seoul')->subHours(self::OFFER_EXPIRE_AFTER_HOURS);
+        $cutoffDate = $cutoff->format('Y-m-d');
+        $cutoffTime = $cutoff->format('H:i');
+
+        $offers = OrderOffer::query()
+            ->where('status', OrderOffer::STATUS_PENDING)
+            ->whereHas('order', function ($q) use ($cutoffDate, $cutoffTime) {
+                $q->where('admin_hold', false)
+                    ->where(function ($group) use ($cutoffDate, $cutoffTime) {
+                        // 취소된 운행의 대기 제안 — 더 이상 성사될 수 없다
+                        $group->where('status', Order::STATUS_CANCELLED)
+                            // 시작 시각이 유예를 지난 공개/거래중 운행 — 마켓에서 사라진 운행의 제안
+                            ->orWhere(function ($active) use ($cutoffDate, $cutoffTime) {
+                                $active->whereIn('status', [Order::STATUS_PUBLISHED, Order::STATUS_TRADING])
+                                    ->whereNotNull('service_date')
+                                    ->where('service_date', '!=', '')
+                                    ->whereNotNull('service_time')
+                                    ->where('service_time', '!=', '')
+                                    ->where(function ($date) use ($cutoffDate, $cutoffTime) {
+                                        $date->where('service_date', '<', $cutoffDate)
+                                            ->orWhere(function ($sameDay) use ($cutoffDate, $cutoffTime) {
+                                                $sameDay->where('service_date', $cutoffDate)
+                                                    ->where('service_time', '<', $cutoffTime);
+                                            });
+                                    });
+                            });
+                    });
+            })
+            ->with('order')
+            ->orderBy('id')
+            ->limit($limit)
+            ->get();
+
+        $processed = 0;
+
+        foreach ($offers as $offer) {
+            $order = $offer->order;
+            $isCancelled = $order !== null && $order->status === Order::STATUS_CANCELLED;
+
+            $offer->forceFill(['status' => OrderOffer::STATUS_CANCELLED])->save();
+
+            $driver = User::query()->find($offer->driver_id);
+
+            if ($driver !== null) {
+                $message = $isCancelled
+                    ? "{$order->rideSummary()} 운행이 취소되어 요금 제안이 자동으로 철회되었습니다."
+                    : "{$order->rideSummary()} 운행의 시작 시각이 지나 요금 제안이 자동으로 철회되었습니다.";
+
+                $driver->notify(new OrderNotification(
+                    '요금 제안 만료',
+                    $message,
+                    $offer->order_id,
+                ));
+            }
+
+            $processed++;
+        }
+
+        return $processed;
     }
 
     /**

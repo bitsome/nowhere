@@ -157,6 +157,22 @@ test('등록자가 제안을 거절하면 제안만 거절되고 운행은 마�
     expect($this->order->refresh()->status)->toBe(Order::STATUS_PUBLISHED);
 });
 
+test('제안 거절 시 사유가 기록되고 기사 알림에 전달된다', function () {
+    $offer = $this->postJson("/api/orders/{$this->order->id}/offers", ['amount' => 140000])->json('data');
+
+    Sanctum::actingAs($this->owner);
+    $this->postJson("/api/orders/{$this->order->id}/offers/{$offer['id']}/reject", [
+        'reason' => '예상 운임보다 높아요',
+    ])->assertOk();
+
+    expect(OrderOffer::find($offer['id'])->reject_reason)->toBe('예상 운임보다 높아요');
+
+    $notification = $this->driver->notifications()
+        ->where('data->title', '요금 제안 거절됨')->first();
+
+    expect($notification?->data['message'] ?? '')->toContain('예상 운임보다 높아요');
+});
+
 test('드라이버가 본인 대기 제안을 철회할 수 있다', function () {
     $offer = $this->postJson("/api/orders/{$this->order->id}/offers", ['amount' => 140000])->json('data');
 

@@ -120,7 +120,6 @@ class OrderWorkspaceListBuilder
             'isUrgent' => $sortedOrders->contains(fn (Order $order) => $this->rowBuilder->isUrgent($order)),
             'isToday' => $this->isOnDate($firstOrder, 'today'),
             'isTomorrow' => $this->isOnDate($firstOrder, 'tomorrow'),
-            'showUrl' => $firstOrder !== null ? route('dashboard.business.order.show', $firstOrder) : '',
             'routes' => $sortedOrders
                 ->map(fn (Order $order) => [
                     'route' => ($order->pickup_location ?: '-').' → '.($order->dropoff_location ?: '-'),
@@ -130,6 +129,9 @@ class OrderWorkspaceListBuilder
                     'serviceLabel' => $this->rowBuilder->serviceLabel($order),
                     'vehicle' => $order->vehicle_type ?: '',
                     'passengerCount' => $order->passenger_count ?: 0,
+                    'luggageCount' => $order->luggage_count ?: 0,
+                    'flightNumber' => $order->flight_number ?: '',
+                    'sortDate' => $order->service_date ?: '',
                 ])
                 ->values()
                 ->all(),

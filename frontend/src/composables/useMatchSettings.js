@@ -6,6 +6,7 @@ import {
     apiUpdateMatchPreference,
 } from '../api/match';
 import { getApiErrorMessage } from '../api/client';
+import { displayLocation } from '../utils/locations';
 
 const PRESETS_KEY = 'match_form_presets';
 
@@ -19,22 +20,15 @@ const DATE_RANGES = [
     { label: '오늘+내일', value: 'today_tomorrow' },
 ];
 
-// 시간대 프리셋 — 선택하면 시작/종료 시각이 채워진다
+// 시간대 프리셋 — 빠른 매칭은 주간/야간 2개만. 선택하면 시작/종료 시각이 채워진다.
+// 야간은 자정을 넘기므로(20:00 → 06:00) 다음날 배지가 붙는다.
 const TIME_PRESETS = [
-    { label: '새벽', start: '03:00', end: '06:00' },
-    { label: '아침', start: '06:00', end: '09:00' },
-    { label: '오전', start: '09:00', end: '11:00' },
-    { label: '정오', start: '11:00', end: '13:00' },
-    { label: '오후', start: '13:00', end: '17:00' },
-    { label: '저녁', start: '17:00', end: '20:00' },
-    { label: '밤', start: '20:00', end: '00:00' },
-    { label: '심야', start: '00:00', end: '03:00' },
-    { label: '자정 넘김', start: '22:00', end: '03:00' },
+    { label: '주간', start: '06:00', end: '20:00' },
+    { label: '야간', start: '20:00', end: '06:00' },
 ];
 
 // 금액 프리셋 — 단위 만원. 탭하면 최소 수익이 채워지고, 같은 칩을 다시 누르면 해제
 const AMOUNT_PRESETS = [
-    { label: '5만', value: 50000 },
     { label: '6만', value: 60000 },
     { label: '7만', value: 70000 },
     { label: '8만', value: 80000 },
@@ -114,6 +108,11 @@ export function useMatchSettings({ message, loadMatchedOrders }) {
             date_range: matchForm.date_range || null,
             days: matchForm.days.length ? [...matchForm.days] : [],
             area: matchForm.area.trim() || '',
+            tags: matchForm.tags.length ? [...matchForm.tags] : [],
+            service_type: matchForm.service_type || '',
+            origin: matchForm.origin.trim() || '',
+            destination: matchForm.destination.trim() || '',
+            vehicle_id: matchForm.vehicle_id || null,
             max_passengers: matchForm.max_passengers || null,
             min_revenue: matchForm.min_revenue || 0,
             is_active: matchForm.is_active,
@@ -138,6 +137,11 @@ export function useMatchSettings({ message, loadMatchedOrders }) {
         matchForm.date_range = preset.date_range || '';
         matchForm.days = Array.isArray(preset.days) ? [...preset.days] : [];
         matchForm.area = preset.area || '';
+        matchForm.tags = Array.isArray(preset.tags) ? [...preset.tags] : [];
+        matchForm.service_type = preset.service_type || '';
+        matchForm.origin = preset.origin || '';
+        matchForm.destination = preset.destination || '';
+        matchForm.vehicle_id = preset.vehicle_id || null;
         matchForm.max_passengers = preset.max_passengers || null;
         matchForm.min_revenue = Number(preset.min_revenue) || 0;
         matchForm.is_active = preset.is_active !== false;
@@ -155,6 +159,11 @@ export function useMatchSettings({ message, loadMatchedOrders }) {
         date_range: '',
         days: [],
         area: '',
+        tags: [],
+        service_type: '',
+        origin: '',
+        destination: '',
+        vehicle_id: null,
         max_passengers: null,
         min_revenue: 0,
         is_active: true,
@@ -196,6 +205,11 @@ export function useMatchSettings({ message, loadMatchedOrders }) {
         matchForm.date_range = pref?.date_range || '';
         matchForm.days = Array.isArray(pref?.days) ? [...pref.days] : [];
         matchForm.area = typeof pref?.area === 'string' ? pref.area : '';
+        matchForm.tags = Array.isArray(pref?.tags) ? [...pref.tags] : [];
+        matchForm.service_type = typeof pref?.service_type === 'string' ? pref.service_type : '';
+        matchForm.origin = typeof pref?.origin === 'string' ? pref.origin : '';
+        matchForm.destination = typeof pref?.destination === 'string' ? pref.destination : '';
+        matchForm.vehicle_id = pref?.vehicle_id || null;
         matchForm.max_passengers = Number(pref?.max_passengers) || null;
         matchForm.min_revenue = Number(pref?.min_revenue) || 0;
         matchForm.is_active = pref?.is_active !== false;
@@ -225,6 +239,11 @@ export function useMatchSettings({ message, loadMatchedOrders }) {
                 date_range: matchForm.date_range || null,
                 days: matchForm.days.length ? matchForm.days : null,
                 area: matchForm.area.trim() || null,
+                tags: matchForm.tags.length ? matchForm.tags : null,
+                service_type: matchForm.service_type || null,
+                origin: matchForm.origin.trim() || null,
+                destination: matchForm.destination.trim() || null,
+                vehicle_id: matchForm.vehicle_id || null,
                 max_passengers: matchForm.max_passengers || null,
                 min_revenue: matchForm.min_revenue || 0,
                 is_active: matchForm.is_active,
@@ -288,6 +307,23 @@ export function useMatchSettings({ message, loadMatchedOrders }) {
         const parts = [];
 
         parts.push(matchDayLabel(pref.days));
+
+        const serviceLabels = { pickup: '픽업', sending: '샌딩', landing: '랜딩' };
+        if (pref.service_type && serviceLabels[pref.service_type]) {
+            parts.push(serviceLabels[pref.service_type]);
+        }
+
+        if (pref.tags?.length) {
+            parts.push(`태그 ${pref.tags.join('·')}`);
+        }
+
+        if (pref.origin) {
+            parts.push(`출발 ${displayLocation(pref.origin)}`);
+        }
+
+        if (pref.destination) {
+            parts.push(`도착 ${displayLocation(pref.destination)}`);
+        }
 
         if (pref.area) {
             parts.push(`출발 ${pref.area}`);

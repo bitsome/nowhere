@@ -62,8 +62,8 @@ self.addEventListener('push', (event) => {
     event.waitUntil(
         self.registration.showNotification(data.title, {
             body: data.message,
-            icon: data.icon || '/spa/icons/icon.svg',
-            badge: data.badge || '/spa/icons/icon.svg',
+            icon: data.icon || '/spa/icons/icon-192.png',
+            badge: data.badge || '/spa/icons/icon-192.png',
             tag: data.tag || 'nowhere-push',
             data: { url: data.url },
         }),

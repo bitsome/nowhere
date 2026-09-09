@@ -1,5 +1,7 @@
 # ROADMAP
 
+> 상태: ✅ 현행 (2026-09-08 갱신) — 단계와 방향만 정리. 실행 이력·세부 체크리스트는 [IMPROVEMENT_PLAN.md](./IMPROVEMENT_PLAN.md)가 단일 기록이며, TASKS.md는 현재 작업을 지정한다.
+
 ## 목적
 - NoWhere 프로젝트의 개발 단계와 우선순위를 정리한다.
 - 현재 진행 중인 범위와 다음 작업 범위를 명확히 구분한다.
@@ -21,7 +23,7 @@
   - Profile
   - Logout
 - 메모
-  - 세션 기반 인증 구현 완료
+  - Sanctum Bearer 토큰 인증(API) 구현 완료
   - 이메일 인증코드 기반 비밀번호 재설정 구현 완료
   - 프로필 사진, 휴대폰, 비밀번호 변경 흐름 구현 완료
 
@@ -94,7 +96,7 @@
 - 메모
   - `Loading`은 `BaseLoading`을 실제 피드백 계층(DataTable 로딩, 버튼 로딩, 전체 화면 로딩)에서 재사용한다.
   - `Toast`, `Confirm Dialog`, `Alert`는 사용자 반응과 상태 전달을 위한 공통 피드백 기능으로 묶는다.
-  - 알림 배너(`x-alert`)와 토스트(`createToastBridge`)를 실제 업무 화면(오더 등록, 검증 오류)에 적용 완료.
+  - 알림 배너(`x-alert`)와 토스트(`createToastBridge`)를 실제 업무 화면(운행 등록, 검증 오류)에 적용 완료.
    - 컴포넌트별 사용 규칙은 `docs/FOUNDATION.md`를 기준으로 유지한다.
 
 ### STEP 2-5
@@ -112,30 +114,25 @@
   - 인터셉터에서 공통 에러 처리와 인증 흐름 확장 지점을 제공한다.
   - `request`, `requestData`, `ensureCsrfCookie` 헬퍼를 통해 재사용 가능한 호출 규약을 제공한다.
   - API 계층은 실제 화면 로직이 아니라 공통 통신 규약을 담당한다.
-  - 실제 서비스 계층 연결 완료: 오더 AI 구조화(`postData`), 파일 관리(`getData`), 이미지 업로드(`postData`).
+  - 실제 서비스 계층 연결 완료: 운행 AI 구조화(`postData`), 파일 관리(`getData`), 이미지 업로드(`postData`).
   - 사용 규약은 `docs/API.md`를 기준으로 유지한다.
 
 ## 현재 우선순위
-1. 서버 운영 안정화 (SSH 키 인증, SQLite 백업 cron, https 터널) — 완료 (2026-08-26)
-2. NoWhere 마켓 (SPA + Laravel API) — 기능 개발 완료
-3. 상용화 준비 (고정 주소·도메인, SQLite→MySQL 검토) — 예정
+1. 운행 플랫폼 기능 확장: Phase A~C(MVP·신뢰/운영·자동화) 완료 — 2026-09-08 기준 구현 이력은 [IMPROVEMENT_PLAN.md](./IMPROVEMENT_PLAN.md)
+2. 품질·기반(Phase Q): Q-1~Q-4 완료, Q-3(CI)·Q-5(모바일·성능)·Q-6(문서) 진행 예정
+3. Phase D(장기): 개인화 추천·동선 최적화·오늘 수익 목표·배차 엔진 — 운영 데이터 축적 후 진행
+4. 상용화 준비 (고정 주소·도메인·SSL, GitHub 리포 private) — 예정 (서버 DB는 MySQL 전환 완료, 로컬은 SQLite 유지)
 
 ## Phase 3
 
 ### NoWhere 마켓 (SPA + Laravel API)
-- 상태: `완료` (기능 개발) · 서버 운영 안정화 단계
-- 범위
-  - 운행(Order): 등록/마켓/가져오기(claim)/상태 전이/정산/리뷰
-  - 매칭(Match): 매칭 설정/추천/콜링
-  - 기사(Driver) 앱: 홈(오늘 운행·수익·빠른 매칭)/운행 이력/정산/설정
-  - 커뮤니티(Community): 카테고리 7종/검색/인기 글
-  - 채팅(Chat): 요청 이벤트 카드(승인/시간/경로/요금/취소), 날짜·유형 분류
-  - 알림: 웹 푸시(VAPID) + 알림 센터(상황별 카테고리/색상)
-  - 자동화: 자동 운행 등록(매일 09:00 KST), 일괄 정산, 배포 스크립트(deploy.sh)
+- 상태: **Phase A~C·B(신뢰·운영)·Q-1/Q-2/Q-4 완료 (2026-09-08)** — 상세·남은 항목은 [IMPROVEMENT_PLAN.md](./IMPROVEMENT_PLAN.md) 참조
+- 범위: 운행(등록/마켓/가져오기/상태 전이/정산/리뷰) · 매칭 · 기사 앱 · 커뮤니티 · 채팅 · 알림 · 자동화 · 신고/분쟁 · 관리자 개입 · 증빙 심사 · 고객지원 · 보안(Q-4)
 - 메모
-  - 마켓은 본인 등록 운행도 노출하되 본인 claim은 차단한다 (관리자 검증 목적).
+  - 운영 원칙: **정상 운행은 자동 처리, 문제 운행만 관리자가 개입** (docs/OPERATIONS.md)
+  - 상태 흐름 단일 소스: docs/ORDER_FLOW.md (`draft→published→acceptance_pending→accepted→driving→completed→settled`)
   - 민감 정보는 로컬 전용 `SECRETS.md`로 분리해 커밋·업로드하지 않는다.
-  - DB는 상용화 전까지 서버 SQLite 유지.
+  - DB는 서버 MySQL(전환 완료), 로컬은 SQLite 유지.
 
 ### 서버 운영 안정화
 - 상태: `완료` (2026-08-26, 서버 초기화 후 재구성)
@@ -147,7 +144,7 @@
 - 완료 기준
   - SSH 키로 접속 안정화되고, 비밀번호 노출 의존이 제거된다. (완료)
   - DB 백업이 매일 자동 수행된다. (완료)
-  - 남은 후보: GitHub 히스토리 정리·리포 private, 비밀번호 로그인 비활성화, 고정 도메인+Let's Encrypt, SQLite→MySQL 검토
+  - 남은 후보: GitHub 히스토리 정리·리포 private, 비밀번호 로그인 비활성화, 고정 도메인+Let's Encrypt
 
 ## 작업 원칙
 - 한 번에 하나의 기능만 개발한다.

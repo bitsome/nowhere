@@ -6,6 +6,7 @@ use App\Models\Driver;
 use App\Models\MatchPreference;
 use App\Models\Order;
 use App\Models\User;
+use App\Models\Vehicle;
 use App\Notifications\OrderNotification;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -22,7 +23,12 @@ class MatchService
     public const MATCH_TITLE = '매칭 운행 도착';
 
     /**
-     * 공개된 운행을 조건에 맞는 기사에게 매칭 제안(알림)한다.
+     * 공개된 운행을 적합도 랭킹 상위 N명의 기사에게 매칭 제안(알림)한다.
+     *
+     * 후보는 랭킹 엔진(DriverMatchRanker)이 온라인 + 매칭 켬 + 활성 매칭 설정 보유
+     * 기사 중 같은 날짜 진행 중 일정과 겹치지 않는 기사를 점수 순으로 뽑는다.
+     * 알림은 기사의 매칭 설정 조건(isMatch)을 실제로 충족한 기사에게만 보낸다.
+     * (랭킹은 '누구부터 제안할지' 순서를 정하고, 설정 조건은 자동 추천 범위를 지킨다)
      *
      * @return int 매칭 제안을 보낸 기사 수
      */
@@ -37,21 +43,19 @@ class MatchService
             return 0;
         }
 
-        $preferences = MatchPreference::query()
-            ->where('is_active', true)
-            ->with('user')
-            ->get();
+        $topN = (int) config('matching.top_n', 5);
 
         $matched = 0;
 
-        foreach ($preferences as $preference) {
-            $user = $preference->user;
-
-            if ($user === null || $user->role !== User::ROLE_DRIVER) {
+        foreach (app(DriverMatchRanker::class)->rank($order, $topN) as $row) {
+            // 매칭 설정 조건이 실제로 충족된 기사만 제안 대상
+            if (($row['breakdown']['preference'] ?? 0) <= 0) {
                 continue;
             }
 
-            if (! $this->isEligible($user, $preference, $order)) {
+            $user = User::find($row['user_id']);
+
+            if ($user === null) {
                 continue;
             }
 
@@ -193,16 +197,21 @@ class MatchService
     }
 
     /**
-     * 설정 조건(지역/시간대/요일/최소수익)과 운행이 일치하는지.
+     * 설정 조건(지역/태그/시간대/요일/최소수익/서비스유형/출발지/도착지/차량)과 운행이 일치하는지.
      */
     public function isMatch(MatchPreference $preference, Order $order): bool
     {
         return $this->dateMatches($preference, $order)
             && $this->areaMatches($preference, $order)
+            && $this->tagsMatch($preference, $order)
             && $this->timeMatches($preference, $order)
             && $this->dayMatches($preference, $order)
             && $this->passengerMatches($preference, $order)
-            && $this->revenueMatches($preference, $order);
+            && $this->revenueMatches($preference, $order)
+            && $this->serviceTypeMatches($preference, $order)
+            && $this->originMatches($preference, $order)
+            && $this->destinationMatches($preference, $order)
+            && $this->vehicleMatches($preference, $order);
     }
 
     /**
@@ -334,7 +343,7 @@ class MatchService
         };
     }
 
-    private function areaMatches(MatchPreference $preference, Order $order): bool
+    public function areaMatches(MatchPreference $preference, Order $order): bool
     {
         $area = trim((string) $preference->area);
 
@@ -353,7 +362,36 @@ class MatchService
         return mb_stripos($pickup, $area) !== false || mb_stripos($dropoff, $area) !== false;
     }
 
-    private function timeMatches(MatchPreference $preference, Order $order): bool
+    /**
+     * 태그 조건 — 기사가 선택한 태그 중 하나라도 운행 태그에 있으면 매칭.
+     * 태그를 지정한 기사는 태그가 있는 운행만 받는다 (비우면 전체).
+     */
+    public function tagsMatch(MatchPreference $preference, Order $order): bool
+    {
+        $tags = $preference->tags ?? [];
+
+        if ($tags === []) {
+            return true;
+        }
+
+        $orderTags = array_map('trim', array_filter((array) ($order->tags ?? [])));
+
+        if ($orderTags === []) {
+            return false;
+        }
+
+        foreach ($tags as $tag) {
+            $tag = trim((string) $tag);
+
+            if ($tag !== '' && in_array($tag, $orderTags, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function timeMatches(MatchPreference $preference, Order $order): bool
     {
         $start = $preference->start_time;
         $end = $preference->end_time;
@@ -402,7 +440,7 @@ class MatchService
         return in_array($dayOfWeek, $days, true);
     }
 
-    private function revenueMatches(MatchPreference $preference, Order $order): bool
+    public function revenueMatches(MatchPreference $preference, Order $order): bool
     {
         if ($preference->min_revenue <= 0) {
             return true;
@@ -411,6 +449,99 @@ class MatchService
         $revenue = (int) ($order->expected_revenue ?: $order->amount_value ?: 0);
 
         return $revenue >= $preference->min_revenue;
+    }
+
+    /**
+     * 서비스 유형 조건 — 픽업/샌딩/랜딩 중 설정한 유형의 운행만 매칭 (비우면 전체).
+     */
+    private function serviceTypeMatches(MatchPreference $preference, Order $order): bool
+    {
+        $type = $preference->service_type;
+
+        if (! $type || blank($order->service_type)) {
+            return true;
+        }
+
+        return $order->service_type === $type;
+    }
+
+    /**
+     * 출발지 조건 — 설정한 출발지 키워드가 운행 픽업지에 포함되면 매칭 (비우면 전체).
+     */
+    private function originMatches(MatchPreference $preference, Order $order): bool
+    {
+        $origin = trim((string) $preference->origin);
+
+        if ($origin === '' || blank($order->pickup_location)) {
+            return true;
+        }
+
+        return $this->locationContains((string) $order->pickup_location, $origin);
+    }
+
+    /**
+     * 도착지 조건 — 설정한 도착지 키워드가 운행 하차지에 포함되면 매칭 (비우면 전체).
+     */
+    private function destinationMatches(MatchPreference $preference, Order $order): bool
+    {
+        $destination = trim((string) $preference->destination);
+
+        if ($destination === '' || blank($order->dropoff_location)) {
+            return true;
+        }
+
+        return $this->locationContains((string) $order->dropoff_location, $destination);
+    }
+
+    /**
+     * 지역 키워드 포함 여부 — 공항 표기 차이('국제')를 정규화하고,
+     * 마켓 와일드카드 '인천%공항'처럼 %로 나뉜 부분을 순서대로 모두 포함하는지 확인한다.
+     */
+    private function locationContains(string $haystack, string $needle): bool
+    {
+        $normalize = fn (string $s): string => str_replace('국제', '', $s);
+
+        $haystack = $normalize($haystack);
+        $needle = $normalize($needle);
+
+        $parts = preg_split('/%/', $needle, -1, PREG_SPLIT_NO_EMPTY);
+
+        if ($parts === false || count($parts) < 2) {
+            return mb_stripos($haystack, $needle) !== false;
+        }
+
+        $position = 0;
+
+        foreach ($parts as $part) {
+            $found = mb_stripos($haystack, $part, $position);
+
+            if ($found === false) {
+                return false;
+            }
+
+            $position = $found + mb_strlen($part);
+        }
+
+        return true;
+    }
+
+    /**
+     * 차량 조건 — 지정한 차량의 차종과 운행이 요구하는 차량이 일치하면 매칭 (비우면 전체).
+     */
+    private function vehicleMatches(MatchPreference $preference, Order $order): bool
+    {
+        if (! $preference->vehicle_id || blank($order->vehicle_type)) {
+            return true;
+        }
+
+        $vehicle = Vehicle::find($preference->vehicle_id);
+
+        if ($vehicle === null || blank($vehicle->type)) {
+            return true;
+        }
+
+        return mb_stripos((string) $order->vehicle_type, $vehicle->type) !== false
+            || mb_stripos($vehicle->type, (string) $order->vehicle_type) !== false;
     }
 
     /**
