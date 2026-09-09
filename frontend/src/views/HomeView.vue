@@ -31,6 +31,9 @@ const preferences = ref([]);
 const recommendations = ref([]);
 const currentTrips = ref([]);
 const loading = ref(true);
+// 마지막 홈 데이터 조회 시각 — 탭 복귀 시 짧은 간격의 중복 재조회를 막는다
+let lastLoadedAt = 0;
+const HOME_REFRESH_MIN_GAP_MS = 10000;
 
 // 활성 매칭 설정이 없으면 추천 조건이 없는 상태 — 홈에서 설정을 유도하는 힌트를 띄운다
 const hasActivePreference = computed(() => preferences.value.some((p) => p.is_active));
@@ -376,6 +379,9 @@ const load = async (silent = false) => {
         }
     }
 
+    // 조회 완료 시각 기록 — 짧은 탭 왕복 시 재조회 생략 기준
+    lastLoadedAt = Date.now();
+
     if (!silent) {
         loading.value = false;
     }
@@ -554,6 +560,25 @@ watch([todayTrip, topRec], ([trip, rec]) => {
     }
 }, { immediate: true });
 
+// 드라이버 홈 데이터를 아직 안 불렀고 조회 간격이 지났을 때만 조용히 갱신한다
+// (로딩 중·10초 내 재조회는 생략해 중복 호출을 막는다)
+const maybeRefreshDriverData = () => {
+    if (isDriver.value && !loading.value && Date.now() - lastLoadedAt > HOME_REFRESH_MIN_GAP_MS) {
+        load(true);
+    }
+};
+
+// 사용자 정보가 늦게 채워져(첫 실행 fetchMe 지연 등) 마운트 시점엔 isDriver가 false였다면,
+// 하이드레이션이 끝나 isDriver가 true가 되는 순간 카운트다운·히어로 타이머와 데이터 로드를 시작한다.
+watch(isDriver, (isDriverNow) => {
+    if (!isDriverNow) {
+        return;
+    }
+    startClaimTimers();
+    startHeroTimer();
+    maybeRefreshDriverData();
+});
+
 onMounted(() => {
     if (!isDriver.value) {
         // 등록자 홈은 기사 데이터를 로드하지 않는다
@@ -567,15 +592,9 @@ onMounted(() => {
 });
 
 // keep-alive 복귀 시 조용히 갱신 — "불러오는 중" 화면 없이 기존 내용을 유지한다
+// (짧은 탭 왕복에서는 직전 조회 10초 안이면 재조회를 생략해 불필요한 호출을 줄인다)
 onActivated(() => {
-    if (!isDriver.value) {
-        return;
-    }
-
-    if (!loading.value) {
-        load(true);
-    }
-
+    maybeRefreshDriverData();
     startClaimTimers();
     startHeroTimer();
 });

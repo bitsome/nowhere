@@ -1,8 +1,9 @@
 /* NoWhere PWA 서비스 워커 — 설치 가능 + 방문한 앱 셸 오프라인 캐시.
  * 주의: /api(동적 데이터)와 외부 오리진은 절대 캐시하지 않는다.
- * 내비게이션/정적 자산 모두 네트워크 우선 — 배포(새 index.html/해시 assets)가
- * 캐시에 가려지지 않도록 항상 최신 빌드를 먼저 사용하고 오프라인일 때만 캐시로 폴백한다. */
-const CACHE = 'nowhere-v4';
+ * 해시 빌드 자산(/assets/*)은 불변이므로 캐시 우선으로 재방문을 빠르게 하고,
+ * 앱 셸(내비게이션)·매니페스트·아이콘은 네트워크 우선으로 배포(새 index.html)가
+ * 캐시에 가려지지 않게 하며 오프라인일 때만 캐시로 폴백한다. */
+const CACHE = 'nowhere-v5';
 
 self.addEventListener('install', () => {
     self.skipWaiting();
@@ -15,6 +16,27 @@ self.addEventListener('activate', (event) => {
             .then(() => self.clients.claim()),
     );
 });
+
+// 해시가 붙은 빌드 자산(/assets/*.js|css 등)은 내용이 바뀌면 파일명이 달라지므로
+// 한 번 받은 파일은 그대로 재사용해도 안전하다 — 캐시 우선으로 반복 방문 로딩을 줄인다.
+const respondAssets = (event, request) => {
+    event.respondWith(
+        caches.match(request).then((hit) => {
+            if (hit) {
+                return hit;
+            }
+
+            return fetch(request).then((response) => {
+                if (response.ok) {
+                    const copy = response.clone();
+                    caches.open(CACHE).then((cache) => cache.put(request, copy));
+                }
+
+                return response;
+            });
+        }),
+    );
+};
 
 self.addEventListener('fetch', (event) => {
     const { request } = event;
@@ -30,7 +52,13 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // 앱 셸(내비게이션)·정적 자산 — 네트워크 우선. 성공 시 캐시를 갱신해 항상 최신 빌드를 보여준다.
+    // 해시 빌드 자산 — 캐시 우선 (불변 파일)
+    if (url.pathname.includes('/assets/')) {
+        respondAssets(event, request);
+        return;
+    }
+
+    // 앱 셸(내비게이션)·매니페스트·아이콘 등 — 네트워크 우선. 성공 시 캐시를 갱신해 항상 최신 빌드를 보여준다.
     event.respondWith(
         fetch(request)
             .then((response) => {

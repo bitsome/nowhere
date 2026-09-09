@@ -1,5 +1,5 @@
 <script setup>
-import { computed, h, onActivated, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, h, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from 'vue';
 import { useNotification } from 'naive-ui';
 import { useRouter } from 'vue-router';
 import { apiOrders, apiReturnRoutes } from '../api/orders';
@@ -461,22 +461,28 @@ const load = async (silent = false) => {
             params.search = search.value;
         }
 
-        const { data } = await apiOrders(params);
-        notifyNewOrders(data.data);
-        orders.value = data.data;
-        pagination.value = data.meta.pagination;
+        // 마켓 목록과 왕복 추천을 병렬 호출해 순차 대기 시간을 없앤다.
+        // (왕복 추천은 참고용이라 실패해도 목록에는 영향 없음)
+        const [listRes, rrRes] = await Promise.allSettled([
+            apiOrders(params),
+            apiReturnRoutes(params),
+        ]);
 
-        // 왕복 추천 — 내가 맡은 운행의 하차지 근처에서 시작하는 운행 (실패해도 마켓 목록에는 영향 없음)
-        // 현재 적용 중인 필터를 함께 넘겨 목록과 일관된 추천을 받는다
-        try {
-            const rr = await apiReturnRoutes(params);
-            returnRoutes.value = rr.data.data ?? [];
-        } catch {
-            returnRoutes.value = [];
+        if (listRes.status === 'rejected') {
+            error.value = getApiErrorMessage(listRes.reason, '운행 목록을 불러오지 못했습니다.');
+        } else {
+            const { data } = listRes.value;
+            notifyNewOrders(data.data);
+            orders.value = data.data;
+            pagination.value = data.meta.pagination;
         }
+
+        returnRoutes.value = rrRes.status === 'fulfilled' ? (rrRes.value.data?.data ?? []) : [];
     } catch (e) {
         error.value = getApiErrorMessage(e, '운행 목록을 불러오지 못했습니다.');
     } finally {
+        // 재조회 중복 방지 기준 시각 — 폴링/탭 복귀 갱신이 지나치게 자주 겹치지 않게 한다
+        lastLoadedAt = Date.now();
         loading.value = false;
     }
 };
@@ -630,14 +636,40 @@ const activeFilterChips = computed(() => {
 
 // 실시간 반영 — 새 운행이 등록되면 화면을 조용히 갱신한다 (30초 폴링, 백그라운드 시 중지)
 let pollTimer = null;
+// 마지막 목록 조회 시각 — 폴링·탭 복귀·SSE 갱신이 서로 겹쳐 중복 호출되는 것을 막는다
+let lastLoadedAt = 0;
+const SILENT_REFRESH_MIN_GAP_MS = 10000;
+// 조용한 갱신 진행 중 플래그 — 중복 실행을 직렬화한다
+let silentRefreshing = false;
 
 const silentRefresh = () => {
-    // 탭이 숨겨져 있는 동안에는 API 호출을 하지 않는다 (SSE/재진입 시 갱신)
-    if (document.visibilityState === 'hidden') {
+    // 탭이 숨겨져 있거나 전체 로딩 중이면 생략 (keep-alive 첫 진입 시 onMounted와 onActivated가 겹치는 것 포함)
+    if (document.visibilityState === 'hidden' || loading.value || silentRefreshing) {
+        return;
+    }
+    // 방금 조회했다면 건너뛴다 (30초 폴링 시점 직후 탭 복귀 등 중복 방지)
+    if (Date.now() - lastLoadedAt < SILENT_REFRESH_MIN_GAP_MS) {
         return;
     }
 
-    load(true).catch(() => {});
+    silentRefreshing = true;
+    load(true)
+        .catch(() => {})
+        .finally(() => {
+            silentRefreshing = false;
+        });
+};
+
+// 화면이 보이는 동안에만 30초 폴링을 돌린다 (탭 이동 시 중지·복귀 시 재개)
+const startPolling = () => {
+    if (pollTimer) {
+        return;
+    }
+    pollTimer = setInterval(silentRefresh, 30000);
+};
+const stopPolling = () => {
+    clearInterval(pollTimer);
+    pollTimer = null;
 };
 
 const onVisibility = () => {
@@ -652,18 +684,24 @@ const onSseRefresh = () => {
 
 onMounted(() => {
     load();
-    pollTimer = setInterval(silentRefresh, 30000);
+    startPolling();
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('app:sse-refresh', onSseRefresh);
 });
 
-// keep-alive 복귀 시 조용히 새로고침 (화면 깜빡임 없이 최신 목록 유지)
+// keep-alive 복귀 시 조용히 새로고침 (화면 깜빡임 없이 최신 목록 유지 — 직전 조회와 10초 미만이면 생략)
 onActivated(() => {
-    load(true);
+    startPolling();
+    silentRefresh();
+});
+
+// 다른 탭으로 벗어나 있으면 폴링을 멈춰 불필요한 재조회를 막는다 (keep-alive 캐시 상태)
+onDeactivated(() => {
+    stopPolling();
 });
 
 onBeforeUnmount(() => {
-    clearInterval(pollTimer);
+    stopPolling();
     document.removeEventListener('visibilitychange', onVisibility);
     window.removeEventListener('app:sse-refresh', onSseRefresh);
 });
