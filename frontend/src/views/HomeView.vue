@@ -15,6 +15,7 @@ import UiSection from '../components/ui/UiSection.vue';
 import CustomerHome from './home/CustomerHome.vue';
 import { relativeDateLabel } from '../utils/dateText';
 import { trackClick, trackImpression } from '../utils/tracking';
+import { ROLE_DRIVER } from '../data/roles';
 
 // keep-alive 캐시 매칭용 이름
 defineOptions({ name: 'HomeView' });

@@ -137,18 +137,26 @@ const preloadTabViews = () => {
     const preload = (loader) => loader().catch(() => {});
 
     const core = [
-        import('./views/HomeView.vue'),
-        import('./views/MarketView.vue'),
-        import('./views/orders/MyMarketView.vue'),
-        import('./views/MoreView.vue'),
+        () => import('./views/HomeView.vue'),
+        () => import('./views/MarketView.vue'),
+        () => import('./views/orders/MyMarketView.vue'),
+        () => import('./views/MoreView.vue'),
     ];
 
+    // 핵심 다음으로 자주 진입하는 화면 — 첫 렌더 후 여유가 생기면 순차 프리로드해
+    // 이후 상세/이력/정산 진입 시 청크 다운로드 지연이 없게 한다
     const rest = [
+        () => import('./views/orders/OrderDetailView.vue'),
         () => import('./views/orders/OrderCreateView.vue'),
+        () => import('./views/orders/RideHistoryView.vue'),
+        () => import('./views/orders/ActionCenterView.vue'),
+        () => import('./views/SettlementView.vue'),
+        () => import('./views/ReviewsView.vue'),
         () => import('./views/NotificationsView.vue'),
         () => import('./views/ProfileView.vue'),
         () => import('./views/community/CommunityView.vue'),
         () => import('./views/ChatView.vue'),
+        () => import('./views/SupportView.vue'),
     ];
 
     // 브라우저 유휴 시 한 번만 실행 (없으면 setTimeout 폴백)
