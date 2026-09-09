@@ -1,6 +1,6 @@
 # ROADMAP
 
-> 상태: ✅ 현행 (2026-09-08 갱신) — 단계와 방향만 정리. 실행 이력·세부 체크리스트는 [IMPROVEMENT_PLAN.md](./IMPROVEMENT_PLAN.md)가 단일 기록이며, TASKS.md는 현재 작업을 지정한다.
+> 상태: ✅ 현행 (2026-09-09 갱신) — 단계와 방향만 정리. 실행 이력·세부 체크리스트는 [IMPROVEMENT_PLAN.md](./IMPROVEMENT_PLAN.md)가 단일 기록이며, TASKS.md는 현재 작업을 지정한다.
 
 ## 목적
 - NoWhere 프로젝트의 개발 단계와 우선순위를 정리한다.
