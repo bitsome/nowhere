@@ -292,7 +292,7 @@ const goActions = () => {
                     </a>
 
                     <button type="button" class="v8-priority-go" @click="goActions">
-                        처리할 일(운행 승인 · 제안 · 요청)로 이동 →
+                        처리할 일(운행 승인 · 제안 · 요청) 화면으로 이동 →
                     </button>
                 </UiCard>
 
@@ -677,23 +677,6 @@ html.dark .v8-priority-status--ride { color: #5de4d2; }
     overflow: hidden;
 }
 
-/* 알림 항목 */
-.v8-noti {
-    display: flex;
-    gap: 10px;
-    padding: 12px;
-    text-decoration: none;
-    color: inherit;
-    border-bottom: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-    cursor: pointer;
-    transition: background 0.12s ease;
-}
-.v8-noti:last-child {
-    border-bottom: 0;
-}
-.v8-noti:hover {
-    background: color-mix(in srgb, var(--brand) 4%, transparent);
-}
 .v8-icon {
     width: 36px;
     height: 36px;

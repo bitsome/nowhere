@@ -1595,6 +1595,7 @@ onBeforeUnmount(() => {
                             <button
                                 type="button"
                                 class="auto-history__del"
+                                aria-label="삭제"
                                 title="삭제"
                                 :disabled="autoDeleting"
                                 @click="deleteAutoOrder(order.id)"
@@ -2267,7 +2268,7 @@ onBeforeUnmount(() => {
                     type="textarea"
                     :rows="3"
                     :maxlength="1000"
-                    placeholder="확인·조사한 내용을 적어주세요. '처리·완료' 단계에서는 신고자에게 그대로 전달됩니다."
+                    placeholder="확인·조사한 내용을 적어 주세요. '처리·완료' 단계에서는 신고자에게 그대로 전달됩니다."
                 />
             </div>
             <template #footer>

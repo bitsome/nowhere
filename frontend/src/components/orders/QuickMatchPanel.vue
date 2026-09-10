@@ -10,19 +10,15 @@ import { useMessage } from 'naive-ui';
 import { useAuthStore } from '../../stores/auth';
 import { apiMyDriver, apiMyVehicles, apiSetDriverMatchEnabled } from '../../api/driver';
 import { apiMatchPreferences, apiCreateMatchPreference } from '../../api/match';
-import { apiOrders } from '../../api/orders';
 import { getApiErrorMessage } from '../../api/client';
 import { useMatchSettings } from '../../composables/useMatchSettings';
 import { ORDER_TAGS } from '../../utils/tags';
 import { matchTimeInfo } from '../../utils/matchTime';
 import BaseIcon from '../common/BaseIcon.vue';
-import EmptyState from '../common/EmptyState.vue';
-import OrderCard from './OrderCard.vue';
-import OrderCardSkeleton from './OrderCardSkeleton.vue';
 import UiCard from '../ui/UiCard.vue';
 import UiChip from '../ui/UiChip.vue';
 
-const emit = defineEmits(['changed']);
+const emit = defineEmits(['changed', 'apply']);
 
 const auth = useAuthStore();
 const message = useMessage();
@@ -34,30 +30,26 @@ const vehicle = ref(null);
 const vehicles = ref([]);
 const preference = ref(null);
 const preferences = ref([]);
-const matchedOrders = ref([]);
-const matchedOrdersLoading = ref(true);
 const loading = ref(true);
 
 const matchEnabled = computed(() => Boolean(driver.value?.match_enabled));
-const hasActivePreference = computed(() => preferences.value.some((p) => p.is_active));
 // 매칭 설정 시간대 — 날짜(오늘/내일)를 앞에 붙이고, 자정을 넘기면 '다음날' 배지를 단다
 const preferenceTime = computed(() => matchTimeInfo(preference.value || {}));
 
 const statusText = computed(() => {
     if (!matchEnabled.value) {
-        return '매칭을 켜면 조건에 맞는 운행이 모여요';
+        return '매칭을 켜면 마켓이 빠른매칭 조건에 맞는 운행만 보여줘요';
     }
     if (quickConditionCount.value > 0) {
-        return `활성 매칭 조건 ${quickConditionCount.value}개 · 맞는 운행을 자동 추천해요`;
+        return `빠른매칭 조건 ${quickConditionCount.value}개 · 마켓에서 맞는 운행만 모아 볼 수 있어요`;
     }
-    return '조건을 설정하면 맞는 운행을 추천해 드려요';
+    return '조건을 설정하면 마켓이 조건에 맞는 운행만 보여줘요';
 });
 
-// 매칭 상태·조건·매칭된 운행을 병렬로 불러온다
+// 매칭 상태와 내 차량·조건을 불러온다 (운행 카드 목록은 마켓이 담당)
 const load = async (silent = false) => {
     if (!isDriver.value) {
         loading.value = false;
-        matchedOrdersLoading.value = false;
 
         return;
     }
@@ -66,11 +58,10 @@ const load = async (silent = false) => {
         loading.value = true;
     }
 
-    const [me, vehiclesRes, prefs, matched] = await Promise.allSettled([
+    const [me, vehiclesRes, prefs] = await Promise.allSettled([
         apiMyDriver(),
         apiMyVehicles(),
         apiMatchPreferences(),
-        apiOrders({ scope: 'market', matched: 1, per_page: 100, sort: 'latest' }),
     ]);
 
     if (me.status === 'fulfilled') {
@@ -87,12 +78,6 @@ const load = async (silent = false) => {
         preferences.value = list;
         preference.value = list.find((p) => p.is_active) ?? list[0] ?? null;
     }
-
-    if (matched.status === 'fulfilled') {
-        matchedOrders.value = (matched.value.data.data ?? []).filter((order) => order.is_matched_to_me && order.kind !== 'set');
-    }
-
-    matchedOrdersLoading.value = false;
 
     if (!silent) {
         loading.value = false;
@@ -118,6 +103,26 @@ const toggleMatch = async (enabled) => {
         }
         message.error(getApiErrorMessage(e, '매칭 설정을 변경하지 못했습니다.'));
     }
+};
+
+// 마켓에서 빠른매칭 보기 — 매칭이 꺼져 있으면 먼저 켜고, 마켓을 빠른매칭 목록으로 전환한다.
+// (운행 카드는 여기서 띄우지 않고 마켓 목록이 보여준다)
+const goMatched = async () => {
+    if (!matchEnabled.value) {
+        try {
+            await apiSetDriverMatchEnabled(true);
+
+            if (driver.value) {
+                driver.value.match_enabled = true;
+            }
+        } catch (e) {
+            message.error(getApiErrorMessage(e, '매칭을 켜지 못했습니다.'));
+
+            return;
+        }
+    }
+
+    emit('apply');
 };
 
 // 매칭 설정 팝오버 — 시간·태그·금액·차량을 골라 간단히 매칭 설정을 만든다.
@@ -415,12 +420,15 @@ const startQuickMatching = async (preset) => {
     startingQuick.value = true;
 
     try {
-        // 기본 조건 — 오늘·내일 + (시간 프리셋) + 등록 차량. 상세는 '조건 관리'에서 조정
+        // 기본 조건 — 야간(자정을 넘는 시간대)은 '오늘 밤'만, 그 외는 오늘·내일 + 등록 차량.
+        // 상세는 '조건 관리'에서 조정할 수 있다.
+        const overnight = preset.start && preset.end && preset.start > preset.end;
+
         const res = await apiCreateMatchPreference({
             name: '빠른 매칭',
             start_time: preset.start,
             end_time: preset.end,
-            date_range: 'today_tomorrow',
+            date_range: overnight ? 'today' : 'today_tomorrow',
             days: null,
             area: null,
             tags: null,
@@ -452,7 +460,8 @@ const startQuickMatching = async (preset) => {
     }
 };
 
-// 선택한 조건으로 매칭 설정 저장 — 건드리지 않은 섹션은 기존 값을 유지한다
+// 선택한 조건으로 매칭 설정 저장 — 건드리지 않은 섹션은 기존 값을 유지한다.
+// 차량은 간단 필터의 일부이므로 항상 현재 고른 차량(기본: 내 차량)을 조건으로 저장한다.
 const saveQuickMatch = async () => {
     matchForm.date_range = quickDateRange.value;
 
@@ -470,9 +479,7 @@ const saveQuickMatch = async () => {
         matchForm.min_revenue = quickAmount.value || 0;
     }
 
-    if (quickVehicleDirty.value) {
-        matchForm.vehicle_id = quickVehicleId.value;
-    }
+    matchForm.vehicle_id = quickVehicleId.value;
 
     await saveMatch();
     quickChanged.value = false;
@@ -554,7 +561,7 @@ onMounted(() => load());
                 <span v-if="prefVehicle" class="qmp-chip-group">
                     <button type="button" class="qmp-chip-btn" @click="openQuickMatch('vehicle')">
                         <UiChip>
-                            <b>차량</b>{{ prefVehicle.name || prefVehicle.type || '등록 차량' }}
+                            <b>차량</b>{{ prefVehicle.type || prefVehicle.name || '등록 차량' }}
                             <span v-if="prefVehicle.capacity" class="qmp-chip-next">{{ prefVehicle.capacity }}인승</span>
                         </UiChip>
                     </button>
@@ -580,6 +587,7 @@ onMounted(() => load());
                         <UiChip>
                             <b>시간</b>
                             <template v-if="preferenceTime.date">{{ preferenceTime.date }}&nbsp;</template>
+                            <template v-else-if="preferenceTime.overnight">오늘&nbsp;</template>
                             {{ preferenceTime.start }}–
                             <span v-if="preferenceTime.overnight" class="qmp-chip-next">다음날</span>
                             {{ preferenceTime.end }}
@@ -592,41 +600,18 @@ onMounted(() => load());
                     </button>
                 </span>
             </div>
+
+            <!-- 결과는 여기 카드로 띄우지 않고, 마켓 목록이 빠른매칭 조건에 맞는 운행만 보여준다 -->
+            <button
+                v-if="preference"
+                type="button"
+                class="qmp-card__view"
+                @click="goMatched"
+            >
+                <span>마켓에서 빠른매칭 보기</span>
+                <BaseIcon name="arrow-forward" :size="14" />
+            </button>
         </UiCard>
-
-        <!-- 나에게 매칭된 운행 -->
-        <section class="qmp-section">
-            <div class="qmp-section__head">
-                <span class="qmp-section__title">나에게 매칭된 운행</span>
-                <span class="qmp-section__meta">
-                    <span class="qmp-section__count">{{ matchedOrders.length }}건</span>
-                    <button
-                        type="button"
-                        class="qmp-refresh"
-                        :disabled="matchedOrdersLoading"
-                        aria-label="새로고침"
-                        @click="load(true)"
-                    >
-                        <BaseIcon class="qmp-refresh__icon" :class="{ 'qmp-refresh__icon--spin': matchedOrdersLoading }" name="refresh" :size="13" />
-                    </button>
-                </span>
-            </div>
-
-            <div v-if="matchedOrdersLoading" class="qmp-list">
-                <OrderCardSkeleton v-for="n in 2" :key="n" />
-            </div>
-            <div v-else-if="matchedOrders.length" class="qmp-list">
-                <OrderCard v-for="order in matchedOrders" :key="order.id" :order="order" />
-            </div>
-            <EmptyState
-                v-else
-                icon="truck"
-                :title="matchEnabled ? '조건에 맞는 운행이 아직 없습니다' : '빠른 매칭이 꺼져 있어요'"
-                :hint="hasActivePreference
-                    ? '운행이 등록되면 여기에 자동으로 모여요'
-                    : '빠른 매칭을 켜고 조건을 설정하면 조건에 맞는 운행이 여기에 모여요'"
-            />
-        </section>
 
         <!-- 빠른 매칭 조건 모달 -->
         <n-modal
@@ -1027,60 +1012,30 @@ html.dark .qmp-switch--on span {
     white-space: nowrap;
 }
 
-/* 매칭된 운행 목록 */
-.qmp-section {
-    margin-top: 18px;
-}
-.qmp-section__head {
+/* 마켓에서 빠른매칭 보기 — 카드 하단 행동 버튼 (결과 목록은 마켓이 담당) */
+.qmp-card__view {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 10px;
-}
-.qmp-section__title {
-    font-size: 11px;
-    font-weight: 800;
-}
-.qmp-section__meta {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-}
-.qmp-section__count {
-    color: var(--text-muted);
-    font-size: 11px;
-    font-weight: 600;
-}
-.qmp-refresh {
-    display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    background: var(--surface);
-    color: var(--text-muted);
+    gap: 6px;
+    width: 100%;
+    margin-top: 12px;
+    padding: 11px 14px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--brand);
+    color: #fff;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 700;
     cursor: pointer;
-    padding: 0;
-    transition: color 0.15s ease, border-color 0.15s ease;
+    transition: opacity 0.15s ease;
 }
-.qmp-refresh:disabled {
-    opacity: 0.5;
-    cursor: default;
+html.dark .qmp-card__view {
+    color: #07120e;
 }
-.qmp-refresh__icon--spin {
-    animation: qmp-spin 0.9s linear infinite;
-}
-@keyframes qmp-spin {
-    to {
-        transform: rotate(360deg);
-    }
-}
-.qmp-list {
-    display: flex;
-    flex-direction: column;
-    gap: var(--card-gap);
+.qmp-card__view:hover {
+    opacity: 0.9;
 }
 </style>
 

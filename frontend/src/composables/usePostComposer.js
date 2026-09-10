@@ -47,7 +47,7 @@ export function usePostComposer({ message, posts }) {
         const content = draftContent.value.trim();
 
         if (content === '' && !draftImage.value) {
-            message.warning('글 내용을 입력해주세요.');
+            message.warning('글 내용을 입력해 주세요.');
 
             return;
         }

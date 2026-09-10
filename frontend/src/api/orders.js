@@ -10,6 +10,9 @@ export const apiRecommendations = () => apiClient.get('/orders/recommendations')
 
 export const apiOrder = (id) => apiClient.get(`/orders/${id}`);
 
+// 찜(즐겨찾기) 토글 — 마켓 운행을 보관/해제한다 (응답: { favorited: bool })
+export const apiToggleFavorite = (id) => apiClient.post(`/orders/${id}/favorite`);
+
 // 왕복 체인 일괄 가져오기 요청 — 체인에 포함된 운행들을 등록자들에게 한 번에 요청한다
 export const apiBatchClaim = (orderIds) => apiClient.post('/orders/batch-claim', { order_ids: orderIds });
 

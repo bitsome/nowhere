@@ -115,6 +115,7 @@ const logout = async () => {
             <UiCard :padded="false" class="more-list">
                 <UiListRow tag="button" icon="order-create" arrow @click="go('order-create')">내 운행</UiListRow>
                 <UiListRow tag="button" icon="history" arrow @click="go('history')">운행 기록</UiListRow>
+                <UiListRow tag="button" icon="heart" arrow @click="go('order-favorites')">찜한 운행</UiListRow>
                 <UiListRow v-if="isDriver" tag="button" icon="coin" arrow @click="go('settlement')">정산</UiListRow>
                 <UiListRow tag="button" icon="my-market" arrow @click="go('my-market')">내 마켓</UiListRow>
                 <UiListRow tag="button" icon="cash" arrow @click="go('actions')">처리할 일</UiListRow>

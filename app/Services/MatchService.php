@@ -23,11 +23,19 @@ class MatchService
     public const MATCH_TITLE = '매칭 운행 도착';
 
     /**
-     * 공개된 운행을 적합도 랭킹 상위 N명의 기사에게 매칭 제안(알림)한다.
+     * 빠른매칭을 켜거나 온라인으로 전환하는 순간, 이미 마켓에 열려 있는
+     * 매칭 운행 전체를 하나씩 알리면 알림이 폭주한다. 그래서 조건에 맞는 운행이
+     * 있으면 '한 건으로 모은 요약 알림'만 보낸다.
+     * (새로 등록되는 알맞은 운행은 matchForOrder()가 개별 알림으로 처리한다)
+     */
+    public const MATCH_DIGEST_TITLE = '조건에 맞는 운행이 있어요';
+
+    /**
+     * 공개(또는 다시 열려)된 운행을 적합도 랭킹 상위 N명의 기사에게 매칭 제안(알림)한다.
      *
+     * 새로 등록된 운행 중 내 빠른매칭 조건(isEligible)에 맞는 운행만 개별 알림으로 도착한다.
      * 후보는 랭킹 엔진(DriverMatchRanker)이 온라인 + 매칭 켬 + 활성 매칭 설정 보유
      * 기사 중 같은 날짜 진행 중 일정과 겹치지 않는 기사를 점수 순으로 뽑는다.
-     * 알림은 기사의 매칭 설정 조건(isMatch)을 실제로 충족한 기사에게만 보낸다.
      * (랭킹은 '누구부터 제안할지' 순서를 정하고, 설정 조건은 자동 추천 범위를 지킨다)
      *
      * @return int 매칭 제안을 보낸 기사 수
@@ -76,7 +84,11 @@ class MatchService
      * 콜링(온라인+매칭 켬)을 시작한 기사에게 현재 열려 있는 매칭 운행을 알린다.
      * 운행 공개 시점에 오프라인/매칭 꺼짐이던 기사가 놓친 매칭을 되돌려 받는다.
      *
-     * @return int 매칭 제안을 보낸 운행 수
+     * 이미 열려 있는 운행을 하나씩 개별 알림으로 보내면 폭주하므로,
+     * 조건에 맞는 운행이 있으면 '한 건으로 모은 요약 알림'만 보낸다.
+     * (새로 등록되는 알맞은 운행은 matchForOrder()가 개별 알림으로 처리한다)
+     *
+     * @return int 보낸 요약 알림 수 (0 또는 1)
      */
     public function matchForDriver(User $user): int
     {
@@ -96,7 +108,8 @@ class MatchService
             return 0;
         }
 
-        $matched = 0;
+        // 개별 알림을 아직 받지 않은 매칭 운행 수를 센다
+        $unnotified = 0;
 
         foreach ($this->availableOrders()->get() as $order) {
             foreach ($preferences as $preference) {
@@ -108,15 +121,39 @@ class MatchService
                     break;
                 }
 
-                $this->sendMatchNotification($user, $order);
-
-                $matched++;
+                $unnotified++;
 
                 break;
             }
         }
 
-        return $matched;
+        if ($unnotified === 0) {
+            return 0;
+        }
+
+        // 켜고 끄기를 반복해도 같은 내용의 요약 알림이 짧은 시간에 반복되지 않게 한다
+        if ($this->recentlyDigested($user)) {
+            return 0;
+        }
+
+        $user->notify(new OrderNotification(
+            self::MATCH_DIGEST_TITLE,
+            "조건에 맞는 운행 {$unnotified}건이 마켓에 있어요. 빠른매칭 목록에서 확인해 보세요.",
+        ));
+
+        return 1;
+    }
+
+    /**
+     * 최근에 같은 요약 알림을 보냈는지 — 10분 안에 재스캔(켬/끔 반복)되면 중복을 막는다.
+     */
+    private function recentlyDigested(User $user): bool
+    {
+        return $user->notifications()
+            ->where('type', OrderNotification::class)
+            ->where('data->title', self::MATCH_DIGEST_TITLE)
+            ->where('created_at', '>=', now()->subMinutes(10))
+            ->exists();
     }
 
     /**
@@ -323,17 +360,52 @@ class MatchService
 
     /**
      * 날짜 범위 조건 — 오늘/내일/오늘+내일로 좁힐 수 있다 (비우면 전체).
+     *
+     * 자정을 넘는 야간 시간대(예: 20:00~06:00)는 '그 밤이 시작된 날짜'로 판정한다.
+     * 20시 이후 운행은 그 날짜의 밤, 새벽(00:00~종료) 운행은 전날 밤의 연장으로 보아
+     * 날짜를 정하지 않았으면 '오늘 밤'(오늘 20시~내일 06시) 운행만 매칭된다.
+     * → 내일 저녁 20시·모레 밤처럼 밤 단위가 날마다 반복되는 운행은 제외된다.
      */
     private function dateMatches(MatchPreference $preference, Order $order): bool
     {
         $range = $preference->date_range;
 
-        if (! $range || ! $order->service_date) {
+        if (! $order->service_date) {
             return true;
         }
 
         $today = now('Asia/Seoul')->format('Y-m-d');
         $tomorrow = now('Asia/Seoul')->addDay()->format('Y-m-d');
+        $start = $preference->start_time;
+        $end = $preference->end_time;
+        $overnight = $start && $end && $start > $end;
+
+        if ($overnight) {
+            // 밤이 시작될 수 있는 날짜 — 날짜를 정하지 않았으면 '오늘 밤' 운행만
+            $allowed = match ($range) {
+                'today' => [$today],
+                'tomorrow' => [$tomorrow],
+                'today_tomorrow' => [$today, $tomorrow],
+                default => [$today],
+            };
+            $time = $order->service_time
+                ?: ($order->service_datetime ? Carbon::parse($order->service_datetime)->format('H:i') : '');
+
+            if ($time === '') {
+                return true; // 시각 미정 운행은 통과
+            }
+
+            // 새벽 구간(00:00~종료)은 전날 밤의 연장으로 판정
+            $anchor = $time <= $end
+                ? Carbon::parse($order->service_date)->subDay()
+                : Carbon::parse($order->service_date);
+
+            return in_array($anchor->format('Y-m-d'), $allowed, true);
+        }
+
+        if (! $range) {
+            return true;
+        }
 
         return match ($range) {
             'today' => $order->service_date === $today,

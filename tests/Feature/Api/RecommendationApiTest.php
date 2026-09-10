@@ -484,3 +484,65 @@ test('선호도 60% 이상 운행만 추천에 남는다', function () {
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.match_score', 70);
 });
+
+test('진행 중 일정과 겹치면 시간 여유 근거가 빠지고, 같은 점수면 여유 있는 운행이 먼저 온다', function () {
+    $this->travelTo(Carbon::parse('today 08:00 Asia/Seoul'));
+
+    // 운행 이력 — '강남' 하차 2회 + 09시 2회 (지역·시간 신호)
+    Order::factory()->create([
+        'user_id' => $this->driver->id,
+        'status' => Order::STATUS_COMPLETED,
+        'pickup_location' => '인천공항',
+        'dropoff_location' => '서울 강남',
+        'service_date' => now('Asia/Seoul')->subDays(2)->format('Y-m-d'),
+        'service_time' => '09:00',
+    ]);
+    Order::factory()->create([
+        'user_id' => $this->driver->id,
+        'status' => Order::STATUS_COMPLETED,
+        'pickup_location' => '인천공항',
+        'dropoff_location' => '서울 강남',
+        'service_date' => now('Asia/Seoul')->subDays(1)->format('Y-m-d'),
+        'service_time' => '09:30',
+    ]);
+
+    // 확정된 내 일정 — 오늘 11:00 (11:00~12:30)
+    Order::factory()->create([
+        'user_id' => $this->driver->id,
+        'status' => Order::STATUS_ACCEPTED,
+        'pickup_location' => '서울 강남',
+        'dropoff_location' => '인천공항',
+        'service_date' => now('Asia/Seoul')->format('Y-m-d'),
+        'service_time' => '11:00',
+        'estimated_duration_minutes' => 90,
+    ]);
+
+    // 추천 후보 2건 — 같은 점수(자주 다니는 노선 20)지만 시간 여유가 다른 운행
+    $free = Order::factory()->create([
+        'user_id' => $this->owner->id,
+        'status' => Order::STATUS_PUBLISHED,
+        'pickup_location' => '서울 강남',
+        'dropoff_location' => '잠실',
+        'service_date' => now('Asia/Seoul')->format('Y-m-d'),
+        'service_time' => '10:00', // 내 일정(11:00)과 안 겹침 → 여유 있음
+    ]);
+    $busy = Order::factory()->create([
+        'user_id' => $this->owner->id,
+        'status' => Order::STATUS_PUBLISHED,
+        'pickup_location' => '서울 강남',
+        'dropoff_location' => '판교',
+        'service_date' => now('Asia/Seoul')->format('Y-m-d'),
+        'service_time' => '11:30', // 내 일정(11:00~12:30)과 겹침 → 여유 없음
+    ]);
+
+    $rows = $this->getJson('/api/orders/recommendations')
+        ->assertOk()
+        ->assertJsonCount(2, 'data')
+        ->json('data');
+
+    // 같은 조건 일치율이면 '시간 여유 충분' 근거가 있는 운행을 먼저 보여준다 (개인화·실행 가능성 우선)
+    $this->assertSame($free->id, $rows[0]['id']);
+    $this->assertSame($busy->id, $rows[1]['id']);
+    expect($rows[0]['match_reasons'])->toContain('시간 여유 충분');
+    expect($rows[1]['match_reasons'])->not->toContain('시간 여유 충분');
+});

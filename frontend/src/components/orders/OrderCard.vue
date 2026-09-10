@@ -1,11 +1,13 @@
 <script setup>
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../../stores/auth';
+import { apiToggleFavorite } from '../../api/orders';
 import { statusColorVar } from '../../utils/colors';
 import { relativeDateLabel } from '../../utils/dateText';
 import { trackClick, trackImpression } from '../../utils/tracking';
 import BaseIcon from '../common/BaseIcon.vue';
+import ScoreStars from './ScoreStars.vue';
 
 const props = defineProps({
     order: {
@@ -44,9 +46,19 @@ const props = defineProps({
         type: Object,
         default: null,
     },
+    // 찜(하트) 표시 — 마켓·찜한 운행 목록에서만 켠다
+    favoriteable: {
+        type: Boolean,
+        default: false,
+    },
+    // 찜 여부 — 목록 행의 is_favorited 값 (백엔드가 함께 내려준다)
+    favorited: {
+        type: Boolean,
+        default: false,
+    },
 });
 
-const emit = defineEmits(['toggle']);
+const emit = defineEmits(['toggle', 'favorite-change', 'tag-search']);
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -91,6 +103,81 @@ const handleClick = () => {
     open();
 };
 
+// 태그 검색 — 태그 칩을 누르면 마켓에서 그 태그로 운행을 검색한다.
+// 이미 마켓에 있으면 화면에 직접 반영하고, 다른 화면에서는 마켓으로 이동해 태그를 적용한다.
+const goTagSearch = (tag) => {
+    if (props.selectable) {
+        return;
+    }
+
+    if (router.currentRoute.value.name === 'market') {
+        emit('tag-search', tag);
+
+        return;
+    }
+
+    try {
+        localStorage.setItem('nowhere:market:pendingTag', tag);
+    } catch {
+        /* 저장 실패 무시 — 마켓은 기존 필터로 열린다 */
+    }
+
+    router.push({ name: 'market' });
+};
+
+// ── 찜(즐겨찾기) — 하트를 눌러 마켓 운행을 보관/해제한다 ──
+const fav = ref(props.favorited);
+const favBusy = ref(false);
+
+// 목록이 새로고침되면 서버 상태(행의 is_favorited)로 초기화한다
+watch(
+    () => props.favorited,
+    (value) => {
+        fav.value = value;
+    },
+);
+
+// ── 운행 조건 점수 — 카드 아래 점선 바에서 별 5개(0~5점)로 요약하고, 클릭하면 근거 모달 ──
+const scoreOpen = ref(false);
+
+const matchScore = computed(() => {
+    const score = Number(props.order.match_score ?? props.order.matchScore ?? null);
+
+    return Number.isFinite(score) ? score : null;
+});
+
+// 100점 만점을 5점 만점으로 환산 (예: 70 → 3.5 → 별 3개 + 반별 1개)
+const ratingValue = computed(() => {
+    if (matchScore.value === null) {
+        return null;
+    }
+
+    return Math.min(5, Math.max(0, matchScore.value / 20));
+});
+
+// 조건 버튼 노출 — 추천 근거/점수가 있는 카드(마켓·홈 추천)에서만
+const condOpenable = computed(() => props.showMatchReasons && (matchScore.value !== null || matchReasons.value.length > 0));
+
+const toggleFavorite = async () => {
+    if (favBusy.value || props.selectable) {
+        return;
+    }
+
+    favBusy.value = true;
+
+    try {
+        const { data } = await apiToggleFavorite(props.order.id);
+        const next = Boolean(data?.data?.favorited);
+
+        fav.value = next;
+        emit('favorite-change', props.order.id, next);
+    } catch {
+        // 마켓에서 빠진 운행 등은 조용히 무시 — 다음 목록 갱신에서 정리된다
+    } finally {
+        favBusy.value = false;
+    }
+};
+
 // 상태별 배지 색상 — 중앙 팔레트(utils/colors.js)에서 참조 (테마 자동 적용)
 // 재정의(statusOverride)가 있으면 그 라벨·색상을 우선 사용한다 (휴지통 '요청취소' 등)
 const statusText = computed(() => {
@@ -98,7 +185,7 @@ const statusText = computed(() => {
         return props.statusOverride.label;
     }
 
-    // 승인 대기 상태 — 요청을 보낸 기사(claimant)와 등록자에게만 '수락대기'로 보여준다.
+    // 승인 대기 상태 — 요청을 보낸 기사(claimant)와 등록자에게만 '수락 대기'로 보여준다.
     // 그 외 드라이버/관람자에게는 아직 가져올 수 있는 운행으로 안내한다.
     if (props.order.status === 'acceptance_pending') {
         const me = auth.user?.id;
@@ -223,24 +310,39 @@ const startRemainIcon = computed(() => START_REMAIN_ICONS[startRemain.value?.lev
                         {{ order.flightNumber }}
                     </span>
                 </div>
+                <!-- 운행 조건 점수 별 — 항공편(시간) 줄 아래. 클릭하면 근거 모달 -->
+                <div v-if="condOpenable" class="order-card__route-score">
+                    <button
+                        type="button"
+                        class="order-card__cond"
+                        aria-label="운행 조건 보기"
+                        :title="'조건 0~5점 · 클릭해 근거 보기'"
+                        @click.stop="scoreOpen = true"
+                    >
+                        <ScoreStars v-if="matchScore !== null" :value="ratingValue" :size="14" />
+                        <span v-else class="order-card__cond-hint">조건 보기</span>
+                    </button>
+                </div>
             </div>
             <div class="order-card__side">
-                <n-checkbox
-                    v-if="selectable"
-                    :checked="selected"
-                    class="order-card__check"
-                    @click.stop
-                    @update:checked="emit('toggle', order.id)"
-                />
-                <!-- 공개 상태는 배지 대신 금액 — 그 외 상태는 상태 배지 유지 -->
-                <span v-else-if="isPublished" class="order-card__amount">
-                    <BaseIcon class="order-card__coin-icon" name="coin" :size="16" />
-                    {{ order.amount }}
-                </span>
-                <span v-else class="status-badge" :class="statusBadgeClass" :style="{ background: statusColor, borderColor: statusColor }">
-                    {{ statusText }}
-                </span>
-                <span v-if="statusExtra" class="order-card__status-extra">{{ statusExtra }}</span>
+                <div class="order-card__side-top">
+                    <n-checkbox
+                        v-if="selectable"
+                        :checked="selected"
+                        class="order-card__check"
+                        @click.stop
+                        @update:checked="emit('toggle', order.id)"
+                    />
+                    <!-- 공개 상태는 배지 대신 금액 — 그 외 상태는 상태 배지 유지 -->
+                    <span v-else-if="isPublished" class="order-card__amount">
+                        <BaseIcon class="order-card__coin-icon" name="coin" :size="16" />
+                        {{ order.amount }}
+                    </span>
+                    <span v-else class="status-badge" :class="statusBadgeClass" :style="{ background: statusColor, borderColor: statusColor }">
+                        {{ statusText }}
+                    </span>
+                    <span v-if="statusExtra" class="order-card__status-extra">{{ statusExtra }}</span>
+                </div>
                 <!-- 차량 — 한 줄 -->
                 <span v-if="order.vehicle" class="order-card__side-line">
                     <BaseIcon name="car" :size="12" />
@@ -255,16 +357,33 @@ const startRemainIcon = computed(() => START_REMAIN_ICONS[startRemain.value?.lev
                 </span>
             </div>
         </div>
-        <!-- 어필 태그 — 등록자가 붙인 운행 설명 태그 (비우면 표시 안 함) -->
-        <div v-if="order.tags?.length" class="order-card__tags">
-            <span v-for="tag in order.tags" :key="tag" class="order-card__tag">{{ tag }}</span>
-        </div>
-        <!-- 추천 근거 — 홈 추천에서 '왜 추천했는지' 체크리스트 (퍼센트 없이 이유 문구만) -->
-        <div v-if="showMatchReasons && matchReasons.length" class="order-card__reasons">
-            <span v-for="reason in matchReasons" :key="reason" class="order-card__reason">
-                <BaseIcon name="check" :size="11" />
-                {{ reason }}
-            </span>
+        <!-- 태그·찜 바 — 한 줄: 왼쪽 태그 칩 / 오른쪽 하트 -->
+        <div v-if="(favoriteable && !selectable) || order.tags?.length" class="order-card__favbar">
+            <!-- 어필 태그 — 누르면 해당 태그로 마켓 검색 -->
+            <div v-if="order.tags?.length" class="order-card__route-tags">
+                <button
+                    v-for="tag in order.tags"
+                    :key="tag"
+                    type="button"
+                    class="order-card__route-tag"
+                    :title="`#${tag} 운행 검색`"
+                    @click.stop.prevent="goTagSearch(tag)"
+                >
+                    #{{ tag }}
+                </button>
+            </div>
+            <!-- 찜 — 마켓에서 나중에 다시 볼 운행을 보관한다 -->
+            <button
+                v-if="favoriteable && !selectable"
+                type="button"
+                class="order-card__fav"
+                :class="{ 'order-card__fav--on': fav }"
+                :aria-label="fav ? '찜 해제' : '찜하기'"
+                :title="fav ? '찜 해제' : '찜하기'"
+                @click.stop.prevent="toggleFavorite"
+            >
+                <BaseIcon :name="fav ? 'heart-filled' : 'heart'" :size="17" />
+            </button>
         </div>
         <!-- 금액 행 — 공개가 아닌 상태(배지가 금액 자리를 사용) 또는 선택 모드에서 하단 표시 -->
         <div v-if="selectable || !isPublished" class="order-card__meta">
@@ -275,6 +394,20 @@ const startRemainIcon = computed(() => START_REMAIN_ICONS[startRemain.value?.lev
         </div>
     </article>
     </div>
+
+    <!-- 운행 조건 상세 모달 — 별(점수)을 누르면 추천 근거 체크리스트가 열린다 -->
+    <n-modal v-model:show="scoreOpen" preset="card" title="운행 조건" :style="{ maxWidth: '340px' }">
+        <div class="cond-modal">
+            <ScoreStars v-if="ratingValue !== null" :value="ratingValue" :size="24" />
+            <div v-if="matchReasons.length" class="cond-modal__reasons">
+                <span v-for="reason in matchReasons" :key="reason" class="cond-modal__reason">
+                    <BaseIcon class="cond-modal__check" name="check" :size="12" />
+                    {{ reason }}
+                </span>
+            </div>
+            <p v-else class="cond-modal__empty">아직 조건 점수에 따른 상세 근거가 없습니다.</p>
+        </div>
+    </n-modal>
 </template>
 
 <style scoped>
@@ -336,6 +469,32 @@ const startRemainIcon = computed(() => START_REMAIN_ICONS[startRemain.value?.lev
     flex-shrink: 0;
 }
 
+/* 찜 하트 — 테두리 없는 심플 아이콘. 태그 칩과 같은 위선(높이 18px)에 맞춘다 */
+.order-card__fav {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 18px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    line-height: 1;
+    transition: color 0.15s ease, transform 0.1s ease;
+    flex-shrink: 0;
+}
+.order-card__fav:hover {
+    color: var(--danger);
+}
+.order-card__fav:active {
+    transform: scale(0.88);
+}
+.order-card__fav--on {
+    color: var(--danger);
+}
+
 .order-card__head {
     display: flex;
     align-items: flex-start;
@@ -361,7 +520,7 @@ const startRemainIcon = computed(() => START_REMAIN_ICONS[startRemain.value?.lev
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 12px;
+    font-size: 15px;
     font-weight: 800;
     letter-spacing: -0.2px;
 }
@@ -402,6 +561,19 @@ const startRemainIcon = computed(() => START_REMAIN_ICONS[startRemain.value?.lev
     flex-shrink: 0;
 }
 
+/* 금액·배지 오른쪽 정렬 — 상단 우측 열의 첫 줄을 한 줄로 묶는다 */
+.order-card__side-top {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    max-width: 100%;
+    flex-shrink: 0;
+}
+.order-card__side-top .order-card__status-extra {
+    margin-left: 2px;
+}
+
 /* 상태 배지 옆 추가 텍스트 — 요청보냄 남은 시간 등 */
 .order-card__status-extra {
     color: var(--text-muted);
@@ -430,45 +602,118 @@ const startRemainIcon = computed(() => START_REMAIN_ICONS[startRemain.value?.lev
     border-top: 1px solid var(--border);
 }
 
-/* 어필 태그 — 등록자가 붙인 운행 설명 태그 뭉치. 정보(노선·시간)를 압도하지 않게 연한 무채색 */
-.order-card__tags {
+/* 어필 태그 — 한 줄(찜 바)의 왼쪽 칩. 카드 좌측 라인에 맞춘다 */
+.order-card__route-tags {
     display: flex;
     flex-wrap: wrap;
-    gap: 5px;
-    margin-top: 8px;
+    align-items: center;
+    gap: 4px;
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-left: 0;
+    line-height: 1;
 }
-.order-card__tag {
-    padding: 1px 6px;
+.order-card__route-tag:first-child {
+    margin-left: 0;
+}
+.order-card__route-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
     border-radius: 999px;
     background: var(--bg);
     border: 1px solid var(--border);
     color: var(--text-muted);
     font-size: 10px;
     font-weight: 400;
+    line-height: 1;
     white-space: nowrap;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.order-card__route-tag:hover,
+.order-card__route-tag:focus-visible {
+    color: var(--brand);
+    border-color: color-mix(in srgb, var(--brand) 55%, transparent);
+    background: color-mix(in srgb, var(--brand) 6%, transparent);
+    outline: none;
 }
 
-/* 추천 근거 체크리스트 — 홈 추천 카드에서만 표시. 퍼센트·점수 없이 이유 문구만 연하게 */
-.order-card__reasons {
+/* 운행 조건 점수 별 줄 — 항공편(시간) 줄 아래. 살짝 숨 쉬는 간격 */
+.order-card__route-score {
     display: flex;
-    flex-direction: column;
-    gap: 3px;
-    margin-top: 8px;
-    padding-top: 8px;
+    align-items: center;
+    margin-top: 3px;
+    padding-left: 0;
+    min-height: 16px;
+}
+.order-card__route-score .order-card__cond {
+    height: 16px;
+}
+
+/* 태그·찜 바 — 점선 구분 한 줄. 왼쪽 태그 칩 / 오른쪽 하트 */
+.order-card__favbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 10px;
+    padding-top: 11px;
     border-top: 1px dashed var(--border);
 }
-.order-card__reason {
+
+/* 조건 별점 버튼 — 별 0~5점 요약. 클릭하면 근거 체크리스트 모달 */
+.order-card__cond {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    color: var(--text-muted);
-    font-size: 11px;
-    font-weight: 500;
-    line-height: 1.4;
+    justify-content: center;
+    gap: 3px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    font-family: inherit;
+    line-height: 1;
+    cursor: pointer;
+    transition: opacity 0.15s ease;
 }
-.order-card__reason :deep(svg) {
+.order-card__cond:hover {
+    opacity: 0.75;
+}
+.order-card__cond-hint {
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 500;
+}
+
+/* 조건 상세 모달 — 별점 + 추천 근거 체크리스트 */
+.cond-modal__reasons {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--border);
+}
+.cond-modal__reason {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 6px;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.45;
+}
+.cond-modal__check {
     flex-shrink: 0;
     color: var(--brand);
+    margin-top: 1px;
+}
+.cond-modal__empty {
+    margin: 12px 0 0;
+    color: var(--text-muted);
+    font-size: 11px;
 }
 
 /* 카드 밖 상단 래퍼 — 시작 전 시간(좌)·승인 시간(우)을 카드 위에 둔다 */
@@ -562,6 +807,11 @@ html.dark .order-card-start--teal {
     50% {
         box-shadow: 0 1px 8px color-mix(in srgb, var(--danger) 80%, transparent);
     }
+}
+
+/* 임박 배지 — 다크 모드에서 danger가 밝은 빨강으로 톤 다운되어 흰 글자 대비가 약해지므로 어두운 글자로 전환 */
+html.dark .order-card__urgent {
+    color: #101418;
 }
 
 .order-card__priority {

@@ -4,6 +4,7 @@ namespace App\Services\Order;
 
 use App\Models\MatchPreference;
 use App\Models\Order;
+use App\Models\OrderFavorite;
 use App\Models\Review;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -49,11 +50,23 @@ class OrderListService
         $perPage = min(max((int) $request->integer('per_page', 20), 1), 100);
         $orders = $this->paginate($query, $request, $perPage);
 
+        $sort = $request->string('sort', 'latest')->toString();
+
+        if ($request->boolean('matched')) {
+            // 빠른매칭 보기 — 등록순이 아니라 지금 시각에서 가장 가까운 서비스 시각순으로 보여준다
+            $sort = 'date';
+        }
+
         $rows = app(OrderWorkspaceListBuilder::class)->build(
             collect($orders->items()),
             null,
-            $request->string('sort', 'latest')->toString(),
+            $sort,
         );
+
+        if ($request->boolean('matched')) {
+            // 날짜·시각 미정 운행은 '가장 가까운 순서'를 매길 수 없으므로 맨 뒤로 보낸다
+            $rows = $this->orderMatchedRowsSoonestFirst($rows);
+        }
 
         if ($request->string('scope', 'market')->toString() === 'market') {
             $rows = $this->decorateMarketRows($rows, $orders, $request->user());
@@ -82,6 +95,29 @@ class OrderListService
                 'last_page' => $orders->lastPage(),
             ],
         ];
+    }
+
+    /**
+     * 빠른매칭 보기 정렬 보정 — 서비스 시각이 정해진 운행을 시간순으로 두고,
+     * 날짜·시각이 비어 있는(미정) 운행은 순서를 매길 수 없어 맨 뒤로 보낸다.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function orderMatchedRowsSoonestFirst(array $rows): array
+    {
+        $dated = [];
+        $undated = [];
+
+        foreach ($rows as $row) {
+            if (($row['sortDate'] ?? '') !== '') {
+                $dated[] = $row;
+            } else {
+                $undated[] = $row;
+            }
+        }
+
+        return [...$dated, ...$undated];
     }
 
     /**
@@ -339,6 +375,21 @@ class OrderListService
             return; // 금액순은 정렬로 처리
         }
 
+        // 찜한 운행 — 마켓에서 빠진(가져감·취소·숨김) 찜은 조회 시점에 자동 정리한다
+        if ($quick === 'favorites') {
+            OrderFavorite::query()
+                ->where('user_id', $request->user()->id)
+                ->whereDoesntHave('order', fn (Builder $orderQuery) => $orderQuery
+                    ->whereIn('status', [Order::STATUS_PUBLISHED, Order::STATUS_TRADING, Order::STATUS_ACCEPTANCE_PENDING])
+                    ->where('is_hidden', false)
+                    ->where('admin_hold', false))
+                ->delete();
+
+            $query->whereHas('favorites', fn (Builder $q) => $q->where('user_id', $request->user()->id));
+
+            return;
+        }
+
         if (! in_array($quick, ['new', 'urgent', 'today', 'tomorrow', 'priority'], true)) {
             return;
         }
@@ -365,11 +416,15 @@ class OrderListService
         }
 
         if ($scope === 'market') {
-            // 마켓 검색은 노선(출발/도착)과 주문번호만 매칭한다 — 고객명 등 개인정보는 검색하지 않는다
+            // 마켓 검색은 노선(출발/도착)·주문번호·태그만 매칭한다 — 고객명 등 개인정보는 검색하지 않는다
             $query->where(function ($sub) use ($search) {
                 $sub->where('order_number', 'like', "%{$search}%")
                     ->orWhere('pickup_location', 'like', "%{$search}%")
-                    ->orWhere('dropoff_location', 'like', "%{$search}%");
+                    ->orWhere('dropoff_location', 'like', "%{$search}%")
+                    ->orWhereRaw(
+                        $this->tagsSearchExpression($sub).' LIKE ?',
+                        ["%{$search}%"],
+                    );
             });
 
             return;
@@ -382,6 +437,16 @@ class OrderListService
                 ->orWhere('dropoff_location', 'like', "%{$search}%")
                 ->orWhere('reservation_company', 'like', "%{$search}%");
         });
+    }
+
+    /**
+     * 태그 검색용 컬럼 표현식 — JSON 컬럼은 DB에 따라 LIKE를 위해 문자열로 캐스팅한다.
+     */
+    private function tagsSearchExpression(Builder $query): string
+    {
+        return $query->getConnection()->getDriverName() === 'mysql'
+            ? 'CAST(tags AS CHAR)'
+            : 'tags';
     }
 
     /**
@@ -409,6 +474,35 @@ class OrderListService
             ->pluck('id');
 
         $query->whereIn('id', $eligibleIds);
+
+        // 이미 시작된 운행은 '받을 수 있는 운행'이 아니므로 제외한다.
+        // 예) 지금이 밤인데 주간(06~20)을 골랐다면 오늘 남은 주간은 전부 지났으므로
+        //     가장 가까운 '내일 주간'부터 시작되는 운행만 남는다.
+        $now = now('Asia/Seoul');
+        [$todayStr, $timeStr] = explode(' ', $now->format('Y-m-d H:i'));
+
+        $query->where(function ($sub) use ($todayStr, $timeStr) {
+            // 날짜·시각이 모두 있는 운행 — 아직 시작하지 않은 것만 통과
+            $sub->where(function ($q) use ($todayStr, $timeStr) {
+                $q->whereNotNull('service_date')
+                    ->where('service_date', '!=', '')
+                    ->whereNotNull('service_time')
+                    ->where('service_time', '!=', '')
+                    ->where(function ($dateQuery) use ($todayStr, $timeStr) {
+                        $dateQuery->where('service_date', '>', $todayStr)
+                            ->orWhere(function ($q2) use ($todayStr, $timeStr) {
+                                $q2->where('service_date', $todayStr)
+                                    ->where('service_time', '>=', $timeStr);
+                            });
+                    });
+            })->orWhere(function ($q) {
+                // 날짜·시각 미정 운행은 시작 시각을 알 수 없으므로 통과
+                $q->whereNull('service_date')
+                    ->orWhere('service_date', '')
+                    ->orWhereNull('service_time')
+                    ->orWhere('service_time', '');
+            });
+        });
     }
 
     /**
@@ -1044,7 +1138,19 @@ class OrderListService
             }
         }
 
-        usort($singleRows, fn (array $a, array $b): int => ($b['match_score'] ?? 0) <=> ($a['match_score'] ?? 0));
+        // 조건 일치율(match_score) 높은 순으로 정렬하되,
+        // 같은 점수라면 내 운행 이력 기반(자주 다니는 노선/시간대)·시간 여유가 있는 운행을 먼저 보여준다.
+        // (개인화 1단계 — 선호+과거 운행이 추천 순서를 차등화)
+        usort($singleRows, function (array $a, array $b): int {
+            $score = ($b['match_score'] ?? 0) <=> ($a['match_score'] ?? 0);
+
+            if ($score !== 0) {
+                return $score;
+            }
+
+            return $this->personalizationRank($b['match_reasons'] ?? [])
+                <=> $this->personalizationRank($a['match_reasons'] ?? []);
+        });
 
         return array_merge($chainRows, $singleRows, $setRows);
     }
@@ -1468,6 +1574,8 @@ class OrderListService
         $preferences = $user->matchPreferences()->where('is_active', true)->get();
         $signals = $this->driverHistorySignals($user);
         $activeVehicle = Vehicle::activeVehicleFor($user->id);
+        // 진행 중인 내 일정(수락/운행중) 구간 — '시간 여유 충분' 근거 판단용 (1회 조회)
+        $conflictWindows = $this->activeTripWindows($user, collect($orderMap)->keys()->all());
 
         foreach ($rows as &$row) {
             if (($row['kind'] ?? '') === 'set') {
@@ -1481,7 +1589,7 @@ class OrderListService
             }
 
             $isChain = ($row['recommend_reason'] ?? null) === '연결 운행';
-            $profile = $this->matchProfile($user, $order, $preferences, $signals, $activeVehicle, $isChain);
+            $profile = $this->matchProfile($user, $order, $preferences, $signals, $activeVehicle, $isChain, $conflictWindows);
 
             $row['match_score'] = $profile['score'];
             $row['match_reasons'] = $profile['reasons'];
@@ -1513,6 +1621,7 @@ class OrderListService
         array $signals,
         ?Vehicle $activeVehicle,
         bool $isChain = false,
+        array $conflictWindows = [],
     ): array {
         $score = 0;
         $reasons = [];
@@ -1605,6 +1714,17 @@ class OrderListService
             $reasons[] = '공항 운행';
         }
 
+        // 시간 여유 근거 — 비체인 단일 추천에서만 (점수 없이 근거만)
+        // 지금부터 30분 이상 앞서고, 진행 중인 내 일정(수락/운행중)과 겹치지 않을 때 붙인다.
+        // (연결 운행 체인은 의도된 백투백 일정이므로 제외)
+        if (! $isChain) {
+            $tripStart = $this->orderStart($order);
+
+            if ($tripStart !== null && $this->hasTimeBuffer($tripStart, $conflictWindows)) {
+                $reasons[] = '시간 여유 충분';
+            }
+        }
+
         return ['score' => min(100, $score), 'reasons' => $reasons];
     }
 
@@ -1638,9 +1758,88 @@ class OrderListService
             || mb_stripos($driverVehicle, $orderVehicle) !== false;
     }
 
+    /**
+     * 진행 중인 내 일정(수락/운행중)의 시간 구간 — 추천 운행과 겹쳐 '시간 여유'가 없는지 판단용.
+     *
+     * @param  array<int, int>  $excludeOrderIds
+     * @return array<int, array{Carbon, Carbon}>
+     */
+    private function activeTripWindows(User $user, array $excludeOrderIds = []): array
+    {
+        $windows = [];
+
+        $trips = Order::query()
+            ->where('user_id', $user->id)
+            ->whereIn('status', [Order::STATUS_ACCEPTED, Order::STATUS_DRIVING])
+            ->when($excludeOrderIds !== [], fn ($query) => $query->whereNotIn('id', $excludeOrderIds))
+            ->whereNotNull('service_date')
+            ->where('service_date', '!=', '')
+            ->whereNotNull('service_time')
+            ->where('service_time', '!=', '')
+            ->get(['service_date', 'service_time', 'estimated_duration_minutes']);
+
+        foreach ($trips as $trip) {
+            $start = $this->orderStart($trip);
+
+            if ($start === null) {
+                continue;
+            }
+
+            $duration = max(30, (int) ($trip->estimated_duration_minutes ?? 90));
+            $windows[] = [$start, $start->copy()->addMinutes($duration)];
+        }
+
+        return $windows;
+    }
+
+    /**
+     * 추천 운행에 '시간 여유 충분' 근거를 붙일 수 있는지 — 지금부터 30분 이상 앞서 시작하고,
+     * 진행 중인 내 일정(수락/운행중)과 겹치지 않아야 한다.
+     *
+     * @param  array<int, array{Carbon, Carbon}>  $windows
+     */
+    private function hasTimeBuffer(Carbon $start, array $windows): bool
+    {
+        // 출발까지 30분 미만이면 준비 시간이 빠듯해 '여유'로 보지 않는다
+        if ($start->lt(now('Asia/Seoul')->addMinutes(30))) {
+            return false;
+        }
+
+        foreach ($windows as [$windowStart, $windowEnd]) {
+            // 내 일정 시작·종료 각각 30분 여유를 포함해 겹치면 여유 없음
+            if ($start->lte($windowEnd->copy()->addMinutes(30))
+                && $start->gte($windowStart->copy()->subMinutes(30))) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * 같은 조건 일치율일 때 어떤 추천을 먼저 보여줄지 — 이력 기반(자주 다니는 노선·시간대)이거나
+     * 시간 여유가 있는(바로 신청 가능한) 운행을 우선한다. (개인화 1단계 차등화)
+     *
+     * @param  array<int, string>  $reasons
+     */
+    private function personalizationRank(array $reasons): int
+    {
+        $markers = ['자주 다니는 노선', '자주 운행한 시간대', '시간 여유 충분'];
+
+        return array_intersect($markers, $reasons) === [] ? 0 : 1;
+    }
+
     private function paginate(Builder $query, Request $request, int $perPage): LengthAwarePaginator
     {
-        return match ($this->sortKey($request)) {
+        $sort = $this->sortKey($request);
+
+        // 빠른매칭(조건에 맞는 운행만)은 등록순이 아니라
+        // 지금 시각에서 가장 가까운 운행부터 보여준다 (오늘 끝난 주간은 건너뛰고 내일 주간부터)
+        if ($request->boolean('matched')) {
+            $sort = 'date';
+        }
+
+        return match ($sort) {
             'date' => $query
                 ->orderByRaw("CASE WHEN service_date IS NULL OR service_date = '' THEN 1 ELSE 0 END")
                 ->orderBy('service_date')
@@ -1667,7 +1866,32 @@ class OrderListService
     {
         $rows = $this->withOwnerTrust($rows, $orders->items());
 
-        return $this->withMatchFlag($rows, $orders->items(), $user);
+        $rows = $this->withMatchFlag($rows, $orders->items(), $user);
+
+        return $this->withFavoriteFlag($rows, $user);
+    }
+
+    /**
+     * 찜 여부 플래그 — 목록 카드 하트를 채울지 판단한다.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @return array<int, array<string, mixed>>
+     */
+    private function withFavoriteFlag(array $rows, User $user): array
+    {
+        $favoritedIds = OrderFavorite::query()
+            ->where('user_id', $user->id)
+            ->whereIn('order_id', collect($rows)->pluck('id')->all())
+            ->pluck('order_id')
+            ->all();
+
+        $favorited = array_fill_keys($favoritedIds, true);
+
+        foreach ($rows as &$row) {
+            $row['is_favorited'] = isset($favorited[$row['id']]);
+        }
+
+        return $rows;
     }
 
     /**

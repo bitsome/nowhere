@@ -154,7 +154,7 @@ export function useOrderForm({ route, screen, error, success, saving, loadMyOrde
         try {
             const { data } = await apiStructureOrder(summary.value);
             applyStructured(data.data.structured);
-            success.value = 'AI 구조화가 완료되었습니다. 내용을 확인하고 저장해주세요.';
+            success.value = 'AI 구조화가 완료되었습니다. 내용을 확인하고 저장해 주세요.';
         } catch (e) {
             error.value = getApiErrorMessage(e, '구조화에 실패했습니다.');
         } finally {

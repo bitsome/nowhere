@@ -54,12 +54,11 @@ const strongChains = computed(() => {
         } else if (r.chain_leg === 2 && r.recommend_level === 'strong') {
             chains.push({
                 legs: [r],
-                rankLabel: `추천${chains.length + 1}`,
             });
         }
     }
 
-    return chains.slice(0, 3);
+    return chains;
 });
 // 표시 체인이 있는지 — 일괄요청중(보낸) 체인도 포함한다
 const hasStrong = computed(() => displayChains.value.length > 0);
@@ -274,6 +273,26 @@ watch(claimedOrderIds, (ids) => {
     else stopClaimTimers();
 }, { immediate: true });
 
+// 한 번에 보여주는 추천 수 — 처음 20개만 노출하고 '더보기'로 20개씩 이어 붙인다
+const HOME_PAGE_SIZE = 20;
+const singleShow = ref(HOME_PAGE_SIZE);
+const chainShow = ref(HOME_PAGE_SIZE);
+const setShow = ref(HOME_PAGE_SIZE);
+
+// 아직 더 볼 추천이 있는지 (전체 수 > 현재 노출 수)
+const singleHasMore = computed(() => singleRecs.value.length > singleShow.value);
+const setHasMore = computed(() => setRecs.value.length > setShow.value);
+
+const showMoreSingles = () => {
+    singleShow.value += HOME_PAGE_SIZE;
+};
+const showMoreChains = () => {
+    chainShow.value += HOME_PAGE_SIZE;
+};
+const showMoreSets = () => {
+    setShow.value += HOME_PAGE_SIZE;
+};
+
 // 홈 표시용 체인 — 아직 요청 안 한 추천 체인 + 일괄요청 보낸 체인(일괄요청중)을 합쳐 번호를 다시 붙인다
 const displayChains = computed(() => {
     const claimed = claimedChains.value.map((chain) => ({ ...chain, claimed: true }));
@@ -281,8 +300,17 @@ const displayChains = computed(() => {
         .filter((chain) => !claimed.some((c) => c.legs[0].id === chain.legs[0].id))
         .map((chain) => ({ ...chain, claimed: false }));
 
-    return [...claimed, ...current].slice(0, 3).map((chain, index) => ({ ...chain, rankLabel: `추천${index + 1}` }));
+    return [...claimed, ...current].slice(0, chainShow.value).map((chain, index) => ({ ...chain, rankLabel: `추천${index + 1}` }));
 });
+
+// 왕복 체인 전체 수 — 더보기 버튼 표시와 탭 건수에 사용
+const chainPoolCount = computed(() => {
+    const claimed = claimedChains.value;
+    const current = strongChains.value.filter((chain) => !claimed.some((c) => c.legs[0].id === chain.legs[0].id));
+
+    return claimed.length + current.length;
+});
+const chainHasMore = computed(() => chainPoolCount.value > chainShow.value);
 
 // 홈 추천 탭 — 단일(기본) / 왕복 / 셋트.
 // '오늘 받은 추천' 퀘스트 아래에서 한 종류씩 골라 보게 해 판단 피로도를 낮춘다.
@@ -294,15 +322,23 @@ const HOME_TABS = [
 ];
 const homeTab = ref('single');
 
+// 탭 전환 — 해당 추천만 보여주고 노출 수는 처음 20개로 되돌린다
+const pickHomeTab = (tabKey) => {
+    homeTab.value = tabKey;
+    singleShow.value = HOME_PAGE_SIZE;
+    chainShow.value = HOME_PAGE_SIZE;
+    setShow.value = HOME_PAGE_SIZE;
+};
+
 // 탭별 섹션 가시성 — 활성 탭의 그룹만 보인다
 const showChains = computed(() => homeTab.value === 'chain' && hasStrong.value);
 const showSingles = computed(() => homeTab.value === 'single' && singleRecs.value.length > 0);
 const showSets = computed(() => homeTab.value === 'set' && setRecs.value.length > 0);
 
-// 탭 칩 건수 — 각 탭에서 볼 수 있는 추천 수를 칩에 함께 보여준다
+// 탭 칩 건수 — 전체 추천 수를 칩에 함께 보여준다 ('더보기'로 모두 확인할 수 있다)
 const tabCounts = computed(() => ({
     single: singleRecs.value.length,
-    chain: displayChains.value.length,
+    chain: chainPoolCount.value,
     set: setRecs.value.length,
 }));
 
@@ -613,8 +649,11 @@ onBeforeUnmount(() => {
 
 <template>
     <div class="home-page page-shell">
-        <!-- 등록자(Customer) 홈 — 운행 등록·승인·정산 관리 -->
-        <CustomerHome v-if="!isDriver" />
+        <!-- 등록자(Customer) 홈 — 운행 등록·승인·정산 관리.
+             인증 사용자 확인 전에는 아무 홈도 그리지 않는다 — 기사 계정에 등록자 홈이
+             잠깐 노출되는 플래시를 막고, 확인된 뒤에만 역할에 맞는 홈을 보여준다. -->
+        <CustomerHome v-if="auth.user && !isDriver" />
+        <div v-else-if="!auth.user" aria-hidden="true" />
 
         <!-- 로딩 스켈레톤 — 실제 레이아웃과 동일한 골격을 그려 레이아웃 밀림(CLS)을 막는다 -->
         <div v-else-if="loading" class="home-skeleton" aria-hidden="true">
@@ -711,7 +750,7 @@ onBeforeUnmount(() => {
                     class="home-tab-chip"
                     :class="{ 'home-tab-chip--active': homeTab === tab.key }"
                     :aria-selected="homeTab === tab.key"
-                    @click="homeTab = tab.key"
+                    @click="pickHomeTab(tab.key)"
                 >
                     {{ tab.label }}
                     <em class="home-tab-chip__count">{{ tabCounts[tab.key] }}</em>
@@ -767,31 +806,55 @@ onBeforeUnmount(() => {
                         </div>
                     </div>
                 </div>
+                <button
+                    v-if="chainHasMore"
+                    type="button"
+                    class="home-more"
+                    @click="showMoreChains"
+                >
+                    더보기
+                </button>
             </UiSection>
 
             <!-- 단일 추천 — 연결고리가 아닌 개별 운행 (매칭 설정·운행 이력 기반) -->
             <UiSection v-if="showSingles" class="home-block--rec">
                 <div class="home-rec-list">
                     <OrderCard
-                        v-for="(order, si) in singleRecs.slice(0, 5)"
+                        v-for="(order, si) in singleRecs.slice(0, singleShow)"
                         :key="order.key"
                         :order="order"
                         :show-match-reasons
                         :tracking="{ scope: 'home', section: 'single', rank: si + 1 }"
                     />
                 </div>
+                <button
+                    v-if="singleHasMore"
+                    type="button"
+                    class="home-more"
+                    @click="showMoreSingles"
+                >
+                    더보기
+                </button>
             </UiSection>
 
             <!-- 셋트 추천 — 묶음 운행 카드 (한 다리라도 매칭되면 전체 일정이 포함된다) -->
             <UiSection v-if="showSets" class="home-block--rec">
                 <div class="home-rec-list">
                     <SetGroupCard
-                        v-for="(set, si) in setRecs.slice(0, 3)"
+                        v-for="(set, si) in setRecs.slice(0, setShow)"
                         :key="set.key"
                         :set="set"
                         :tracking="{ scope: 'home', section: 'set', rank: si + 1 }"
                     />
                 </div>
+                <button
+                    v-if="setHasMore"
+                    type="button"
+                    class="home-more"
+                    @click="showMoreSets"
+                >
+                    더보기
+                </button>
             </UiSection>
 
             <!-- 단일 탭 — 단일 추천이 아직 없으면 안내 -->
@@ -1049,6 +1112,29 @@ html.dark .home-hero__cta {
     display: flex;
     flex-direction: column;
     gap: var(--card-gap);
+}
+
+/* 더보기 — 추천이 20개 넘으면 목록 아래에서 이어서 본다 */
+.home-more {
+    display: block;
+    min-width: 160px;
+    margin: 16px auto 0;
+    padding: 11px 18px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+@media (hover: hover) {
+    .home-more:hover {
+        border-color: var(--brand);
+        color: var(--brand);
+    }
 }
 .home-rec-group__head {
     display: flex;

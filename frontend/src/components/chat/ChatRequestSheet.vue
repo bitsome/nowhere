@@ -124,19 +124,19 @@ const buildPayload = () => {
 const send = async () => {
     // 필수값 검증
     if (activeType.value === 'time_change' && !form.to_time.trim()) {
-        naiveMessage.warning('변경 요청 시간을 입력해주세요.');
+        naiveMessage.warning('변경 요청 시간을 입력해 주세요.');
         return;
     }
     if (activeType.value === 'route_change' && (!form.from.trim() || !form.to.trim())) {
-        naiveMessage.warning('변경 위치를 입력해주세요.');
+        naiveMessage.warning('변경 위치를 입력해 주세요.');
         return;
     }
     if (activeType.value === 'payment_change' && !form.amount) {
-        naiveMessage.warning('변경 요청 금액을 입력해주세요.');
+        naiveMessage.warning('변경 요청 금액을 입력해 주세요.');
         return;
     }
     if (activeType.value === 'cancel' && !form.reason) {
-        naiveMessage.warning('취소 사유를 선택해주세요.');
+        naiveMessage.warning('취소 사유를 선택해 주세요.');
         return;
     }
 
@@ -171,12 +171,13 @@ const send = async () => {
                     v-if="view === 'form'"
                     type="button"
                     class="rq-sheet__back"
+                    aria-label="뒤로가기"
                     @click="view = 'menu'"
                 >
                     <BaseIcon name="arrow-back" :size="16" />
                 </button>
                 <b>{{ view === 'menu' ? '운행 요청' : typeLabel }}</b>
-                <button type="button" class="rq-sheet__close" @click="close"><BaseIcon name="close" :size="14" /></button>
+                <button type="button" class="rq-sheet__close" aria-label="닫기" @click="close"><BaseIcon name="close" :size="14" /></button>
             </div>
 
             <!-- 메뉴 -->

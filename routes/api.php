@@ -152,6 +152,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/orders', [OrderController::class, 'index']);
     Route::get('/orders/return-routes', [OrderController::class, 'returnRoutes']);
     Route::get('/orders/recommendations', [OrderController::class, 'recommendations']);
+    // 찜한 운행 — 마켓에서 아직 가져올 수 있는 운행만 (빠진 찜은 조회 시 자동 정리)
+    Route::get('/orders/favorites', [OrderController::class, 'favorites']);
+    Route::post('/orders/{order}/favorite', [OrderController::class, 'favorite']);
     Route::post('/orders', [OrderController::class, 'store'])->middleware('can:create,App\Models\Order');
     Route::post('/orders/batch', [OrderController::class, 'batchStore'])->middleware('can:create,App\Models\Order');
     Route::post('/orders/batch-settle', [OrderController::class, 'batchSettle']);

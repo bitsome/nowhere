@@ -95,7 +95,7 @@ export function useDriverWorkspace({ message, driver }) {
 
     const saveVehicle = async () => {
         if (!vehicleForm.name.trim()) {
-            message.warning('차량 이름을 입력해주세요.');
+            message.warning('차량 이름을 입력해 주세요.');
 
             return;
         }

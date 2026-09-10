@@ -82,7 +82,7 @@ const submitReset = async () => {
                 <span class="reset-mark">N</span>
                 <h1 class="reset-title">비밀번호 찾기</h1>
                 <p class="reset-desc">
-                    {{ sent ? '인증코드를 확인해 새 비밀번호를 설정하세요' : '가입한 이메일로 인증코드를 보내드려요' }}
+                    {{ sent ? '인증코드를 확인해 새 비밀번호를 설정하세요' : '가입한 이메일로 인증코드를 보내 드려요' }}
                 </p>
             </div>
 

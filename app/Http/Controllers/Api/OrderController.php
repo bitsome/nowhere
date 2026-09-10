@@ -14,6 +14,7 @@ use App\Services\Order\OrderClaimService;
 use App\Services\Order\OrderCreator;
 use App\Services\Order\OrderListService;
 use App\Services\Order\OrderTransitionService;
+use App\Services\OrderFavoriteService;
 use App\Services\OrderSummaryAiStructurer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -38,6 +39,31 @@ class OrderController extends Controller
             'meta' => [
                 'pagination' => $result['pagination'],
             ],
+        ]);
+    }
+
+    /**
+     * 찜한 운행 목록 — 마켓에서 아직 가져올 수 있는 운행만 (마켓 공용 파이프라인 재사용).
+     *
+     * @return JsonResponse{data: array<int, array<string, mixed>>, meta: array<string, mixed>}
+     */
+    public function favorites(Request $request, OrderListService $listService): JsonResponse
+    {
+        // '찜' 퀵 필터가 정리(마켓에서 빠진 찜 제거)·스코프(마켓)를 모두 담당한다
+        $request->merge(['scope' => 'market', 'quick' => 'favorites']);
+
+        return $this->index($request, $listService);
+    }
+
+    /**
+     * 찜(즐겨찾기) 상태를 뒤집는다 — 이미 찜했으면 해제, 아니면 추가.
+     *
+     * @return JsonResponse{data: array{favorited: bool}}
+     */
+    public function favorite(Request $request, Order $order, OrderFavoriteService $favoriteService): JsonResponse
+    {
+        return response()->json([
+            'data' => $favoriteService->toggle($request->user(), $order),
         ]);
     }
 
@@ -83,6 +109,10 @@ class OrderController extends Controller
         return response()->json([
             'data' => [
                 'order' => $order->toArray(),
+                // 내가 찜한 운행인지 — 상세 화면 하트 초기 상태
+                'favorited' => $request->user() !== null
+                    ? app(OrderFavoriteService::class)->isFavorited($request->user(), $order)
+                    : false,
                 // 운행 타임라인 — 상태·단계 변경 이력을 시간순(최신이 위)으로 내려준다
                 'timeline' => $order->orderEvents()
                     ->with('user:id,name')
@@ -484,6 +514,21 @@ class OrderController extends Controller
         $data = $this->validateOrderPayload($request);
 
         $creator->update($order, $data);
+
+        // 찜한 운행의 조건(일정·노선·차량·금액 등)이 실제로 바뀌었으면 찜한 기사에게 알린다.
+        // 마켓에 없는 운행(진행중·완료 등)의 세부 수정은 알림 대상이 아니다.
+        $relevantFields = [
+            'service_date', 'service_time', 'service_datetime',
+            'pickup_location', 'dropoff_location', 'flight_number',
+            'vehicle_type', 'service_type',
+            'passenger_count', 'luggage_count',
+            'expected_revenue', 'amount_value', 'tags', 'is_priority',
+        ];
+
+        if (array_intersect($relevantFields, array_keys($order->getChanges() ?: [])) !== []
+            && app(OrderFavoriteService::class)->isMarketable($order)) {
+            app(OrderFavoriteService::class)->notifyChanged($order);
+        }
 
         return response()->json([
             'data' => [

@@ -66,7 +66,7 @@ const submit = async () => {
         });
         emit('submitted');
         emit('update:show', false);
-        message.success('신고가 접수되었습니다. 처리 결과는 알림으로 알려드려요.');
+        message.success('신고가 접수되었습니다. 처리 결과는 알림으로 알려 드려요.');
     } catch (e) {
         message.error(getApiErrorMessage(e, '신고 접수에 실패했습니다.'));
     } finally {
@@ -92,7 +92,7 @@ const submit = async () => {
             <span>{{ subjectText }}</span>
         </div>
 
-        <p class="report-desc">무엇 때문에 신고하시나요? 아래 유형 중 골라주세요.</p>
+        <p class="report-desc">무엇 때문에 신고하시나요? 아래 유형 중 골라 주세요.</p>
 
         <div class="report-categories">
             <label
@@ -106,7 +106,7 @@ const submit = async () => {
             </label>
         </div>
 
-        <p class="report-desc">신고 내용을 자세히 적어주세요. (최소 5자)</p>
+        <p class="report-desc">신고 내용을 자세히 적어 주세요. (최소 5자)</p>
         <n-input
             v-model:value="reason"
             type="textarea"

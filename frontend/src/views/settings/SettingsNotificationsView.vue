@@ -24,7 +24,7 @@ const { error, success, notifyEnabled, toggleNotify } = settings;
         <div class="page-head">
             <div>
                 <h1 class="page-head__title">알림</h1>
-                <p class="page-head__desc">새 운행·채팅·알림 도착 시 데스크톱 알림으로 알려드립니다.</p>
+                <p class="page-head__desc">새 운행·채팅·알림 도착 시 데스크톱 알림으로 알려 드립니다.</p>
             </div>
         </div>
 
@@ -39,7 +39,7 @@ const { error, success, notifyEnabled, toggleNotify } = settings;
             <div class="notify-row">
                 <div class="notify-row__text">
                     <strong>브라우저 알림</strong>
-                    <span>앱이 백그라운드에 있어도 새 소식을 알려드립니다.</span>
+                    <span>앱이 백그라운드에 있어도 새 소식을 알려 드립니다.</span>
                 </div>
                 <n-switch :value="notifyEnabled" @update:value="toggleNotify" />
             </div>

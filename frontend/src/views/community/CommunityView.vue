@@ -417,7 +417,7 @@ onMounted(() => {
                 <n-input
                     v-model:value="draftContent"
                     type="textarea"
-                    placeholder="무슨 일이 있었나요? 공유해보세요."
+                    placeholder="무슨 일이 있었나요? 공유해 보세요."
                     :rows="4"
                     maxlength="2000"
                     show-count

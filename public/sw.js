@@ -1,77 +1,22 @@
-/* NoWhere PWA 서비스 워커 — 설치 가능 + 방문한 앱 셸 오프라인 캐시.
- * 주의: /api(동적 데이터)와 외부 오리진은 절대 캐시하지 않는다.
- * 해시 빌드 자산(/assets/*)은 불변이므로 캐시 우선으로 재방문을 빠르게 하고,
- * 앱 셸(내비게이션)·매니페스트·아이콘은 네트워크 우선으로 배포(새 index.html)가
- * 캐시에 가려지지 않게 하며 오프라인일 때만 캐시로 폴백한다. */
-const CACHE = 'nowhere-v5';
+/* NoWhere PWA 서비스 워커 — 개발 단계에서는 캐싱을 끈다.
+ * fetch를 가로채지 않으므로 모든 요청이 네트워크로 가며,
+ * 항상 최신 빌드·데이터를 사용한다 (캐시로 인한 구버전 노출 방지).
+ * 설치·푸시 알림 수신만 유지하고, 상용 전환 시 캐시 전략을 다시 도입한다. */
 
 self.addEventListener('install', () => {
     self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
+    // 개발 중 캐시 미사용 — 이전 버전이 남긴 캐시는 모두 정리한다
     event.waitUntil(
         caches.keys()
-            .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+            .then((keys) => Promise.all(keys.map((key) => caches.delete(key))))
             .then(() => self.clients.claim()),
     );
 });
 
-// 해시가 붙은 빌드 자산(/assets/*.js|css 등)은 내용이 바뀌면 파일명이 달라지므로
-// 한 번 받은 파일은 그대로 재사용해도 안전하다 — 캐시 우선으로 반복 방문 로딩을 줄인다.
-const respondAssets = (event, request) => {
-    event.respondWith(
-        caches.match(request).then((hit) => {
-            if (hit) {
-                return hit;
-            }
-
-            return fetch(request).then((response) => {
-                if (response.ok) {
-                    const copy = response.clone();
-                    caches.open(CACHE).then((cache) => cache.put(request, copy));
-                }
-
-                return response;
-            });
-        }),
-    );
-};
-
-self.addEventListener('fetch', (event) => {
-    const { request } = event;
-
-    if (request.method !== 'GET') {
-        return;
-    }
-
-    const url = new URL(request.url);
-
-    // API·외부 요청은 항상 네트워크로 보낸다 (실시간 데이터는 캐시하지 않음)
-    if (url.origin !== self.location.origin || url.pathname.startsWith('/api')) {
-        return;
-    }
-
-    // 해시 빌드 자산 — 캐시 우선 (불변 파일)
-    if (url.pathname.includes('/assets/')) {
-        respondAssets(event, request);
-        return;
-    }
-
-    // 앱 셸(내비게이션)·매니페스트·아이콘 등 — 네트워크 우선. 성공 시 캐시를 갱신해 항상 최신 빌드를 보여준다.
-    event.respondWith(
-        fetch(request)
-            .then((response) => {
-                if (response.ok) {
-                    const copy = response.clone();
-                    caches.open(CACHE).then((cache) => cache.put(request, copy));
-                }
-
-                return response;
-            })
-            .catch(() => caches.match(request).then((hit) => hit || Response.error())),
-    );
-});
+// ── fetch 핸들러 없음: 모든 요청은 브라우저 기본(네트워크) 동작으로 처리된다 ──
 
 // ── 웹 푸시 알림 — 앱이 닫혀 있어도 새 알림을 시스템 알림으로 보여준다 ──
 self.addEventListener('push', (event) => {

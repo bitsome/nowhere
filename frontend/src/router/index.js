@@ -31,6 +31,7 @@ const NotFoundView = () => import('../views/NotFoundView.vue');
 const RideHistoryView = () => import('../views/orders/RideHistoryView.vue');
 const ReviewsView = () => import('../views/ReviewsView.vue');
 const SupportView = () => import('../views/SupportView.vue');
+const OrderFavoritesView = () => import('../views/OrderFavoritesView.vue');
 
 const routes = [
     { path: '/login', name: 'login', component: LoginView },
@@ -52,6 +53,7 @@ const routes = [
     { path: '/settings/verification', name: 'settings-verification', component: SettingsVerificationView, meta: { requiresAuth: true } },
     { path: '/settings/appearance', name: 'settings-appearance', component: SettingsAppearanceView, meta: { requiresAuth: true } },
     { path: '/my-market', name: 'my-market', component: MyMarketView, meta: { requiresAuth: true } },
+    { path: '/favorites', name: 'order-favorites', component: OrderFavoritesView, meta: { requiresAuth: true } },
     { path: '/actions', name: 'actions', component: ActionCenterView, meta: { requiresAuth: true } },
     { path: '/more', name: 'more', component: MoreView, meta: { requiresAuth: true } },
     { path: '/history', name: 'history', component: RideHistoryView, meta: { requiresAuth: true } },

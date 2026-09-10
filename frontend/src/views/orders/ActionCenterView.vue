@@ -195,6 +195,17 @@ const respondInChat = async (request) => {
     }
 };
 
+// 받침 유무로 조사(을/를) 선택 — '요금 협의'·'취소'처럼 받침 없는 단어 뒤에는 '를'
+const particleUl = (word) => {
+    const last = (word ?? '').trim().slice(-1);
+
+    if (!last) {
+        return '을';
+    }
+
+    return (last.charCodeAt(0) - 0xac00) % 28 > 0 ? '을' : '를';
+};
+
 const resolveChatRequest = (request, action) => {
     const isAccept = action === 'accept';
     const label = CHAT_TAG[request.type] ?? '요청';
@@ -202,8 +213,8 @@ const resolveChatRequest = (request, action) => {
     dialog.warning({
         title: isAccept ? '요청 수락' : '요청 거절',
         content: isAccept
-            ? `${label}을 수락할까요?\n수락하면 운행에 바로 반영됩니다.`
-            : `${label}을 거절할까요?\n운행은 그대로 유지됩니다.`,
+            ? `${label}${particleUl(label)} 수락할까요?\n수락하면 운행에 바로 반영됩니다.`
+            : `${label}${particleUl(label)} 거절할까요?\n운행은 그대로 유지됩니다.`,
         positiveText: isAccept ? '수락' : '거절',
         negativeText: '취소',
         onPositiveClick: async () => {
@@ -249,7 +260,7 @@ onActivated(() => {
             </div>
             <div class="actions-head__actions">
                 <span v-if="totalPending" class="actions-head__count">대기 {{ totalPending }}건</span>
-                <button type="button" class="actions-head__refresh" title="새로고침" @click="load">
+                <button type="button" class="actions-head__refresh" aria-label="새로고침" title="새로고침" @click="load">
                     <BaseIcon name="refresh" :size="16" />
                 </button>
             </div>

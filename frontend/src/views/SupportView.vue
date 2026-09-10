@@ -81,7 +81,7 @@ const submitTicket = async () => {
         await apiCreateSupportTicket({ title, body });
         ticketForm.value.title = '';
         ticketForm.value.body = '';
-        message.success('문의가 접수되었습니다. 답변은 알림으로 알려드릴게요.');
+        message.success('문의가 접수되었습니다. 답변은 알림으로 알려 드릴게요.');
         await loadMyTickets();
     } catch (e) {
         message.error(getApiErrorMessage(e, '문의 접수에 실패했습니다.'));

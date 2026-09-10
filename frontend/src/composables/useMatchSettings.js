@@ -224,7 +224,7 @@ export function useMatchSettings({ message, loadMatchedOrders }) {
 
     const saveMatch = async () => {
         if (!matchForm.name.trim()) {
-            message.warning('설정 이름을 입력해주세요.');
+            message.warning('설정 이름을 입력해 주세요.');
 
             return;
         }

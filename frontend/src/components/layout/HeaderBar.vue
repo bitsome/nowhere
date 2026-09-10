@@ -45,6 +45,7 @@ const PAGE_LABEL = {
     'order-edit': '운행 수정', 'order-detail': '운행 상세',
     dashboard: '대시보드', admin: '운영 관리', 'my-market': '내 마켓',
     more: '더보기', history: '운행 기록', reviews: '받은 리뷰',
+    'order-favorites': '찜한 운행',
 };
 
 const activeConv = computed(() =>

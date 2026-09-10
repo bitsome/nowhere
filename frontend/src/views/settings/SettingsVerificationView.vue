@@ -128,7 +128,7 @@ const submit = async (item) => {
         item.form.image = null;
         item.form.preview = '';
         item.form.note = '';
-        message.success('증빙이 접수되었습니다. 관리자 심사 후 알림으로 알려드릴게요.');
+        message.success('증빙이 접수되었습니다. 관리자 심사 후 알림으로 알려 드릴게요.');
         await loadMyRequests();
     } catch (e) {
         message.error(getApiErrorMessage(e, '신청에 실패했습니다.'));

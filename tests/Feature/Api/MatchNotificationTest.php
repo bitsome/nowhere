@@ -44,7 +44,18 @@ function matchNotificationCount(User $driver, Order $order): int
         ->count();
 }
 
-test('콜링 온라인 전환 시 조건에 맞는 공개 운행이 매칭 알림으로 도착한다', function () {
+/**
+ * 드라이버에게 쌓인 '조건에 맞는 운행이 있어요' 요약 알림 수.
+ */
+function matchDigestCount(User $driver): int
+{
+    return $driver->notifications()
+        ->where('type', OrderNotification::class)
+        ->where('data->title', '조건에 맞는 운행이 있어요')
+        ->count();
+}
+
+test('콜링 온라인 전환 시 조건에 맞는 운행이 있으면 요약 알림 1건만 온다', function () {
     $order = Order::factory()->create([
         'user_id' => $this->owner->id,
         'status' => Order::STATUS_PUBLISHED,
@@ -60,13 +71,14 @@ test('콜링 온라인 전환 시 조건에 맞는 공개 운행이 매칭 알�
         'is_active' => true,
     ]);
 
-    // 오프라인 → 온라인 전환 시점에 보류 매칭을 되돌려 받는다
+    // 오프라인 → 온라인 전환 시점에 보류 매칭을 요약 알림(1건)으로 알린다
     $this->patchJson('/api/me/driver/status', ['status' => 'online'])->assertOk();
 
-    expect(matchNotificationCount($this->driver, $order))->toBe(1);
+    expect(matchDigestCount($this->driver))->toBe(1)
+        ->and(matchNotificationCount($this->driver, $order))->toBe(0);
 });
 
-test('매칭 설정을 활성으로 등록하면 현재 열려 있는 매칭 운행을 즉시 알린다', function () {
+test('매칭 설정을 활성으로 등록하면 열려 있는 매칭 운행을 요약 알림 1건으로 알린다', function () {
     $order = Order::factory()->create([
         'user_id' => $this->owner->id,
         'status' => Order::STATUS_PUBLISHED,
@@ -84,10 +96,11 @@ test('매칭 설정을 활성으로 등록하면 현재 열려 있는 매칭 운
         'is_active' => true,
     ])->assertCreated();
 
-    expect(matchNotificationCount($this->driver, $order))->toBe(1);
+    expect(matchDigestCount($this->driver))->toBe(1)
+        ->and(matchNotificationCount($this->driver, $order))->toBe(0);
 });
 
-test('이미 알림을 받은 운행은 재스캔해도 중복 매칭 알림이 없어야 한다', function () {
+test('요약 알림은 짧은 시간 안에 재스캔해도 중복으로 쌓이지 않는다', function () {
     $order = Order::factory()->create([
         'user_id' => $this->owner->id,
         'status' => Order::STATUS_PUBLISHED,
@@ -104,15 +117,16 @@ test('이미 알림을 받은 운행은 재스캔해도 중복 매칭 알림이 
     ]);
 
     $this->patchJson('/api/me/driver/status', ['status' => 'online'])->assertOk();
-    expect(matchNotificationCount($this->driver, $order))->toBe(1);
+    expect(matchDigestCount($this->driver))->toBe(1);
 
-    // 온라인 유지 상태에서 매칭 스위치 재호출(재스캔) — 중복 없이 그대로
+    // 온라인 유지 상태에서 매칭 스위치 재호출(재스캔) — 10분 안에는 같은 요약을 다시 보내지 않는다
     $this->patchJson('/api/me/driver/match', ['enabled' => true])->assertOk();
 
-    expect(matchNotificationCount($this->driver, $order))->toBe(1);
+    expect(matchDigestCount($this->driver))->toBe(1)
+        ->and(matchNotificationCount($this->driver, $order))->toBe(0);
 });
 
-test('조건에 맞지 않는 운행은 매칭 알림이 오지 않는다', function () {
+test('조건에 맞지 않는 운행이면 요약 알림도 오지 않는다', function () {
     Order::factory()->create([
         'user_id' => $this->owner->id,
         'status' => Order::STATUS_PUBLISHED,
@@ -130,10 +144,7 @@ test('조건에 맞지 않는 운행은 매칭 알림이 오지 않는다', func
 
     $this->patchJson('/api/me/driver/status', ['status' => 'online'])->assertOk();
 
-    expect($this->driver->notifications()
-        ->where('type', OrderNotification::class)
-        ->where('data->title', '매칭 운행 도착')
-        ->count())->toBe(0);
+    expect(matchDigestCount($this->driver))->toBe(0);
 });
 
 test('운행 공개 시 조건에 맞는 기사에게 매칭 알림이 도착한다', function () {
@@ -183,10 +194,7 @@ test('서비스 유형 조건에 맞는 운행만 매칭 알림이 온다', func
         'is_active' => true,
     ])->assertCreated();
 
-    expect($this->driver->notifications()
-        ->where('type', OrderNotification::class)
-        ->where('data->title', '매칭 운행 도착')
-        ->count())->toBe(0);
+    expect(matchDigestCount($this->driver))->toBe(0);
 });
 
 test('출발지/도착지 조건은 와일드카드와 국제공항 표기를 모두 잡는다', function () {
@@ -211,7 +219,8 @@ test('출발지/도착지 조건은 와일드카드와 국제공항 표기를 �
 
     $order = Order::first();
 
-    expect(matchNotificationCount($this->driver, $order))->toBe(1);
+    expect(matchDigestCount($this->driver))->toBe(1)
+        ->and(matchNotificationCount($this->driver, $order))->toBe(0);
 });
 
 test('차량 조건 — 기본 차량과 일치하는 운행만 매칭 알림이 온다', function () {
@@ -242,13 +251,10 @@ test('차량 조건 — 기본 차량과 일치하는 운행만 매칭 알림이
         'is_active' => true,
     ])->assertCreated();
 
-    expect($this->driver->notifications()
-        ->where('type', OrderNotification::class)
-        ->where('data->title', '매칭 운행 도착')
-        ->count())->toBe(0);
+    expect(matchDigestCount($this->driver))->toBe(0);
 });
 
-test('태그 조건 — 운행 태그와 하나라도 겹치면 매칭 알림이 온다', function () {
+test('태그 조건 — 운행 태그와 하나라도 겹치면 요약 알림이 온다', function () {
     $order = Order::factory()->create([
         'user_id' => $this->owner->id,
         'status' => Order::STATUS_PUBLISHED,
@@ -267,7 +273,8 @@ test('태그 조건 — 운행 태그와 하나라도 겹치면 매칭 알림이
         'is_active' => true,
     ])->assertCreated();
 
-    expect(matchNotificationCount($this->driver, $order))->toBe(1);
+    expect(matchDigestCount($this->driver))->toBe(1)
+        ->and(matchNotificationCount($this->driver, $order))->toBe(0);
 });
 
 test('태그 조건 — 운행 태그와 겹치지 않으면 매칭 알림이 오지 않는다', function () {
@@ -289,10 +296,7 @@ test('태그 조건 — 운행 태그와 겹치지 않으면 매칭 알림이 �
         'is_active' => true,
     ])->assertCreated();
 
-    expect($this->driver->notifications()
-        ->where('type', OrderNotification::class)
-        ->where('data->title', '매칭 운행 도착')
-        ->count())->toBe(0);
+    expect(matchDigestCount($this->driver))->toBe(0);
 });
 
 test('태그 조건 — 태그가 없는 운행은 태그를 지정한 기사에게 매칭되지 않는다', function () {
@@ -313,10 +317,7 @@ test('태그 조건 — 태그가 없는 운행은 태그를 지정한 기사에
         'is_active' => true,
     ])->assertCreated();
 
-    expect($this->driver->notifications()
-        ->where('type', OrderNotification::class)
-        ->where('data->title', '매칭 운행 도착')
-        ->count())->toBe(0);
+    expect(matchDigestCount($this->driver))->toBe(0);
 });
 
 test('매칭 설정 저장 시 시간·지역·금액·차량 새 필드를 그대로 반환한다', function () {

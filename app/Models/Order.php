@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use App\Services\OrderFavoriteService;
 use Carbon\Carbon;
 use Database\Factories\OrderFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -180,6 +182,23 @@ class Order extends Model
                     'note' => $note,
                     ...$data,
                 ]);
+            }
+
+            // 찜한 기사 안내 — 마켓에서 빠지는 상태(취소·다른 기사 배차)가 되면
+            // 찜한 기사에게 알리고 찜 기록을 정리한다 (배차는 새 수행자가 아닌 사람만)
+            if ($order->status === self::STATUS_CANCELLED) {
+                app(OrderFavoriteService::class)->notifyUnavailable(
+                    $order,
+                    '찜한 운행 취소',
+                    "찜해 둔 {$order->rideSummary()} 운행이 취소되어 마켓에서 내려갔습니다.",
+                );
+            } elseif ($order->status === self::STATUS_ACCEPTED) {
+                app(OrderFavoriteService::class)->notifyUnavailable(
+                    $order,
+                    '찜한 운행 배차 완료',
+                    "찜해 둔 {$order->rideSummary()} 운행을 다른 기사님이 가져갔습니다.",
+                    $order->user_id,
+                );
             }
         });
     }
@@ -425,6 +444,16 @@ class Order extends Model
         return $this->hasMany(OrderOffer::class);
     }
 
+    /**
+     * 이 운행을 찜한 기사들의 기록 — 찜 상태 변화(취소·배차·숨김) 알림에 사용한다.
+     *
+     * @return HasMany<OrderFavorite, $this>
+     */
+    public function favorites(): HasMany
+    {
+        return $this->hasMany(OrderFavorite::class);
+    }
+
     #[Scope]
     protected function search(Builder $query, string $search): void
     {
@@ -453,7 +482,6 @@ class Order extends Model
             'luggage_count' => 'integer',
             'amount_value' => 'integer',
             'extra_options' => 'array',
-            'tags' => 'array',
             'structured_payload' => 'array',
             'ride_step_times' => 'array',
             'scheduled_at' => 'datetime',
@@ -468,6 +496,20 @@ class Order extends Model
             'is_hidden' => 'boolean',
             'admin_hold' => 'boolean',
         ];
+    }
+
+    /**
+     * 태그(배열) 저장 — 한글을 유니코드 이스케이프(\uXXXX) 없이 그대로 저장한다.
+     * 태그 LIKE 검색(마켓 태그 검색)이 SQLite·MySQL 어디서든 한글로 매칭되도록 하기 위함.
+     */
+    protected function tags(): Attribute
+    {
+        return Attribute::make(
+            get: fn ($value) => $value === null ? null : (is_string($value) ? json_decode($value, true) : $value),
+            set: fn ($value) => is_array($value)
+                ? json_encode($value, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)
+                : $value,
+        );
     }
 
     /**

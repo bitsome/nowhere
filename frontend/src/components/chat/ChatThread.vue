@@ -237,6 +237,7 @@ onMounted(() => {
                     class="chat-thread__request"
                     :disabled="sending"
                     title="운행 요청"
+                    aria-label="운행 요청"
                     @click="requestOpen = true"
                 >
                     <BaseIcon name="my-posts" :size="20" />
@@ -248,6 +249,7 @@ onMounted(() => {
                     class="chat-thread__attach"
                     :disabled="sending"
                     title="이미지 첨부"
+                    aria-label="이미지 첨부"
                     @click="imageOpen = true"
                 >
                     <BaseIcon name="image" :size="20" />
@@ -267,6 +269,7 @@ onMounted(() => {
                     :loading="sending"
                     :disabled="!draft.trim()"
                     title="보내기"
+                    aria-label="보내기"
                 >
                     <BaseIcon name="send" :size="18" />
                 </n-button>

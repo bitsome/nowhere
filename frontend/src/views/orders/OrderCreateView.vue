@@ -164,9 +164,9 @@ onMounted(() => {
             <!-- 캘린더 보기 — 월 그리드 + 날짜별 운행 (일|월|연 단위는 숨김) -->
             <div v-if="viewMode === 'calendar'" class="cal">
                 <div class="cal__head">
-                    <button type="button" class="cal__nav" @click="prevMonth"><BaseIcon name="arrow-back" :size="16" /></button>
+                    <button type="button" class="cal__nav" aria-label="이전 달" @click="prevMonth"><BaseIcon name="arrow-back" :size="16" /></button>
                     <b>{{ calTitle }}</b>
-                    <button type="button" class="cal__nav" @click="nextMonth"><BaseIcon name="arrow-forward" :size="16" /></button>
+                    <button type="button" class="cal__nav" aria-label="다음 달" @click="nextMonth"><BaseIcon name="arrow-forward" :size="16" /></button>
                 </div>
                 <div class="cal__grid">
                     <div v-for="dow in ['월', '화', '수', '목', '금', '토', '일']" :key="dow" class="cal__dow">{{ dow }}</div>
@@ -647,49 +647,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* 내 운행 검색 */
-.create-search {
-    margin: 4px 0 12px;
-}
-
-/* 빠른 정렬 칩 */
-.create-sort {
-    display: flex;
-    gap: 6px;
-    margin: -4px 0 12px;
-    overflow-x: auto;
-    scrollbar-width: none;
-}
-
-.create-sort::-webkit-scrollbar {
-    display: none;
-}
-
-.create-sort__btn {
-    flex-shrink: 0;
-    padding: 6px 12px;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    background: var(--surface);
-    color: var(--text-muted);
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
-}
-
-/* hover — 데스크톱에서만. 터치 기기는 탭 후 남는 포커스로 hover가 고정돼 '선택된 것처럼' 보이므로 제외 */
-@media (hover: hover) {
-    .create-sort__btn:hover {
-        border-color: var(--brand);
-    }
-}
-
-.create-sort__btn--active {
-    border-color: var(--brand);
-    background: var(--brand-soft);
-    color: var(--brand);
-}
 /* 운행 등록 템플릿 */
 .template-head {
     display: flex;
@@ -897,12 +854,7 @@ onMounted(() => {
     text-align: center;
 }
 
-/* 스케줄러 — 날짜별 그룹 */
-.schedule-list {
-    display: flex;
-    flex-direction: column;
-    gap: 18px;
-}
+/* 스케줄러 — 날짜별 그룹 (하단 .schedule-list 정의가 통합·우선 — 위 중복 제거) */
 
 .schedule-group__head {
     display: flex;
@@ -956,49 +908,11 @@ onMounted(() => {
     gap: 10px;
 }
 
-/* 활성 필터 칩 */
-.create-tags {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 14px;
-}
-
-/* 필터 모달 */
-.filter-body {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-}
-
-.filter-label {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-muted);
-}
-
+/* 모달 푸터 — 템플릿 저장 등에서 공용 (flex 우측 정렬) */
 .filter-footer {
     display: flex;
     justify-content: flex-end;
     gap: 8px;
-}
-
-.filter-amount-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.filter-amount-row .n-input {
-    flex: 1;
-    min-width: 0;
-}
-
-.filter-amount-sep {
-    color: var(--text-muted);
-    font-size: 11px;
-    flex-shrink: 0;
 }
 
 .create-structure-btn {
@@ -1025,6 +939,7 @@ onMounted(() => {
     flex-direction: column;
     gap: 10px;
     width: 100%;
+    margin-bottom: 14px;
 }
 .create-tags__chips,
 .create-tags__selected {

@@ -206,7 +206,7 @@ watch(
                 <n-card :bordered="true" class="profile-block">
                     <div class="verify-head">
                         <strong>바로가기</strong>
-                        <span class="verify-hint">자주 쓰는 메뉴를 모아뒀어요</span>
+                        <span class="verify-hint">자주 쓰는 메뉴를 모아 뒀어요</span>
                     </div>
                     <button type="button" class="community-entry" @click="router.push({ name: 'my-market' })">
                         <span class="community-entry__icon">

@@ -202,13 +202,13 @@ watch(
                 <div v-for="review in sentReviews" :key="review.id" class="review-item">
                     <div class="review-item__head">
                         <div class="review-item__who">
-                                <span class="review-item__avatar">{{ review.reviewee?.name?.charAt(0) ?? '?' }}</span>
-                                <strong>{{ review.reviewee?.name ?? '익명' }}에게</strong>
-                                <span class="review-item__stars">
-                                    <BaseIcon v-for="n in review.rating" :key="`f${n}`" name="star" :size="12" />
-                                    <BaseIcon v-for="n in 5 - review.rating" :key="`e${n}`" name="star-o" :size="12" />
-                                </span>
-                            </div>
+                            <span class="review-item__avatar">{{ review.reviewee?.name?.charAt(0) ?? '?' }}</span>
+                            <strong>{{ review.reviewee?.name ?? '익명' }}에게</strong>
+                            <span class="review-item__stars">
+                                <BaseIcon v-for="n in review.rating" :key="`f${n}`" name="star" :size="12" />
+                                <BaseIcon v-for="n in 5 - review.rating" :key="`e${n}`" name="star-o" :size="12" />
+                            </span>
+                        </div>
                         <span class="review-item__time">{{ formatTime(review.created_at) }}</span>
                     </div>
                     <p v-if="review.content" class="review-item__content">{{ review.content }}</p>

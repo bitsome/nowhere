@@ -767,13 +767,8 @@ html.dark .settle-bar {
     line-height: 1.5;
 }
 
-.dash-columns {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 16px;
-}
-
 /* ── 기사 오늘 요약 ── */
+
 .dash-driver__head {
     display: flex;
     align-items: center;

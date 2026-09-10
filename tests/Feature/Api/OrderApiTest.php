@@ -360,6 +360,18 @@ test('api order index market search matches route only, not customer name', func
         'user_id' => $this->marketUser->id,
     ]);
 
+    // 태그가 달린 운행 — 태그 검색 전용 (노선은 앞 검색어와 겹치지 않게)
+    Order::factory()->create([
+        'service_date' => $tomorrow,
+        'service_time' => '12:00',
+        'customer_name' => '노선고객',
+        'pickup_location' => '판교역',
+        'dropoff_location' => '안양',
+        'tags' => ['출장 이동', '새벽 운행'],
+        'status' => Order::STATUS_PUBLISHED,
+        'user_id' => $this->marketUser->id,
+    ]);
+
     // 노선(도착지) 검색 — 인천공항으로 가는 운행만 매칭
     $byDropoff = $this->getJson('/api/orders?scope=market&search='.urlencode('인천공항'))
         ->assertOk();
@@ -383,6 +395,15 @@ test('api order index market search matches route only, not customer name', func
 
     expect($orderNumberRows)->toHaveCount(1);
     expect($orderNumberRows->first()['orderNumber'])->toBe($firstOrder->order_number);
+
+    // 태그 검색 — 태그에 달린 단어로 해당 운행만 찾는다 (노선·고객명과 무관)
+    $byTag = $this->getJson('/api/orders?scope=market&search='.urlencode('새벽 운행'))
+        ->assertOk();
+
+    $tagRows = collect($byTag->json('data'));
+
+    expect($tagRows)->toHaveCount(1);
+    expect($tagRows->first()['route'])->toBe('판교역 → 안양');
 });
 
 test('api order index returns my draft orders tab', function () {

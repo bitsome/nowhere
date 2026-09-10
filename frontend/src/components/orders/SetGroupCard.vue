@@ -273,6 +273,11 @@ const routeDateLabel = (route) => relativeDateLabel(route.date, route.sortDate);
     }
 }
 
+/* 임박 배지 — 다크 모드에서 danger가 밝은 빨강으로 톤 다운되어 흰 글자 대비가 약해지므로 어두운 글자로 전환 */
+html.dark .set-card__urgent {
+    color: #101418;
+}
+
 /* 상태 배지 */
 .status-badge {
     display: inline-flex;

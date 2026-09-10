@@ -69,7 +69,7 @@ const submit = async () => {
     const content = draftContent.value.trim();
 
     if (content === '') {
-        message.warning('글 내용을 입력해주세요.');
+        message.warning('글 내용을 입력해 주세요.');
 
         return;
     }
@@ -119,7 +119,7 @@ const submit = async () => {
             <n-input
                 v-model:value="draftContent"
                 type="textarea"
-                placeholder="무슨 일이 있었나요? 공유해보세요."
+                placeholder="무슨 일이 있었나요? 공유해 보세요."
                 :rows="4"
                 maxlength="2000"
                 show-count

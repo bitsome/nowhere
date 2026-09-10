@@ -402,9 +402,9 @@ onMounted(load);
         />
         <div v-else-if="viewMode === 'calendar'" class="cal">
             <div class="cal__head">
-                <button type="button" class="cal__nav" @click="prevMonth"><BaseIcon name="arrow-back" :size="16" /></button>
+                <button type="button" class="cal__nav" aria-label="이전 달" @click="prevMonth"><BaseIcon name="arrow-back" :size="16" /></button>
                 <b>{{ calTitle }}</b>
-                <button type="button" class="cal__nav" @click="nextMonth"><BaseIcon name="arrow-forward" :size="16" /></button>
+                <button type="button" class="cal__nav" aria-label="다음 달" @click="nextMonth"><BaseIcon name="arrow-forward" :size="16" /></button>
             </div>
             <div class="cal__grid">
                 <div v-for="dow in ['월', '화', '수', '목', '금', '토', '일']" :key="dow" class="cal__dow">{{ dow }}</div>

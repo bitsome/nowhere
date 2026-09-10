@@ -192,6 +192,16 @@ class User extends Authenticatable implements HasMedia
         return $this->hasMany(OrderTemplate::class);
     }
 
+    /**
+     * 찜한 운행(즐겨찾기) 기록.
+     *
+     * @return HasMany<OrderFavorite, $this>
+     */
+    public function orderFavorites(): HasMany
+    {
+        return $this->hasMany(OrderFavorite::class);
+    }
+
     public function pushSubscriptions(): HasMany
     {
         return $this->hasMany(PushSubscription::class);

@@ -3,6 +3,8 @@ import { computed, h, onActivated, onBeforeUnmount, onDeactivated, onMounted, re
 import { useNotification } from 'naive-ui';
 import { useRouter } from 'vue-router';
 import { apiOrders, apiReturnRoutes } from '../api/orders';
+import { apiMatchPreferences } from '../api/match';
+import { apiMyVehicles } from '../api/driver';
 import { getApiErrorMessage } from '../api/client';
 import { useUiStore } from '../stores/ui';
 import { useAuthStore } from '../stores/auth';
@@ -30,8 +32,73 @@ const auth = useAuthStore();
 const isDriver = computed(() => auth.user?.role === 'Driver');
 const quickOpen = ref(false);
 
+// '내 조건' 보기 — 빠른매칭(간단 필터) 조건에 맞는 운행만 마켓 목록에 보여준다.
+// (빠른매칭 패널에는 카드를 띄우지 않고, 이 목록이 결과를 담당한다)
+const matchedOnly = ref(false);
+
 const orders = ref([]);
 const pagination = ref(null);
+
+// 필터 적용 줄 우측 건수 — 현재 조건에 맞는 전체 운행 수 (빠른매칭 보기에서는 매칭 전체 수)
+const resultCountText = computed(() => {
+    const total = pagination.value?.total;
+
+    return total === undefined || total === null ? '' : `${total.toLocaleString()}건`;
+});
+
+// 빠른매칭 보기 칩 문구 — '빠른매칭'이라는 말 대신 실제로 고른 조건(시간대·지역·차량 등)을 그대로 보여준다
+const matchedPrefs = ref([]);
+const matchedVehicles = ref([]);
+const SERVICE_NAME = { pickup: '픽업', sending: '샌딩', landing: '랜딩' };
+
+const refreshMatchedLabel = async () => {
+    if (!isDriver.value) {
+        return;
+    }
+    const [prefs, cars] = await Promise.allSettled([apiMatchPreferences(), apiMyVehicles()]);
+
+    if (prefs.status === 'fulfilled') {
+        matchedPrefs.value = prefs.value.data?.data ?? [];
+    }
+    if (cars.status === 'fulfilled') {
+        matchedVehicles.value = cars.value.data?.data ?? [];
+    }
+};
+
+const matchedSummaryText = computed(() => {
+    const actives = matchedPrefs.value.filter((p) => p.is_active);
+
+    if (actives.length === 0) {
+        return '빠른매칭';
+    }
+    // 차량은 등록 '이름'이 아니라 차종으로 보여준다 (예: '내 그랜저' → '그랜저')
+    const carType = new Map((matchedVehicles.value ?? []).map((car) => [car.id, car.type || car.name || '']));
+
+    return actives.map((p) => {
+        const parts = [];
+        if (p.service_type) {
+            parts.push(SERVICE_NAME[p.service_type] ?? p.service_type);
+        }
+        const s = p.start_time;
+        const e = p.end_time;
+
+        if (s && e) {
+            parts.push(s > e ? `야간 ${s}–${e}` : `${s}–${e}`);
+        } else if (!s && !e) {
+            parts.push('종일');
+        }
+        if (p.area) {
+            parts.push(p.area);
+        }
+        const car = p.vehicle_id ? carType.get(p.vehicle_id) : '';
+
+        if (car) {
+            parts.push(car);
+        }
+
+        return parts.length ? parts.join(' · ') : '전체 운행';
+    }).join(' / ');
+});
 const loading = ref(true);
 const error = ref('');
 const filterOpen = ref(false);
@@ -58,9 +125,18 @@ const applyFilter = () => {
     handleFilterChange();
 };
 
-// kind에 따라 분류 — 추천(매칭)/왕복 추천 운행은 전용 섹션에 이미 노출되므로 전체 목록에서 제외(중복 방지)
-const singleRows = computed(() => orders.value.filter((o) => o.kind !== 'set' && !o.is_matched_to_me && !returnRouteKeys.value.has(o.key)));
+// kind에 따라 분류 — 셋트·왕복 추천 운행은 전용 섹션에 이미 노출되므로 전체 목록에서 제외(중복 방지)
+const singleRows = computed(() => orders.value.filter((o) => o.kind !== 'set' && !returnRouteKeys.value.has(o.key)));
 const setRows = computed(() => orders.value.filter((o) => o.kind === 'set'));
+
+// 찜 토글 반영 — 목록 행의 상태를 서버 응답값으로 맞춘다 (다음 조회 전까지 유지)
+const onFavoriteChanged = (orderId, favorited) => {
+    const row = orders.value.find((o) => o.id === orderId);
+
+    if (row) {
+        row.is_favorited = favorited;
+    }
+};
 const serviceType = ref('');
 const date = ref('');
 const departureCity = ref('');
@@ -79,6 +155,19 @@ const sort = ref('latest');
 const quick = ref('');
 const search = ref('');
 const page = ref(1);
+
+// '더보기' 한 번에 붙는 운행 수 — 목록은 20건씩만 노출하고, 더보기로 이어 붙인다
+const PAGE_SIZE = 20;
+
+// 더보기 진행 중 여부 (버튼 로딩 표시)
+const moreLoading = ref(false);
+
+// 더 볼 운행이 남았는지 — 전체 건수보다 불러온 개수가 적으면 '더보기' 버튼을 보여준다
+const hasMore = computed(() => {
+    const total = pagination.value?.total;
+
+    return total !== undefined && total !== null && orders.value.length < total;
+});
 
 // 필터·검색 상태 기억 (재방문 시 유지)
 const MARKET_STATE_KEY = 'nowhere:market:filter';
@@ -142,6 +231,7 @@ const persistState = () => {
 
 // 모든 필터 초기화
 const resetFilters = () => {
+    matchedOnly.value = false;
     serviceType.value = '';
     date.value = '';
     departureCity.value = '';
@@ -161,11 +251,12 @@ const resetFilters = () => {
     search.value = '';
 };
 
-// 빠른 보기 칩 — 신규/임박/긴급만 (금액 정렬은 '정렬'에서 선택하므로 중복 제거)
+// 빠른 보기 칩 — 신규/임박/긴급/찜 (금액 정렬은 '정렬'에서 선택하므로 중복 제거)
 const QUICK_OPTIONS = [
     { label: '신규', value: 'new' },
     { label: '임박', value: 'urgent' },
     { label: '긴급', value: 'priority' },
+    { label: '찜한 운행', value: 'favorites' },
 ];
 
 // 빠른 날짜 칩 — 오늘/내일 (빠른 보기 위에 별도 행)
@@ -263,15 +354,18 @@ const toggleServiceType = (value) => {
     load();
 };
 
-// 필터 모달에만 있는 필터(서비스 유형 제외)가 활성화됐는지 — '필터' 칩 하이라이트용
-const hasModalFilters = computed(() =>
-    [date.value, departureCity.value, departureDistrict.value, departureDetail.value, arrivalCity.value, arrivalDistrict.value, arrivalDetail.value, vehicleType.value, vehicleCapacity.value, timeRange.value, minAmount.value, maxAmount.value, minPassengers.value, quick.value !== '' ? quick.value : '', search.value]
-        .filter(Boolean).length > 0,
-);
+// 빠른매칭 패널의 '마켓에서 내 조건 보기' — 드로어를 닫고 마켓을 내 조건에 맞는 운행만 보여준다.
+// (상단 '내 조건' 칩은 제거됐으므로, 진입은 이 버튼으로만 · 해제는 적용 중 필터 칩으로)
+const showMatchedFromPanel = () => {
+    quickOpen.value = false;
+    matchedOnly.value = true;
+    page.value = 1;
+    load();
+};
 
-// 활성 필터 개수 (초기화 버튼 표시용)
+// 활성 필터 개수 (헤더 필터 점·필터 모달 초기화 버튼 표시용)
 const activeFilterCount = computed(() =>
-    [serviceType.value, date.value, departureCity.value, departureDistrict.value, departureDetail.value, arrivalCity.value, arrivalDistrict.value, arrivalDetail.value, vehicleType.value, vehicleCapacity.value, timeRange.value, minAmount.value, maxAmount.value, minPassengers.value, sort.value !== 'latest' ? sort.value : '', quick.value !== '' ? quick.value : '', search.value]
+    [serviceType.value, date.value, departureCity.value, departureDistrict.value, departureDetail.value, arrivalCity.value, arrivalDistrict.value, arrivalDetail.value, vehicleType.value, vehicleCapacity.value, timeRange.value, minAmount.value, maxAmount.value, minPassengers.value, sort.value !== 'latest' ? sort.value : '', quick.value !== '' ? quick.value : '', search.value, matchedOnly.value ? 'matched' : '']
         .filter(Boolean).length,
 );
 
@@ -407,6 +501,75 @@ const renderCityLabel = (option) => {
     ]);
 };
 
+// 마켓 목록 조회 파라미터 — 한 번에 20건씩 페이지로 나눠 받는다
+const buildListParams = (pageNumber) => {
+    const params = { scope: 'market', page: pageNumber, per_page: PAGE_SIZE };
+
+    if (serviceType.value) {
+        params.service_type = serviceType.value;
+    }
+    if (date.value) {
+        params.date = date.value.replace('T', ' ');
+    }
+    const departure = locationParam(departureCity.value, departureDistrict.value, departureDetail.value);
+    const arrival = locationParam(arrivalCity.value, arrivalDistrict.value, arrivalDetail.value);
+    if (departure) {
+        params.departure = departure;
+    }
+    if (arrival) {
+        params.arrival = arrival;
+    }
+    if (vehicleType.value) {
+        params.vehicle_type = vehicleType.value;
+    }
+    if (vehicleCapacity.value) {
+        params.vehicle_capacity = vehicleCapacity.value;
+    }
+    if (timeRange.value) {
+        params.time_range = timeRange.value;
+    }
+    if (minAmount.value) {
+        params.min_amount = minAmount.value;
+    }
+    if (maxAmount.value) {
+        params.max_amount = maxAmount.value;
+    }
+    if (minPassengers.value) {
+        params.min_passengers = minPassengers.value;
+    }
+    if (sort.value !== 'latest') {
+        params.sort = sort.value;
+    }
+    if (quick.value) {
+        params.quick = quick.value;
+    }
+    if (matchedOnly.value) {
+        // '내 조건' — 빠른매칭 조건에 맞는 운행만. 추천(왕복 노선)은 섞지 않는다.
+        params.matched = 1;
+    }
+    if (search.value) {
+        params.search = search.value;
+    }
+
+    return params;
+};
+
+// 중복 행 제거 — 더보기로 이어 붙일 때 셋트가 페이지 경계로 나뉘면 같은 카드가 두 번 보이지 않게 한다
+const dedupeRows = (rows) => {
+    const seen = new Set();
+    const unique = [];
+
+    for (const row of rows) {
+        if (!row?.key || seen.has(row.key)) {
+            continue;
+        }
+        seen.add(row.key);
+        unique.push(row);
+    }
+
+    return unique;
+};
+
 const load = async (silent = false) => {
     persistState();
 
@@ -417,73 +580,99 @@ const load = async (silent = false) => {
     error.value = '';
 
     try {
-        const params = { scope: 'market', page: page.value };
+        // 확장(더보기) 중이면 지금까지 본 페이지까지 한 번에 다시 불러와
+        // 탭 복귀·폴링 후에도 목록이 20건으로 줄지 않게 스냅샷을 유지한다
+        const loadedPages = Math.max(1, page.value);
+        const pageTasks = [];
 
-        if (serviceType.value) {
-            params.service_type = serviceType.value;
-        }
-        if (date.value) {
-            params.date = date.value.replace('T', ' ');
-        }
-        const departure = locationParam(departureCity.value, departureDistrict.value, departureDetail.value);
-        const arrival = locationParam(arrivalCity.value, arrivalDistrict.value, arrivalDetail.value);
-        if (departure) {
-            params.departure = departure;
-        }
-        if (arrival) {
-            params.arrival = arrival;
-        }
-        if (vehicleType.value) {
-            params.vehicle_type = vehicleType.value;
-        }
-        if (vehicleCapacity.value) {
-            params.vehicle_capacity = vehicleCapacity.value;
-        }
-        if (timeRange.value) {
-            params.time_range = timeRange.value;
-        }
-        if (minAmount.value) {
-            params.min_amount = minAmount.value;
-        }
-        if (maxAmount.value) {
-            params.max_amount = maxAmount.value;
-        }
-        if (minPassengers.value) {
-            params.min_passengers = minPassengers.value;
-        }
-        if (sort.value !== 'latest') {
-            params.sort = sort.value;
-        }
-        if (quick.value) {
-            params.quick = quick.value;
-        }
-        if (search.value) {
-            params.search = search.value;
+        for (let p = 1; p <= loadedPages; p++) {
+            pageTasks.push(apiOrders(buildListParams(p)));
         }
 
-        // 마켓 목록과 왕복 추천을 병렬 호출해 순차 대기 시간을 없앤다.
-        // (왕복 추천은 참고용이라 실패해도 목록에는 영향 없음)
-        const [listRes, rrRes] = await Promise.allSettled([
-            apiOrders(params),
-            apiReturnRoutes(params),
-        ]);
-
-        if (listRes.status === 'rejected') {
-            error.value = getApiErrorMessage(listRes.reason, '운행 목록을 불러오지 못했습니다.');
-        } else {
-            const { data } = listRes.value;
-            notifyNewOrders(data.data);
-            orders.value = data.data;
-            pagination.value = data.meta.pagination;
+        // 왕복 추천은 참고용이라 목록과 병렬 호출 (빠른매칭·찜 보기에서는 호출하지 않음)
+        if (!matchedOnly.value && quick.value !== 'favorites') {
+            pageTasks.push(apiReturnRoutes(buildListParams(1)));
         }
 
-        returnRoutes.value = rrRes.status === 'fulfilled' ? (rrRes.value.data?.data ?? []) : [];
+        const results = await Promise.allSettled(pageTasks);
+
+        const pageRows = [];
+        let meta = null;
+        let listFailed = false;
+
+        results.forEach((result, index) => {
+            if (result.status === 'rejected') {
+                if (index === 0) {
+                    listFailed = true;
+                }
+
+                return;
+            }
+
+            const { data } = result.value;
+
+            if (index < loadedPages) {
+                if (index === 0) {
+                    notifyNewOrders(data.data);
+                    meta = data.meta?.pagination ?? null;
+                }
+                pageRows.push(...(data.data ?? []));
+            } else {
+                // 마지막 결과 = 왕복 추천 (빠른매칭이 아닐 때만 존재)
+                returnRoutes.value = data.data ?? [];
+            }
+        });
+
+        if (listFailed) {
+            error.value = getApiErrorMessage(results[0].reason, '운행 목록을 불러오지 못했습니다.');
+        }
+
+        if (meta) {
+            pagination.value = meta;
+
+            // 전체 건수가 줄어 마지막 페이지가 앞으로 당겨지면 확장 범위도 맞춘다
+            if (meta.last_page && page.value > meta.last_page) {
+                page.value = Math.max(1, meta.last_page);
+            }
+        }
+
+        orders.value = dedupeRows(pageRows);
+
+        // 빠른매칭 보기 중이면 칩 문구(선택한 조건 요약)도 최신으로 맞춘다
+        if (matchedOnly.value && isDriver.value) {
+            refreshMatchedLabel();
+        }
     } catch (e) {
         error.value = getApiErrorMessage(e, '운행 목록을 불러오지 못했습니다.');
     } finally {
-        // 재조회 중복 방지 기준 시각 — 폴링/탭 복귀 갱신이 지나치게 자주 겹치지 않게 한다
         lastLoadedAt = Date.now();
         loading.value = false;
+    }
+};
+
+// '더보기' — 다음 20건을 이어서 불러와 목록 아래에 붙인다 (남은 게 없으면 버튼이 사라진다)
+const loadMore = async () => {
+    if (moreLoading.value || !hasMore.value) {
+        return;
+    }
+
+    moreLoading.value = true;
+
+    try {
+        const nextPage = page.value + 1;
+        const { data } = await apiOrders(buildListParams(nextPage));
+
+        pagination.value = data.meta?.pagination ?? pagination.value;
+        page.value = nextPage;
+
+        const existing = new Set(orders.value.map((o) => o.key));
+        const fresh = (data.data ?? []).filter((row) => row?.key && !existing.has(row.key));
+
+        orders.value = [...orders.value, ...fresh];
+    } catch (e) {
+        error.value = getApiErrorMessage(e, '더 많은 운행을 불러오지 못했습니다.');
+    } finally {
+        moreLoading.value = false;
     }
 };
 
@@ -540,10 +729,32 @@ const handleFilterChange = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
-const handlePage = (nextPage) => {
-    page.value = nextPage;
-    load();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+// 태그 검색 — 카드의 태그 칩을 누르면 그 태그로 목록을 다시 검색한다.
+const applyTagSearch = (tag) => {
+    if (!tag) {
+        return;
+    }
+    matchedOnly.value = false;
+    quick.value = '';
+    search.value = tag;
+    searchOpen.value = false;
+    handleFilterChange();
+};
+
+// 다른 화면(홈·찜 등)의 태그 칩 클릭 — 마켓은 keep-alive 캐시라 화면 이동만으로 필터가
+// 바뀌지 않으므로, 마켓 진입 시점(처음/복귀)에 대기 요청을 소비해 적용한다.
+const PENDING_TAG_KEY = 'nowhere:market:pendingTag';
+const consumePendingTag = () => {
+    let tag = '';
+
+    try {
+        tag = localStorage.getItem(PENDING_TAG_KEY) ?? '';
+        localStorage.removeItem(PENDING_TAG_KEY);
+    } catch {
+        /* 저장 실패 무시 */
+    }
+
+    applyTagSearch(tag);
 };
 
 // 적용 중인 필터 요약 — 칩 클릭 시 해당 필터만 해제하고 목록을 갱신한다
@@ -551,6 +762,12 @@ const activeFilterChips = computed(() => {
     const chips = [];
     const push = (label, clear) => chips.push({ label, clear });
 
+    if (matchedOnly.value) {
+        push(matchedSummaryText.value, () => {
+            matchedOnly.value = false;
+            handleFilterChange();
+        });
+    }
     if (serviceType.value) {
         push(SERVICE_FILTER_OPTIONS.find((o) => o.value === serviceType.value)?.label ?? serviceType.value, () => {
             serviceType.value = '';
@@ -683,6 +900,7 @@ const onSseRefresh = () => {
 };
 
 onMounted(() => {
+    consumePendingTag();
     load();
     startPolling();
     document.addEventListener('visibilitychange', onVisibility);
@@ -691,6 +909,7 @@ onMounted(() => {
 
 // keep-alive 복귀 시 조용히 새로고침 (화면 깜빡임 없이 최신 목록 유지 — 직전 조회와 10초 미만이면 생략)
 onActivated(() => {
+    consumePendingTag();
     startPolling();
     silentRefresh();
 });
@@ -723,7 +942,7 @@ watch(
 
 <template>
     <div class="page-shell">
-        <!-- 필터 칩 — 샌딩/랜딩/픽업은 상단에서 바로, 나머지 필터는 모달로 -->
+        <!-- 운행 유형 칩 — 샌딩/랜딩/픽업 빠른 선택 -->
         <div class="market-filters">
             <button
                 v-for="opt in SERVICE_QUICK_OPTIONS"
@@ -734,23 +953,6 @@ watch(
                 @click="toggleServiceType(opt.value)"
             >
                 {{ opt.label }}
-            </button>
-            <button
-                type="button"
-                class="market-filters__chip"
-                :class="{ 'market-filters__chip--active': hasModalFilters }"
-                @click="filterOpen = true"
-            >
-                필터
-                <span v-if="activeFilterCount > 0" class="market-filters__badge">{{ activeFilterCount }}</span>
-            </button>
-            <button
-                v-if="activeFilterCount > 0"
-                type="button"
-                class="market-filters__chip market-filters__chip--reset"
-                @click="resetFilters(); load()"
-            >
-                초기화
             </button>
             <button
                 type="button"
@@ -771,20 +973,44 @@ watch(
                 <BaseIcon name="search" :size="18" />
                 <span v-if="search" class="market-filters__search-text">{{ search }}</span>
             </button>
+            <!-- 찜한 운행 — 내가 보관한 운행만 모아 보는 별도 화면 -->
+            <button
+                type="button"
+                class="market-filters__favs"
+                aria-label="찜한 운행"
+                title="찜한 운행"
+                @click="router.push({ name: 'order-favorites' })"
+            >
+                <BaseIcon name="heart" :size="18" />
+            </button>
         </div>
 
-        <!-- 적용 중인 필터 요약 — 개별 칩 클릭으로 해당 필터만 해제 -->
+        <!-- 적용 중인 필터 요약 — 개별 칩 클릭으로 해제, 우측에 결과 건수·전체 초기화 -->
         <div v-if="activeFilterChips.length" class="market-active">
-            <button
-                v-for="(chip, index) in activeFilterChips"
-                :key="index"
-                type="button"
-                class="market-active__chip"
-                @click="chip.clear()"
-            >
-                {{ chip.label }}
-                <BaseIcon name="close" :size="11" />
-            </button>
+            <div class="market-active__chips">
+                <button
+                    v-for="(chip, index) in activeFilterChips"
+                    :key="index"
+                    type="button"
+                    class="market-active__chip"
+                    @click="chip.clear()"
+                >
+                    {{ chip.label }}
+                    <BaseIcon name="close" :size="11" />
+                </button>
+            </div>
+            <div class="market-active__side">
+                <span v-if="resultCountText" class="market-active__count">{{ resultCountText }}</span>
+                <button
+                    type="button"
+                    class="market-active__reset"
+                    aria-label="필터 초기화"
+                    title="선택한 필터 모두 해제"
+                    @click="resetFilters(); load()"
+                >
+                    <BaseIcon name="refresh" :size="13" />
+                </button>
+            </div>
         </div>
 
         <!-- 필터 모달 -->
@@ -980,19 +1206,29 @@ watch(
             <EmptyState
                 v-else-if="orders.length === 0"
                 icon="search"
-                title="가져올 수 있는 운행이 없습니다"
-                hint="필터를 줄이거나 잠시 후 다시 확인해 주세요"
+                :title="quick === 'favorites'
+                    ? '찜한 운행이 없습니다'
+                    : matchedOnly ? '조건에 맞는 운행이 아직 없습니다' : '가져올 수 있는 운행이 없습니다'"
+                :hint="quick === 'favorites'
+                    ? '마음에 드는 운행의 하트를 눌러 모아두면 여기서 다시 확인할 수 있어요'
+                    : matchedOnly
+                        ? '매칭 조건을 넓히거나 잠시 후 다시 확인해 주세요'
+                        : '필터를 줄이거나 잠시 후 다시 확인해 주세요'"
             />
             <template v-else>
                 <!-- 연결 운행 — 내가 맡은 운행의 하차지에서 이어지는 운행 (공차 복귀 절감) -->
-                <div v-if="returnRoutes.length" class="market-section">
+                <div v-if="quick !== 'favorites' && returnRoutes.length" class="market-section">
                     <div class="order-grid">
                         <OrderCard
                             v-for="(order, ri) in returnRoutes"
                             :key="order.key"
                             :order="order"
                             :highlight="highlightKeys.has(order.key)"
+                            :favoriteable="true"
+                            :favorited="Boolean(order.is_favorited)"
                             :tracking="{ scope: 'market', section: 'return', rank: ri + 1 }"
+                            @favorite-change="onFavoriteChanged"
+                            @tag-search="applyTagSearch"
                         />
                     </div>
                 </div>
@@ -1013,19 +1249,27 @@ watch(
                             :order="order"
                             :highlight="highlightKeys.has(order.key)"
                             :show-match-reasons="true"
+                            :favoriteable="true"
+                            :favorited="Boolean(order.is_favorited)"
                             :tracking="{ scope: 'market', section: 'list', rank: oi + 1 }"
+                            @favorite-change="onFavoriteChanged"
+                            @tag-search="applyTagSearch"
                         />
                     </div>
                 </div>
             </template>
 
-            <div v-if="pagination && pagination.last_page > 1" class="market-pagination">
-                <n-pagination
-                    :page="page"
-                    :page-size="pagination.per_page"
-                    :item-count="pagination.total"
-                    @update:page="handlePage"
-                />
+            <div class="market-more-wrap">
+                <button
+                    v-if="hasMore"
+                    type="button"
+                    class="market-more"
+                    :disabled="moreLoading"
+                    @click="loadMore"
+                >
+                    {{ moreLoading ? '불러오는 중…' : '더보기' }}
+                </button>
+                <p v-else-if="orders.length" class="market-more__end">모든 운행을 확인했어요</p>
             </div>
         </n-spin>
 
@@ -1051,7 +1295,7 @@ watch(
                     </button>
                 </div>
                 <div class="qm-drawer__body">
-                    <QuickMatchPanel @changed="load(true)" />
+                    <QuickMatchPanel @changed="load(true)" @apply="showMatchedFromPanel" />
                 </div>
             </div>
         </n-drawer>
@@ -1178,10 +1422,40 @@ watch(
     gap: var(--card-gap);
 }
 
-.market-pagination {
+.market-more-wrap {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
     margin-top: 24px;
+}
+.market-more {
+    min-width: 160px;
+    padding: 11px 18px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+.market-more:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+@media (hover: hover) {
+    .market-more:hover:not(:disabled) {
+        border-color: var(--brand);
+        color: var(--brand);
+    }
+}
+.market-more__end {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 11px;
 }
 
 /* ── 빠른매칭 플로팅 버튼 — 하단 네비 바로 위 우측 ── */
@@ -1316,16 +1590,76 @@ html.dark .market-fab {
     white-space: nowrap;
 }
 
-/* 적용 중인 필터 요약 칩 — 개별 해제 가능 */
+.market-filters__favs {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding: 7px 11px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--surface);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+@media (hover: hover) {
+    .market-filters__favs:hover {
+        border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+        color: var(--danger);
+    }
+}
+
+/* 적용 중인 필터 요약 — 개별 칩 해제 가능, 우측 결과 건수·전체 초기화 */
 .market-active {
     display: flex;
+    align-items: center;
     gap: 6px;
-    flex-wrap: wrap;
     margin: 0 0 var(--chips-gap);
 }
 /* 필터 칩 행 아래 요약 칩 — 위로 끌어올려 여백을 작게 */
 .market-filters + .market-active {
     margin-top: -4px;
+}
+.market-active__chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.market-active__side {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    margin-left: auto;
+    padding-left: 8px;
+}
+.market-active__count {
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.market-active__reset {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease;
+}
+.market-active__reset:hover {
+    color: var(--brand);
+    border-color: var(--brand);
 }
 
 .market-active__chip {

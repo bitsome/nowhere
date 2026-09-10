@@ -36,6 +36,7 @@ const {
     isWaitingClaims, confirmState, askConfirm, closeConfirm, doConfirm, withdrawClaim, approveClaim, rejectClaim, requestDetails, openChat, goUserPage,
     rejectOpen, rejectReason, rejectSubmitting, submitRejectClaim,
     detailRequestOpen, detailRequestReason, detailRequestMessage, detailRequestSubmitting, submitDetailRequest,
+    favorited, toggleFavorite,
     primaryAction, primaryActionStatus, statusButtonColor, resolveCssVarColor, groupOrderRows, groupTotalAmount, stepStyle,
     lineItems, statusTagType, refresh, claim, transition, cancelOpen, cancelReason, requestTransition,
     confirmCancel, completionOpen, completionRevenue, confirmComplete, detach,
@@ -90,6 +91,24 @@ const canReportOrder = computed(() => {
     const o = order.value;
 
     return Boolean(o && auth.user && !auth.isAdmin && o.user_id !== auth.user?.id);
+});
+
+// 찜(즐겨찾기) — 마켓에서 가져올 수 있는 운행일 때만 하트를 노출한다
+// (내가 등록했거나 이미 가져간 운행, 숨김·보류 운행은 찜 대상이 아니다)
+const canFavorite = computed(() => {
+    const o = order.value;
+
+    if (!o || isPerformer.value) {
+        return false;
+    }
+    if (o.user_id === auth.user?.id) {
+        return false;
+    }
+    if (o.is_hidden || o.admin_hold) {
+        return false;
+    }
+
+    return ['published', 'trading', 'acceptance_pending'].includes(o.status);
 });
 
 const reportSubject = computed(() => {
@@ -423,7 +442,7 @@ const formatClaimTime = (iso) => {
                     <span class="detail-hero__loc">{{ order?.dropoff_location || '-' }}</span>
                 </div>
                 <div class="detail-hero__badges">
-                    <span v-if="isWaitingClaims" class="hero-badge hero-badge--waiting">요청 대기중</span>
+                    <span v-if="isWaitingClaims" class="hero-badge hero-badge--waiting">요청 대기 중</span>
                     <span v-if="isPriority" class="hero-badge hero-badge--priority">긴급</span>
                     <span v-if="isUrgent" class="hero-badge hero-badge--urgent">임박</span>
                 </div>
@@ -440,7 +459,22 @@ const formatClaimTime = (iso) => {
                 </button>
             </div>
             <div class="detail-hero__side">
-                <div class="detail-hero__amount">{{ amountLabel }}</div>
+                <!-- 금액과 한 줄 — 하트를 금액 바로 옆에 두어 '이 운행을 찜'하는 버튼임을 알게 한다 -->
+                <div class="detail-hero__side-top">
+                    <!-- 찜 — 마켓 운행을 나중에 다시 보려고 보관한다 -->
+                    <button
+                        v-if="canFavorite"
+                        type="button"
+                        class="detail-hero__fav"
+                        :class="{ 'detail-hero__fav--on': favorited }"
+                        :aria-label="favorited ? '찜 해제' : '찜하기'"
+                        :title="favorited ? '찜 해제' : '찜하기'"
+                        @click="toggleFavorite"
+                    >
+                        <BaseIcon :name="favorited ? 'heart-filled' : 'heart'" :size="21" />
+                    </button>
+                    <div class="detail-hero__amount">{{ amountLabel }}</div>
+                </div>
                 <n-tag size="large" round :type="statusTagType">
                     {{ statusLabel }}
                 </n-tag>
@@ -1504,7 +1538,7 @@ const formatClaimTime = (iso) => {
     gap: 6px;
     margin-bottom: 16px;
     padding: 12px 16px;
-    border: 1px dashed rgba(0, 0, 0, 0.12);
+    border: 1px dashed var(--border);
     border-radius: 14px;
     font-size: 13px;
     color: var(--text-muted);
@@ -2101,14 +2135,6 @@ html.dark .detail-claim-card :deep(.n-card__footer) {
     animation: hero-pulse 1.6s ease-in-out infinite;
 }
 
-.hero-badge--today {
-    background: rgba(255, 255, 255, 0.25);
-}
-
-.hero-badge--tomorrow {
-    background: rgba(255, 255, 255, 0.18);
-}
-
 @keyframes hero-pulse {
     0%,
     100% {
@@ -2156,10 +2182,42 @@ html.dark .detail-claim-card :deep(.n-card__footer) {
     flex-shrink: 0;
 }
 
+/* 금액·하트 한 줄 — 금액을 오른쪽 끝에 두고 하트가 그 옆에 붙는다 */
+.detail-hero__side-top {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    max-width: 100%;
+}
+
 .detail-hero__amount {
     font-size: 18px;
     font-weight: 900;
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* 찜 하트 — 테두리 없는 심플 하트. 미찜: 흰 테두리 하트 / 찜: 빨간 채움 하트 */
+.detail-hero__fav {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3px;
+    border: 0;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.92);
+    cursor: pointer;
+    transition: color 0.15s ease, transform 0.1s ease;
+}
+.detail-hero__fav:hover {
+    color: #ffffff;
+    background: transparent;
+}
+.detail-hero__fav:active {
+    transform: scale(0.88);
+}
+.detail-hero__fav--on {
+    color: #e5484d;
 }
 
 /* 히어로와 운행 정보 사이 — 운행 진행 스테퍼 (짧은 문구, 단계별 색상 점) */
@@ -2262,10 +2320,6 @@ html.dark .detail-claim-card :deep(.n-card__footer) {
     text-decoration: none;
     border-bottom: 1px dashed color-mix(in srgb, var(--brand) 55%, transparent);
     padding-bottom: 1px;
-}
-
-.detail-text--urgent {
-    color: var(--danger);
 }
 
 /* ── 경로 지도 ── */

@@ -364,7 +364,7 @@ const pickImage = async (event) => {
 
             if (!uploaded) {
                 item.uploadError = true;
-                naiveMessage.warning(`${itemIndex + 1}번째 이미지 업로드에 실패했습니다. 다시 시도해주세요.`);
+                naiveMessage.warning(`${itemIndex + 1}번째 이미지 업로드에 실패했습니다. 다시 시도해 주세요.`);
             }
             uploadingIndex.value = -1;
         }
@@ -488,14 +488,14 @@ const send = async () => {
 
     if (!toSend.length || sending.value) {
         if (images.value.length && !toSend.length) {
-            naiveMessage.warning('보낼 이미지를 선택해주세요.');
+            naiveMessage.warning('보낼 이미지를 선택해 주세요.');
         }
 
         return;
     }
     // 업로드 실패한 이미지는 지문이 없어 전송할 수 없다 — 먼저 다시 업로드하게 한다
     if (toSend.some((img) => img.uploadError)) {
-        naiveMessage.warning('업로드 실패한 이미지를 다시 시도해주세요.');
+        naiveMessage.warning('업로드 실패한 이미지를 다시 시도해 주세요.');
 
         return;
     }
@@ -630,7 +630,7 @@ const send = async () => {
                 <!-- 빈 상태 -->
                 <div v-else class="img-sheet__empty">
                     <BaseIcon name="image" :size="28" />
-                    <p>사진을 선택하면 바로 업로드됩니다. 보낼 사진을 골라주세요.</p>
+                    <p>사진을 선택하면 바로 업로드됩니다. 보낼 사진을 골라 주세요.</p>
                 </div>
 
                 <!-- 드래그 힌트 — 2장 이상일 때만 안내 -->
@@ -935,10 +935,11 @@ const send = async () => {
     color: transparent;
     cursor: pointer;
 }
+/* brand 채움은 라이트·다크 모두 밝아 어두운 아이콘(#07120e) — .img-sheet__archive-add와 동일 표준 */
 .img-sheet__archive-check.is-checked {
     background: var(--brand);
     border-color: var(--brand);
-    color: #fff;
+    color: #07120e;
 }
 .img-sheet__archive-check:disabled { opacity: 0.6; cursor: not-allowed; }
 /* 보관함 이미지 삭제 — 업로드된 이미지를 파일까지 정리 */
@@ -1150,7 +1151,7 @@ const send = async () => {
 .img-sheet__thumb-check.is-checked {
     background: var(--brand);
     border-color: var(--brand);
-    color: #fff;
+    color: #07120e;
 }
 .img-sheet__thumb-check:disabled { opacity: 0.6; cursor: not-allowed; }
 /* 선택 안 된 이미지 — 어둡게 */
@@ -1253,6 +1254,7 @@ const send = async () => {
     background: rgba(0, 0, 0, 0.55);
     z-index: 1;
 }
+/* 전송 완료 표시 — brand 채움이라 어두운 아이콘(#07120e) 표준 */
 .img-sheet__thumb-done {
     display: flex;
     align-items: center;
@@ -1261,7 +1263,7 @@ const send = async () => {
     height: 24px;
     border-radius: 50%;
     background: var(--brand);
-    color: #fff;
+    color: #07120e;
 }
 .img-sheet__thumb-loading {
     display: flex;

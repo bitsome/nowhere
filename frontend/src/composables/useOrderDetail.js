@@ -1,7 +1,8 @@
 import { computed, ref } from 'vue';
 import {
     apiAcceptOffer, apiApproveClaim, apiClaimOrder, apiCreateOffer, apiDeleteOffer, apiDetachOrder,
-    apiOrder, apiOrderOffers, apiRejectClaim, apiRejectOffer, apiRequestOrderDetails, apiReviewOrder, apiTransitionOrder,
+    apiOrder, apiOrderOffers, apiRejectClaim, apiRejectOffer, apiRequestOrderDetails, apiReviewOrder,
+    apiToggleFavorite, apiTransitionOrder,
 } from '../api/orders';
 import { getApiErrorMessage } from '../api/client';
 import { statusColorVar } from '../utils/colors';
@@ -35,6 +36,8 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
     const acting = ref(false);
     const message = ref('');
     const messageType = ref('success');
+    // 내가 이 운행을 찜했는지 — 히어로 하트 표시 (마켓 운행일 때만 노출)
+    const favorited = ref(false);
 
     const currentStep = computed(() => {
         const index = STATUS_FLOW.indexOf(order.value?.status ?? '');
@@ -205,7 +208,7 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
     });
 
     // 상태 라벨 — 완료(정산 전)는 '정산 대기중'으로 표시.
-    // 승인 대기 상태는 요청을 보낸 기사(claimant)와 등록자에게만 '수락대기'로 보여주고,
+    // 승인 대기 상태는 요청을 보낸 기사(claimant)와 등록자에게만 '수락 대기'로 보여주고,
     // 그 외 드라이버/관람자에게는 아직 가져올 수 있는 운행으로 안내한다.
     const statusLabel = computed(() => {
         const status = order.value?.status;
@@ -244,7 +247,7 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
 
     const submitReview = async () => {
         if (!reviewContent.value.trim()) {
-            naiveMessage.warning('리뷰 내용을 입력해주세요.');
+            naiveMessage.warning('리뷰 내용을 입력해 주세요.');
 
             return;
         }
@@ -370,7 +373,7 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         );
     });
 
-    // 요청 대기중 배지 — 내 가져오기 요청이 승인 대기 중일 때
+    // 요청 대기 중 배지 — 내 가져오기 요청이 승인 대기 중일 때
     const isWaitingClaims = isClaimantPending;
 
     // ── 공용 확인 다이얼로그 — 모든 상태 변경은 확인 후 진행한다 ──
@@ -665,9 +668,9 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
 
     // 하단 액션 바의 주 동작 — 가져오기 요청 철회(요청자) > 다음 상태 전이 > 리뷰
     const primaryAction = computed(() => {
-        // 승인 대기 중인 가져오기 요청은 '수락대기중' 표시 버튼으로 안내한다
+        // 승인 대기 중인 가져오기 요청은 '수락 대기 중' 표시 버튼으로 안내한다
         if (isClaimantPending.value) {
-            return { label: '수락대기중', indicator: true, handler: null };
+            return { label: '수락 대기 중', indicator: true, handler: null };
         }
         if (nextTransitions.value.length && canManageStatus.value) {
             const next = nextTransitions.value[0];
@@ -778,6 +781,7 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         timeline.value = data.data.timeline ?? [];
         myReview.value = data.data.my_review ?? null;
         claims.value = data.data.claims ?? [];
+        favorited.value = Boolean(data.data.favorited);
     };
 
     const refresh = async () => {
@@ -908,6 +912,20 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
     const detach = (siblingId) =>
         run(() => apiDetachOrder(siblingId), '셋트 그룹에서 분리되었습니다.');
 
+    // 찜(즐겨찾기) 토글 — 하트를 누르면 상태를 뒤집는다 (마켓 운행만 가능)
+    const toggleFavorite = async () => {
+        if (!order.value) {
+            return;
+        }
+
+        try {
+            const { data } = await apiToggleFavorite(order.value.id);
+            favorited.value = Boolean(data?.data?.favorited);
+        } catch (e) {
+            naiveMessage.error(getApiErrorMessage(e, '찜 처리에 실패했습니다.'));
+        }
+    };
+
     return {
         order,
         group,
@@ -940,6 +958,8 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         statusLabel,
         canReview,
         myReview,
+        favorited,
+        toggleFavorite,
         reviewOpen,
         reviewRating,
         reviewContent,

@@ -117,7 +117,7 @@ onMounted(load);
                 <h1 class="settle-head__title">정산</h1>
                 <p class="settle-head__desc">정산된 운행의 금액과 출금을 관리합니다.</p>
             </div>
-            <button type="button" class="settle-head__refresh" title="새로고침" @click="load">
+            <button type="button" class="settle-head__refresh" aria-label="새로고침" title="새로고침" @click="load">
                 <BaseIcon name="refresh" :size="16" />
             </button>
         </div>
@@ -150,7 +150,7 @@ onMounted(load);
                 <button
                     type="button"
                     class="settle-hero__cta"
-                    :disabled="submitting || !summary.pending_total || hasPendingPayout"
+                    :disabled="submitting || !summary.account || !summary.pending_total || hasPendingPayout"
                     @click="requestPayout"
                 >
                     <BaseIcon name="coin" :size="15" />

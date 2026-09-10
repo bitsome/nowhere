@@ -99,8 +99,8 @@ export function useProfileSettings({ auth, router, message }) {
 
     const save = async () => {
         if (!form.name.trim()) {
-            error.value = '이름을 입력해주세요.';
-            message.warning('이름을 입력해주세요.');
+            error.value = '이름을 입력해 주세요.';
+            message.warning('이름을 입력해 주세요.');
 
             return;
         }

@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Notifications\OrderNotification;
 use App\Services\Chat\ChatService;
 use App\Services\Order\OrderOfferService;
+use App\Services\OrderFavoriteService;
 use Illuminate\Http\Request;
 
 /**
@@ -118,6 +119,17 @@ class AdminOperationService
             'event' => $hidden ? 'admin_hidden' : 'admin_visible',
             'note' => $reason,
         ]);
+
+        // 찜한 기사 안내 — 숨겨진 운행은 마켓에서 내려가므로 알리고 찜 기록을 정리한다
+        if ($hidden) {
+            $reasonText = trim($reason) !== '' ? " 사유: {$reason}" : '';
+
+            app(OrderFavoriteService::class)->notifyUnavailable(
+                $order,
+                '찜한 운행 숨김',
+                "찜해 둔 {$order->rideSummary()} 운행이 마켓에서 내려갔습니다.{$reasonText}",
+            );
+        }
 
         AuditService::record(
             $admin,

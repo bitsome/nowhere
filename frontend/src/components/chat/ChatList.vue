@@ -211,7 +211,7 @@ const sections = computed(() => {
                                 <template v-if="conv.last_message">
                                     <span v-if="conv.last_message.user_id === auth.user?.id" class="chat-list__mine">나: </span>{{ conv.last_message.body }}
                                 </template>
-                                <template v-else>대화를 시작해보세요</template>
+                                <template v-else>대화를 시작해 보세요</template>
                             </span>
                             <span v-if="typeChipOf(conv.last_message)" class="chat-list__type-chip" :class="typeChipClass(conv.last_message)">
                                 {{ typeChipOf(conv.last_message) }}
