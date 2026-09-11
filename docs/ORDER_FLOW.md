@@ -70,16 +70,30 @@ draft ──▶ published ──▶ acceptance_pending ──▶ accepted ──
 4. 마지막 단계(도착지 도착) 기록 순간 자동으로 → `completed`
    - 수행 기사는 여기까지가 마지막이며, 정산은 **등록자(원 등록자)** 가 처리한다
 
-### 3-4. 정산 (등록자)
+### 3-4. 정산·수금 (등록자 → 관리자 → 기사)
 
 1. 등록자가 완료 운행을 선택해 일괄 정산 → `settled` (XP +30)
-2. 수행 기사는 정산 처리 전까지 '정산 대기중'으로 대기
+   - 정산 시점 요율이 `settlements.fee_rate`에 **스냅샷**된다 — 이후 요율을 바꿔도 확정된 금액은 바뀌지 않는다
+   - 등록자에게 개별 요율(`users.fee_rate`)이 있으면 그것을 우선 적용한다
+2. 정산 원장 생성 시 등록자에게 **운행 대금 입금 안내**(플랫폼 매입 계좌)가 간다 → 수금 상태 `pending`
+3. 등록자가 매입 계좌로 입금 → 관리자가 **'수금 확인'**으로 `pending → paid` 확정 (`collected_at`·`collected_by`·`collection_note` 기록)
+4. **기사 출금은 수금 완료(`paid`)분만 가능** — 등록자 입금이 확인되기 전에는 출금할 수 없다
+5. 기사 출금 신청 → 지급 → 지급 완료
 
 ### 3-5. 취소
 
 - `draft` / `published` / `acceptance_pending` / `accepted`(예약) 상태에서 취소 가능
 - 취소 시 사유(`cancel_reason`) 기록
 - `driving` 이후로는 취소 불가 (강제 종료는 별도 처리 필요)
+
+### 3-6. 자기 수행 (등록자 = 수행자)
+
+등록자가 자기 공개 운행을 기사 모집 없이 본인이 수행한다 (`OrderClaimService::selfDrive`, `claim.cause = self_drive`).
+
+- 가능 조건: 본인 소유 + `published` + 다른 기사의 신청이 없을 때
+- 불가: 남의 운행, 아직 공개하지 않은 초안, 이미 기사 신청이 들어온 운행
+- 완료·정산하면 등록자와 수행자가 같아 **원장은 하나만** 만들어지고, 위 3-4 수금·출금 흐름에 그대로 올라탄다
+- 미확정: 등록자=수행자인 경우의 수금 처리(입금·지급 순환을 없애고 수수료만 납부하는 방향)는 **정책 결정 대기** — 결정 전까지는 동일한 입금 확인 흐름을 따른다
 
 ## 4. 운행중 세부 단계 (ride_step)
 
@@ -118,14 +132,19 @@ draft ──▶ published ──▶ acceptance_pending ──▶ accepted ──
 |---|---|
 | 등록·공개·비공개·취소 | 등록자 (운행 소유자) |
 | 가져오기 요청(claim) | **기사(Driver) 역할만** — 본인 등록 운행 불가 |
+| 직접 수행(self_drive) | 등록자 — **본인 공개 운행**이고 기사 신청이 없을 때만 |
 | 승인·거절 | 등록자 (운행 소유자) |
 | 신청 철회 | 신청한 기사 본인 |
 | 운행 시작·단계 진행·완료 | 운행 수행자(기사) 본인 |
 | 정산 | 등록자 (원 등록자 `original_owner_id` 또는 미이전 본인 등록) |
+| 수금 확인(`pending → paid`) | 관리자만 |
+| 출금 신청·지급 | 수행 기사 본인 / 관리자 지급 |
 
 ## 8. 구현 위치
 
 - 상태 상수·전이 규칙: `app/Models/Order.php` (`STATUS_FLOW`, `canTransitionTo`, `transitionTo`)
-- 신청/승인/거절/철회/만료: `app/Services/Order/OrderClaimService.php`
+- 신청/승인/거절/철회/만료/직접 수행: `app/Services/Order/OrderClaimService.php` (`selfDrive`)
 - 운행 전이·정산·자동 매칭: `app/Services/Order/OrderTransitionService.php`
+- 수수료 계산·수금·출금: `app/Services/Settlement/SettlementService.php` (`feeRateFor`, `calculateFee`, 수금 확인)
+- 수금 상태 상수: `app/Models/Settlement.php` (`COLLECTION_PENDING`, `COLLECTION_PAID`)
 - 상태 라벨: `Order::statusOptions()` (초안/공개/거래중/예약/운행중/완료/정산/취소/수락 대기)
