@@ -133,8 +133,9 @@
 
 ## Current
 - [ ] 다음 작업: **첫 수익 1건 실현** — 실제 운행 등록 → 공유 링크 → 신청 → 승인 → 운행 → 완료 → 정산 → 입금·수금 확인까지 실데이터로 한 바퀴
-  - 선행: **도메인 + 고정 HTTPS**(사용자 구매 진행 중). 홍보 유입·iOS 홈 화면 설치·웹 푸시·GPS가 모두 HTTPS 전용이라 이 하나가 막혀 있다
-  - 그 전까지: quick tunnel(HTTPS)로 아이폰 실기 검증(설치 안내 → 홈 화면 추가 → 알림 켜기 → 수신) + `rehearse_first_revenue.sh` 경로 리허설
+  - 선행 A(막힘): **이름·도메인 확정** — `nowhere.com`·`.net`·`.app`·`.run`은 물론 `nowhere.kr`·`nowhere.co.kr`도 이미 등록돼 있어 **NoWhere로 쓸 도메인이 없다**. 이름 교체 여부·새 이름은 2026-09-11 **보류**(후보·조회 결과·조회 방법은 `.trae/specs/achieve-first-revenue/tasks.md` Task 22)
+  - 선행 B: **고정 HTTPS 주소** — 홍보 유입·iOS 홈 화면 설치·웹 푸시·GPS가 모두 HTTPS 전용이라 이 하나가 실질 병목이다. 도메인 확정 후 Cloudflare Named Tunnel + `APP_URL`/`FRONTEND_URL` + `VITE_SITE_URL` 재빌드 (절차는 [DEPLOY.md](./DEPLOY.md) §7)
+  - 그 전까지: quick tunnel(HTTPS)로 아이폰 실기 검증(설치 안내 → 홈 화면 추가 → 알림 켜기 → 수신) + `rehearse_first_revenue.sh` 경로 리허설. 단 `npm run dev`는 서비스 워커를 해제하므로 반드시 `npm run preview`(PROD) 사용
 - [x] Q-6 문서 동기화: CHANGELOG 2026-09-11 절·ORDER_FLOW 정산 수금·OPERATIONS 입금 확인·TASKS Current 갱신 (2026-09-11)
 
 ## 원칙

@@ -180,6 +180,24 @@
   - [x] SubTask 21.8: 회귀 테스트 `pwa.test.js` 11건(아이폰·아이패드OS UA / 위챗 인앱 / standalone / 안내 4분기). 검증: 프론트 100건·`check:refs`·`vite build` 통과, 빌드 산출물(`public/index.html`·`public/sw.js`) 반영 확인
   - 남은 것: 도메인 + 고정 HTTPS(대표님 구매 진행 중) — 이게 없으면 설치 프롬프트·푸시·GPS가 모두 동작하지 않는다. 도메인 확보 후 Cloudflare Named Tunnel 연결은 이어서 진행
 
+- [x] Task 22: 로컬 HTTPS 검증 환경 + 도메인·이름 조사 (이름 교체는 보류)
+  - 배경: 대표님이 "NoWhere 도메인이 없으니 이름을 바꿔야 한다"고 판단. 실제 조회로 사실을 확인하고 후보를 조사했으나, **도메인·이름 확정은 뒤로 미룸**(대표님 지시 "도메인 뒤로하고 마무리").
+  - [x] SubTask 22.1: 로컬 HTTPS 검증 환경 구성·철거 — `php artisan serve`(:8000) + `npm run preview`(:4173, PROD 빌드라 서비스 워커 등록됨) + cloudflared quick tunnel. 터널 주소로 `/`·`manifest.webmanifest`·`sw.js`·아이콘·`og-cover.jpg` 200, `sw.js`에 `/spa` 잔재 없음, API 로그인 성공(Driver)까지 확인. 검증 후 터널·preview 종료(공개 노출 차단)
+    - 함정: `npm run dev`는 `main.js`가 서비스 워커를 **해제**하므로 PWA 설치 검증에 쓸 수 없다 → 반드시 `npm run preview`(PROD) 사용
+    - 로컬 DB에 테스트 로그인을 만들기 위해 `driver01@example.com` 비밀번호를 임시로 `password`로 재설정(로컬 전용, 서버 DB 동기화 시 덮어써짐)
+  - [x] SubTask 22.2: 도메인 조사 — `nowhere.com`·`.net`·`.app`·`.run` 모두 등록. **`nowhere.kr`·`nowhere.co.kr`도 가비아 NS로 위임돼 등록 상태** → NoWhere로 쓸 수 있는 도메인 없음(대표님 판단 확인)
+  - [x] SubTask 22.3: 조회 방법 확립(재사용) — 무료 RDAP(`rdap.org`)은 `.kr`·`.co.kr`·`.io`·`.me`에서 **오답**(대조군 `google.co.kr`·`github.io`가 "사용 가능"으로 오판). `.com`은 **Verisign 공식 RDAP**(`rdap.verisign.com/com/v1/domain/<name>`) + 대조군 `google.com`으로 신뢰, `.kr`류는 **DNS NS 위임 여부**로 교차 확인. RDAP 404는 "미등록"일 뿐 프리미엄 가격·예약 상태일 수 있음
+  - [x] SubTask 22.4: 후보 조사 — `.com` 한정 230여 개 조회. 아래는 **2026-09-11 조회 시점 미등록**(선점 가능성 있으므로 구매 직전 재확인 필요)
+    - 브랜드형: `unhaengi`, `dallimi`, `doreumi`, `oneulgil`, `ttokgo`, `chakgo`, `dalgongi`, `gonghangi`, `hanbeone`, `cheotbeon`, `gyeolgo`, `baechago`, `unhaengio`, `unhaengro`, `unhaengly`, `cheokgo`, `cheokro`, `routmo`
+    - 숫자 조합: `unhaeng365`, `unhaeng24`, `unhaeng247`, `unhaeng1`, `unhaeng2`, `unhaeng7`, `oneul24`, `oneul1`, `oneul247`, `gonghang24`, `gonghang1`, `gonghang365`, `24unhaeng`, `24gonghang`(→`gonghang24`), `dallimi365`, `dallim1`, `doreumi1`, `nuri1`, `chul1`, `moeun1`, `ttok365`, `chak365`, `1unhaeng`, `7unhaeng`, `4unhaeng`
+    - 과감형(한국어 숫자말·치환): `8282ride`, `1004unhaeng`, `7942ride`, `haruride`, `rideharu`, `byeol365`, `gil365`, `dallyeo24`, `dallyeo365`, `dallim365`, `chongal24`, `bunge24`, `2dayride`, `ride2day`, `unhaeng4u`, `oneul4u`, `u2ride`, `77unhaeng`, `ilsa1`
+    - `1ride` 계열: **`1ride.com`은 이미 등록** → `the1ride`, `1ridekorea`, `1ride24`, `1ride4u`, `my1ride`, `go1ride`, `1ridego`, `1rideone`, `1ridekr`, `pick1ride`, `1ride365`, `1rideon`. 참고로 `1ride.app`·`1ride.net`은 등록, `1ride.kr`·`1ride.co.kr`·`1ride.io`은 NS 위임 없음(등록 가능성 높음)
+  - [x] SubTask 22.5: 제외 권고 — `1be`는 한국에서 **"일베"** 로 읽혀 브랜드 리스크(숫자 문제가 아니라 이름 문제). `nuriro`(누리로)는 코레일 열차명, `bunge`(번개)는 번개장터, `chongal`(총알)은 총알배송과 혼동 소지
+  - [ ] **보류**: 이름·도메인 확정 및 전면 교체
+  - 교체 대상(이름 확정 시): 화면 10여 곳(`index.html`·`manifest.webmanifest`·`LandingView`·`LoginView`·`RegisterView`·`SharedOrderView`·`useOrderShare`), 공유·알림 문구(`ShareController` 3곳·`sw.js` 푸시 제목), 발신 주소(`config/webpush.php` VAPID subject), 저장 키(`nowhere_login_saved`·`nowhere:market:*` 4곳·`nowhere:home:*`), 알림 태그(`nowhere-push`·`nowhere`), 다운로드 파일명(`nowhere-image-N.jpg`), 배포 설정(`fly.toml`·`render.yaml`·`docker`·`hooks`), 문서 일괄
+  - 참고: 실사용자 0명이라 **저장 키를 지금 바꾸는 것이 가장 저렴**하다. 기사가 유입된 뒤에는 `nowhere_login_saved` 이전 비용이 붙는다
+  - 아이폰 실기 확인 항목(미완 — 환경 재기동 후): ① 설정→화면에 공유→홈 화면에 추가 순서 표시 ② 홈 화면 아이콘 이름이 `NoWhere`로 짧게 ③ 홈 화면 앱으로 열면 주소창 없음 ④ 설정→알림에 토글 표시(설치 안내 아님) ⑤ 토글 켜기→권한 허용 ⑥ `php artisan push:test --user=<이메일>`로 실제 푸시 수신·알림 탭 이동(404 아님)
+
 # Task Dependencies
 - [Task 2] depends on [Task 1] (배포 시 매입 계좌가 함께 반영돼야 입금 안내가 정상 동작)
 - [Task 3] depends on [Task 2] (배포 후 실제 운영 데이터로 검증)
