@@ -36,6 +36,9 @@ const isFocusedScreen = computed(() =>
     || (route.name === 'order-create' && ui.orderFormActive),
 );
 
+// 페이지가 자체 플로팅 버튼(FAB)을 띄우는 화면 — 맨 위로 버튼은 그 위로 올려 자리 겹침을 피한다
+const hasPageFab = computed(() => ['market', 'community', 'my-market'].includes(route.name));
+
 // 채팅 화면을 벗어나면(뒤로가기 등) 대화방을 닫아 하단 메뉴를 복원한다
 watch(
     () => route.name,
@@ -274,7 +277,7 @@ let driverTimer = null;
                 <div class="app-shell" :class="{ 'app-shell--ready': initReady || !auth.token }">
 
                 <HeaderBar
-                    v-if="!['login', 'register', 'password-reset'].includes(route.name)"
+                    v-if="!['welcome', 'shared-order', 'login', 'register', 'password-reset'].includes(route.name)"
                     @action="handleHeaderAction"
                 />
 
@@ -294,7 +297,7 @@ let driverTimer = null;
                     :class="{
                         'app-content--full':
                             isChatThread
-                            || ['login', 'register', 'password-reset'].includes(route.name),
+                            || ['welcome', 'shared-order', 'login', 'register', 'password-reset'].includes(route.name),
                     }"
                 >
                     <!-- keep-alive만 사용: 트랜지션은 iOS에서 사라지는 화면이 남아 클릭을 막는 문제가 있어 제거 -->
@@ -305,8 +308,8 @@ let driverTimer = null;
                     </router-view>
                 </main>
 
-                <!-- 긴 목록에서 맨 위로 복귀 -->
-                <ScrollTopButton />
+                <!-- 긴 목록에서 맨 위로 복귀 (페이지 FAB이 있으면 그 위로 올린다) -->
+                <ScrollTopButton :raised="hasPageFab" />
 
                 <nav v-if="auth.isAuthenticated && !chats.activeId && !isFocusedScreen" class="bottom-nav">
                     <router-link

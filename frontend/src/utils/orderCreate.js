@@ -194,3 +194,57 @@ export const parseSetLine = (line) => {
 
     return item;
 };
+
+/**
+ * 구조화 결과 → 등록 초안 목록.
+ *
+ * 일정(line_items)이 여러 건이면 각각을 독립 운행 초안으로 나눈다 — 셋트로 묶지 않는다.
+ * 문구 전체에만 있는 값(차량 등)은 비어 있는 항목에 물려준다.
+ *
+ * @param {object} structured /orders/structure 응답의 structured
+ * @returns {Array<object>} 편집 가능한 등록 초안 (최소 1건)
+ */
+export const buildSplitOrders = (structured) => {
+    const source = structured ?? {};
+    const lineItems = Array.isArray(source.line_items) ? source.line_items : [];
+
+    // 항목 값이 비어 있으면 문구 전체 값으로 채운다
+    const pick = (item, key) => {
+        const value = item?.[key];
+
+        if (value !== undefined && value !== null && value !== '') {
+            return value;
+        }
+
+        const fallback = source[key];
+
+        return fallback === undefined || fallback === null || fallback === '' ? undefined : fallback;
+    };
+
+    const toDraft = (item) => {
+        const isoDate = toIsoDate(pick(item, 'service_date') ?? '');
+        const time = pick(item, 'scheduled_time') || pick(item, 'service_time') || '';
+
+        return {
+            service_date: isoDate || null,
+            service_time: time || null,
+            service_type: toServiceCode(pick(item, 'service_type')),
+            vehicle_type: pick(item, 'vehicle_type') ?? '',
+            pickup_location: pick(item, 'pickup_location') ?? '',
+            dropoff_location: pick(item, 'dropoff_location') ?? '',
+            flight_number: pick(item, 'flight_number') ?? '',
+            passenger_count: pick(item, 'passenger_count') ?? null,
+            luggage_count: pick(item, 'luggage_count') ?? null,
+            expected_revenue: pick(item, 'amount_value') ?? null,
+            customer_name: '',
+            customer_phone: '',
+            is_priority: false,
+        };
+    };
+
+    if (!lineItems.length) {
+        return [toDraft(null)];
+    }
+
+    return lineItems.map(toDraft);
+};

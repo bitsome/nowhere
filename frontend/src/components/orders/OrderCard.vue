@@ -56,9 +56,14 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    // 공유(공개 링크) — 등록자 목록에서만 켠다. 공개 상태 카드에만 노출된다
+    shareable: {
+        type: Boolean,
+        default: false,
+    },
 });
 
-const emit = defineEmits(['toggle', 'favorite-change', 'tag-search']);
+const emit = defineEmits(['toggle', 'favorite-change', 'tag-search', 'share']);
 
 const router = useRouter();
 const auth = useAuthStore();
@@ -209,6 +214,15 @@ const statusBadgeClass = computed(() => (props.statusOverride ? 'status-badge--o
 // 공개 상태 — 배지는 정보 가치가 낮아 생략하고 배지 자리에 금액을 노출한다
 const isPublished = computed(() => props.order.status === 'published');
 
+// 공유 버튼 — 내가 등록해 공개 중인 운행만. 상세(2탭) 대신 목록에서 바로 링크를 만든다.
+// 남에게 넘긴 운행(original_owner_id)은 공유 API 권한이 없으므로 소유자 id까지 확인한다.
+const showShare = computed(
+    () => props.shareable
+        && !props.selectable
+        && isPublished.value
+        && props.order.userId === auth.user?.id,
+);
+
 // 카드 일시 — 오늘/내일/모레는 상대 라벨, 이후 날짜는 "9/2(수)" 유지
 const dateLabel = computed(() => relativeDateLabel(props.order.date, props.order.sortDate));
 
@@ -270,7 +284,7 @@ const START_REMAIN_ICONS = {
     teal: 'speedometer',
 };
 
-const startRemainIcon = computed(() => START_REMAIN_ICONS[startRemain.value?.level] ?? 'time');
+const startRemainIcon = computed(() => START_REMAIN_ICONS[startRemain.value?.level] ?? 'history');
 </script>
 
 <template>
@@ -357,8 +371,8 @@ const startRemainIcon = computed(() => START_REMAIN_ICONS[startRemain.value?.lev
                 </span>
             </div>
         </div>
-        <!-- 태그·찜 바 — 한 줄: 왼쪽 태그 칩 / 오른쪽 하트 -->
-        <div v-if="(favoriteable && !selectable) || order.tags?.length" class="order-card__favbar">
+        <!-- 태그·찜 바 — 한 줄: 왼쪽 태그 칩 / 오른쪽 공유·하트 -->
+        <div v-if="(favoriteable && !selectable) || order.tags?.length || showShare" class="order-card__favbar">
             <!-- 어필 태그 — 누르면 해당 태그로 마켓 검색 -->
             <div v-if="order.tags?.length" class="order-card__route-tags">
                 <button
@@ -372,18 +386,33 @@ const startRemainIcon = computed(() => START_REMAIN_ICONS[startRemain.value?.lev
                     #{{ tag }}
                 </button>
             </div>
-            <!-- 찜 — 마켓에서 나중에 다시 볼 운행을 보관한다 -->
-            <button
-                v-if="favoriteable && !selectable"
-                type="button"
-                class="order-card__fav"
-                :class="{ 'order-card__fav--on': fav }"
-                :aria-label="fav ? '찜 해제' : '찜하기'"
-                :title="fav ? '찜 해제' : '찜하기'"
-                @click.stop.prevent="toggleFavorite"
-            >
-                <BaseIcon :name="fav ? 'heart-filled' : 'heart'" :size="17" />
-            </button>
+            <!-- 공유·찜 — 오른쪽에 모아 카드 클릭(상세 이동)과 구분한다 -->
+            <div class="order-card__actions">
+                <!-- 공유 — 상세로 들어가지 않고 목록에서 바로 공개 링크를 만든다 -->
+                <button
+                    v-if="showShare"
+                    type="button"
+                    class="order-card__share"
+                    aria-label="공유"
+                    title="공유 링크 만들기"
+                    @click.stop.prevent="emit('share', order.id)"
+                >
+                    <BaseIcon name="share" :size="16" />
+                    공유
+                </button>
+                <!-- 찜 — 마켓에서 나중에 다시 볼 운행을 보관한다 -->
+                <button
+                    v-if="favoriteable && !selectable"
+                    type="button"
+                    class="order-card__fav"
+                    :class="{ 'order-card__fav--on': fav }"
+                    :aria-label="fav ? '찜 해제' : '찜하기'"
+                    :title="fav ? '찜 해제' : '찜하기'"
+                    @click.stop.prevent="toggleFavorite"
+                >
+                    <BaseIcon :name="fav ? 'heart-filled' : 'heart'" :size="17" />
+                </button>
+            </div>
         </div>
         <!-- 금액 행 — 공개가 아닌 상태(배지가 금액 자리를 사용) 또는 선택 모드에서 하단 표시 -->
         <div v-if="selectable || !isPublished" class="order-card__meta">
@@ -495,6 +524,37 @@ const startRemainIcon = computed(() => START_REMAIN_ICONS[startRemain.value?.lev
     color: var(--danger);
 }
 
+/* 카드 우측 액션 묶음 — 공유·찜을 카드 클릭 영역과 분리해 한 덩어리로 둔다 */
+.order-card__actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+/* 공유 — 태그 칩과 같은 높이(18px)에 맞춘 텍스트형 버튼. 카드 클릭(상세 이동)과 분리한다 */
+.order-card__share {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 18px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 10px;
+    font-weight: 400;
+    line-height: 1;
+    cursor: pointer;
+    transition: color 0.15s ease;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+.order-card__share:hover {
+    color: var(--brand);
+}
+
 .order-card__head {
     display: flex;
     align-items: flex-start;
@@ -579,6 +639,8 @@ const startRemainIcon = computed(() => START_REMAIN_ICONS[startRemain.value?.lev
     color: var(--text-muted);
     font-size: 10px;
     font-weight: 700;
+    /* 요청보냄 남은 초가 매초 바뀌어도 숫자 폭이 고정되도록 — 배지 옆 흔들림 방지 */
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
 
@@ -743,6 +805,8 @@ const startRemainIcon = computed(() => START_REMAIN_ICONS[startRemain.value?.lev
     padding-left: 2px;
     font-size: 10px;
     font-weight: 700;
+    /* 시작까지 남은 시간이 갱신될 때 카드 좌측 라벨 폭이 흔들리지 않도록 */
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
 
@@ -806,6 +870,14 @@ html.dark .order-card-start--teal {
     }
     50% {
         box-shadow: 0 1px 8px color-mix(in srgb, var(--danger) 80%, transparent);
+    }
+}
+
+/* 모션 감소 설정 — 임박 배지·신규 하이라이트의 반복 깜빡임 정지 (base.css 스켈레톤과 동일 규칙) */
+@media (prefers-reduced-motion: reduce) {
+    .order-card--highlight,
+    .order-card__urgent {
+        animation: none;
     }
 }
 

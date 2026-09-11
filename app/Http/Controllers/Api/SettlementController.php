@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\PayoutRequest;
+use App\Models\Settlement;
 use App\Services\Admin\AuditService;
 use App\Services\Settlement\SettlementService;
 use Illuminate\Http\JsonResponse;
@@ -47,6 +48,18 @@ class SettlementController extends Controller
     }
 
     /**
+     * 등록자 정산(청구) 화면 — 입금 대기(미수금) 운행·합계와 매입 계좌 안내.
+     *
+     * @return JsonResponse{data: array<string, mixed>}
+     */
+    public function payables(Request $request, SettlementService $service): JsonResponse
+    {
+        return response()->json([
+            'data' => $service->payablesFor($request->user()),
+        ]);
+    }
+
+    /**
      * 출금 신청 — 출금 가능한 정산 전부를 한 건으로 묶는다.
      *
      * @return JsonResponse{data: array<string, mixed>}
@@ -84,6 +97,45 @@ class SettlementController extends Controller
         return response()->json([
             'data' => $service->pendingPayouts(),
         ]);
+    }
+
+    /**
+     * 관리자 — 입금 확인 대기(수금 전) 정산 원장 목록.
+     *
+     * @return JsonResponse{data: array<int, array<string, mixed>>}
+     */
+    public function adminCollections(Request $request, SettlementService $service): JsonResponse
+    {
+        $this->assertAdmin($request->user());
+
+        return response()->json([
+            'data' => $service->pendingCollections(),
+        ]);
+    }
+
+    /**
+     * 관리자 — 등록자 입금을 확인해 수금을 확정한다.
+     *
+     * @return JsonResponse{data: bool}
+     */
+    public function collect(Request $request, Settlement $settlement, SettlementService $service): JsonResponse
+    {
+        $this->assertAdmin($request->user());
+
+        $data = $request->validate([
+            'note' => ['nullable', 'string', 'max:200'],
+        ]);
+
+        $service->confirmCollection($request->user(), $settlement, $data['note'] ?? null);
+
+        AuditService::record(
+            $request->user(),
+            'settlement.collect',
+            '정산(#'.$settlement->id.') 운행 대금 입금을 확인했습니다',
+            ['settlement_id' => $settlement->id],
+        );
+
+        return response()->json(['data' => true]);
     }
 
     /**

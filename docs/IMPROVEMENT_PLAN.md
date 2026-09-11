@@ -127,6 +127,14 @@
 
 - [x] 정산 원장 모델·테이블(`settlements`: 운행금액·수수료 5%·실지급액·지급일·출금 연결) (2026-09-05)
 
+- [x] 수수료 정책 config 승격 — `FEE_RATE` 상수 → `settlement.fee_rate`(기본 0.05)·`settlement.min_fee`, 계산 일원화(`SettlementService::feeRate()/calculateFee()`), 원장에 정산 시점 요율 스냅샷(`settlements.fee_rate`), 기사 정산 화면 요율 안내 (2026-09-10)
+
+- [x] 등록자별 수수료율 — `users.fee_rate` 개별 요율이 있으면 기본 요율 대신 적용(`SettlementService::feeRateFor`), 관리자 '사용자 관리' 탭 지정/해제 API·UI + 감사 로그 (2026-09-10)
+
+- [x] 관리자 수수료 매출 지표 — 운영 지표 '수수료 매출' 그룹(이번 달 수수료 매출·실효 요율·이번 달 거래액·누적 수수료) (2026-09-10)
+
+- [x] 등록자 대금 수금(입금 확인) — `settlements.collection_status`(pending/paid)·`collected_at`·`collected_by`·`collection_note`, 매입 계좌(`settlement.platform_account`), 관리자 '수금 확인' 탭 + 등록자 '정산·입금' 화면, 수금 완료분만 기사 출금 재원 (2026-09-10)
+
 - [x] 정산 지급 이력 — 출금 신청 상태 흐름(신청→지급/거절, 처리자·시각·사유 기록)
 
 - [x] 기사 계좌 등록(`user_bank_accounts`, 기사별 1개) — 1원 인증은 `(제안)`

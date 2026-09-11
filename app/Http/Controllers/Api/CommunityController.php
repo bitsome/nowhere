@@ -62,8 +62,12 @@ class CommunityController extends Controller
         }
 
         // 카테고리 칩 건수 — 선택한 카테고리와 무관하게 현재 범위(검색/기간/내 글)의 카테고리별 글 수
+        // select() 로 컬럼을 먼저 비워야 한다. feed() 가 withCount/withExists 로 community_posts.* 와
+        // 집계 서브쿼리를 이미 채워두는데, 그대로 두면 count(*) 와 함께 나가 MySQL ONLY_FULL_GROUP_BY 에서
+        // 1055 오류가 난다 (SQLite 로컬 테스트로는 잡히지 않는다).
         $categoryCounts = (clone $query)->reorder()
-            ->selectRaw('category, count(*) as total')
+            ->select('category')
+            ->selectRaw('count(*) as total')
             ->groupBy('category')
             ->pluck('total', 'category')
             ->map(fn ($total) => (int) $total);

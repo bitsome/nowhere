@@ -18,14 +18,34 @@ class OrderCreator
      */
     public function create(array $data, int $userId): Order
     {
-        return DB::transaction(function () use ($data, $userId): Order {
-            $order = Order::create($this->toAttributes($data, $userId));
+        return $this->createMany([$data], $userId)[0];
+    }
 
-            foreach ($data['line_items'] ?? [] as $lineItem) {
-                $order->lineItems()->create($lineItem);
+    /**
+     * 여러 운행을 한 번에 등록한다 — 각 운행은 서로 묶이지 않는 독립(단일) 운행이 된다.
+     *
+     * 붙여넣은 문구 한 건에 여러 운행이 섞여 있을 때 쓴다. 셋트(그룹)로 묶지 않으므로
+     * 각 운행이 마켓에서 따로 가져가진다. 중간에 실패하면 전부 등록되지 않는다.
+     *
+     * @param  array<int, array<string, mixed>>  $orders  검증된 페이로드 목록
+     * @return array<int, Order>
+     */
+    public function createMany(array $orders, int $userId): array
+    {
+        return DB::transaction(function () use ($orders, $userId): array {
+            $created = [];
+
+            foreach ($orders as $orderData) {
+                $order = Order::create($this->toAttributes($orderData, $userId));
+
+                foreach ($orderData['line_items'] ?? [] as $lineItem) {
+                    $order->lineItems()->create($lineItem);
+                }
+
+                $created[] = $order;
             }
 
-            return $order;
+            return $created;
         });
     }
 

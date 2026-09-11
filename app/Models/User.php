@@ -23,6 +23,7 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
 #[Fillable([
     'name',
     'company_name',
+    'fee_rate',
     'email',
     'phone',
     'password',
@@ -447,6 +448,7 @@ class User extends Authenticatable implements HasMedia
     {
         return [
             'email_verified_at' => 'datetime',
+            'fee_rate' => 'float',
             'last_login_at' => 'datetime',
             'password' => 'hashed',
             'permissions' => 'array',

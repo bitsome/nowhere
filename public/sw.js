@@ -18,9 +18,13 @@ self.addEventListener('activate', (event) => {
 
 // ── fetch 핸들러 없음: 모든 요청은 브라우저 기본(네트워크) 동작으로 처리된다 ──
 
+/* 배포 경로 — 하위 경로(/spa 등)에 배포돼도 알림 아이콘·이동 경로가 어긋나지 않도록
+ * 서비스 워커 스코프에서 얻는다(빌드 상수는 서비스 워커에서 읽을 수 없다). */
+const basePath = () => new URL(self.registration.scope).pathname.replace(/\/$/, '');
+
 // ── 웹 푸시 알림 — 앱이 닫혀 있어도 새 알림을 시스템 알림으로 보여준다 ──
 self.addEventListener('push', (event) => {
-    let data = { title: 'NoWhere', message: '새 알림이 도착했습니다.', url: '/spa/notifications' };
+    let data = { title: 'NoWhere', message: '새 알림이 도착했습니다.', url: '/notifications' };
 
     try {
         const parsed = event.data ? event.data.json() : null;
@@ -32,11 +36,13 @@ self.addEventListener('push', (event) => {
         /* payload가 JSON이 아니면 기본 문구 사용 */
     }
 
+    const icon = `${basePath()}/icons/icon-192.png`;
+
     event.waitUntil(
         self.registration.showNotification(data.title, {
             body: data.message,
-            icon: data.icon || '/spa/icons/icon-192.png',
-            badge: data.badge || '/spa/icons/icon-192.png',
+            icon: data.icon || icon,
+            badge: data.badge || icon,
             tag: data.tag || 'nowhere-push',
             data: { url: data.url },
         }),
@@ -47,8 +53,11 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
 
-    const raw = event.notification.data?.url || '/spa/';
-    const target = raw.startsWith('/spa') || raw.startsWith('http') ? raw : `/spa${raw}`;
+    const raw = event.notification.data?.url || '/';
+    // 절대 주소는 그대로, 내부 경로는 배포 경로를 앞에 붙인다
+    const target = raw.startsWith('http')
+        ? raw
+        : `${basePath()}${raw.startsWith('/') ? raw : `/${raw}`}`;
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {

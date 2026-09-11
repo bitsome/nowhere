@@ -206,6 +206,57 @@ class OrderClaimService
     }
 
     /**
+     * 등록자가 자기 공개 운행을 직접 수행한다 — 기사 모집 없이 본인이 운행한다.
+     *
+     * 가져오기 신청→승인 두 단계를 건너뛰고 바로 운행 확정(accepted)으로 넘긴다.
+     * 정산 원장·상호 리뷰·목록 분류가 가져오기 흐름과 같은 기준을 쓰도록
+     * 원 등록자(original_owner_id)와 신청 시각(claimed_at)을 그대로 기록한다.
+     */
+    public function selfDrive(User $actor, Order $order): void
+    {
+        abort_unless($order->user_id === $actor->id, 403, '본인 운행만 직접 수행할 수 있습니다.');
+
+        // 제재 상태 — 운행 제한·정지 계정은 운행을 수행할 수 없다 (B-2)
+        abort_unless($actor->canOperate(), 403, '정지·제한된 계정으로는 운행을 수행할 수 없습니다.');
+
+        DB::transaction(function () use ($order) {
+            $locked = Order::query()->lockForUpdate()->find($order->id);
+
+            abort_unless($locked !== null, 404, '운행을 찾을 수 없습니다.');
+
+            abort_unless($locked->status === Order::STATUS_PUBLISHED, 403, '공개한 운행만 직접 수행할 수 있습니다.');
+
+            // 다른 기사가 이미 신청한 운행은 가로채지 않는다 — 신청자와의 신뢰가 우선이다
+            abort_if($locked->pendingClaims()->exists(), 409, '기사가 가져오기 신청한 운행입니다. 신청을 먼저 처리해 주세요.');
+
+            $locked->forceFill([
+                // 남에게 넘어가지 않았어도 원 등록자를 기록 — 정산 원장·상호 리뷰가 같은 기준을 쓴다
+                'original_owner_id' => $locked->original_owner_id ?? $locked->user_id,
+                // 신청 시각을 남겨야 '내 운행'·히스토리 분류(claimed_at 기준)에 정상 노출된다
+                'claimed_at' => now(),
+                'claimant_user_id' => null,
+                'approved_at' => $locked->approved_at ?? now(),
+                'status' => Order::STATUS_ACCEPTED,
+            ])->save();
+        });
+
+        // 컨트롤러 응답이 최신 상태를 반환하도록 원본 인스턴스도 동기화
+        $order->refresh();
+
+        // 운행이 마켓에서 벗어났으므로 남아 있는 요금 제안은 모두 정리
+        $this->offerService->cancelPendingFor($order);
+
+        // 기사 상태 자동 연동 — 직접 수행도 '운행 중'으로 둔다
+        $actor->driver()->updateOrCreate(
+            ['user_id' => $actor->id],
+            ['status' => Driver::STATUS_ON_TRIP, 'status_updated_at' => now()],
+        );
+
+        // 행동 로그 — 본인이 직접 수행하는 운행의 특징을 개인화 학습에 반영
+        $this->behaviorService->record($actor, BehaviorEvent::EVENT_CLAIM, $order->id, ['cause' => 'self_drive']);
+    }
+
+    /**
      * 왕복 체인에 포함된 여러 운행을 등록자들에게 일괄로 가져오기 요청한다.
      * 한 건이 실패해도 나머지는 계속 진행하고, 건별 결과를 반환한다.
      *

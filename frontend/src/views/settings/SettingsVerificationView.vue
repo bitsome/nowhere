@@ -312,16 +312,17 @@ onMounted(loadMyRequests);
     line-height: 1.5;
 }
 
-/* 상태 칩 — 완료(민트)/대기(옐로우)/거절(레드)/미인증(회색) */
+/* 상태 칩 — 완료(민트)/대기(옐로우)/거절(레드)/미인증(회색).
+   배지 컨벤션(padding 1px 6px / 10px / 굵기 제거) 준수 — 회원정보의 동일 상태(verify-row__done·__pending)와 규격 통일 */
 .verify-chip {
     display: inline-flex;
     align-items: center;
     gap: 4px;
     flex-shrink: 0;
-    padding: 2px 8px;
+    padding: 1px 6px;
     border-radius: 999px;
     font-size: 10px;
-    font-weight: 700;
+    font-weight: 400;
     white-space: nowrap;
 }
 .verify-chip--done {
@@ -339,7 +340,6 @@ onMounted(loadMyRequests);
 .verify-chip--none {
     background: color-mix(in srgb, var(--border) 70%, transparent);
     color: var(--text-muted);
-    font-weight: 400;
 }
 
 .verify-card__done {

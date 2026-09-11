@@ -132,7 +132,7 @@ onMounted(() => {
 
                 <div v-else class="support-list">
                     <article v-for="post in notices" :key="post.id" class="support-card">
-                        <button type="button" class="support-card__head" @click="openedPostId = openedPostId === post.id ? null : post.id">
+                        <button type="button" class="support-card__head" :aria-expanded="openedPostId === post.id" @click="openedPostId = openedPostId === post.id ? null : post.id">
                             <strong>{{ post.title }}</strong>
                             <span class="support-card__date">{{ post.created_at }}</span>
                             <BaseIcon name="chevron-down" :size="14" class="support-card__chevron" :class="{ 'support-card__chevron--open': openedPostId === post.id }" />
@@ -159,7 +159,7 @@ onMounted(() => {
 
                 <div v-else class="support-list">
                     <article v-for="post in faqs" :key="post.id" class="support-card">
-                        <button type="button" class="support-card__head" @click="openedPostId = openedPostId === post.id ? null : post.id">
+                        <button type="button" class="support-card__head" :aria-expanded="openedPostId === post.id" @click="openedPostId = openedPostId === post.id ? null : post.id">
                             <strong>Q. {{ post.title }}</strong>
                             <BaseIcon name="chevron-down" :size="14" class="support-card__chevron" :class="{ 'support-card__chevron--open': openedPostId === post.id }" />
                         </button>
@@ -186,7 +186,7 @@ onMounted(() => {
                             type="textarea"
                             :rows="4"
                             :maxlength="5000"
-                            placeholder="어떤 문제인지 구체적으로 적어 주세요. (운행 번호·날짜 포함 시 확인이 빠릅니다)"
+                            placeholder="어떤 문제인지 구체적으로 적어 주세요. (운행 날짜·노선 포함 시 확인이 빠릅니다)"
                         />
                     </div>
                     <button type="submit" class="support-ticket__submit" :disabled="submitting">
@@ -397,10 +397,10 @@ onMounted(() => {
 
 .support-ticket-item__status {
     flex-shrink: 0;
-    padding: 1px 8px;
+    padding: 1px 6px;
     border-radius: 999px;
     font-size: 10px;
-    font-weight: 700;
+    font-weight: 400;
 }
 .support-ticket-item__status--open {
     background: #f0a800;

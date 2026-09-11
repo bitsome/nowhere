@@ -23,6 +23,9 @@ export const apiCreateOrder = (payload) => apiClient.post('/orders', payload);
 
 export const apiCreateSetOrders = (payload) => apiClient.post('/orders/batch', payload);
 
+// N건 일괄 등록 — 각 운행이 셋트로 묶이지 않는 독립 운행이 된다 (publish=true면 공개 가능한 건만 공개)
+export const apiCreateBulkOrders = (payload) => apiClient.post('/orders/bulk', payload);
+
 export const apiUpdateOrder = (id, payload) => apiClient.patch(`/orders/${id}`, payload);
 
 export const apiStructureOrder = (summary) => apiClient.post('/orders/structure', { summary });
@@ -66,3 +69,9 @@ export const apiBatchSettle = (ids) => apiClient.post('/orders/batch-settle', { 
 
 export const apiOrderOptions = () => apiClient.get('/options/orders');
 export const apiReviewOrder = (id, payload) => apiClient.post(`/orders/${id}/review`, payload);
+
+// 운행 공유 링크 발급 — 등록자가 카카오 오픈채팅·카페 등 외부에 뿌릴 공개 주소
+export const apiShareOrder = (id) => apiClient.post(`/orders/${id}/share`);
+
+// 공유된 운행 공개 조회 — 로그인 없이 토큰으로 접근 (고객 실명·연락처는 내려오지 않음)
+export const apiPublicOrder = (token) => apiClient.get(`/public/orders/${token}`);

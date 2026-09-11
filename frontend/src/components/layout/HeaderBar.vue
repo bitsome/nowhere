@@ -451,6 +451,13 @@ html.dark .hb__label {
     }
 }
 
+/* 모션 감소 설정 — 운행중 표시 점의 반복 점멸 정지 (base.css 스켈레톤과 동일 규칙) */
+@media (prefers-reduced-motion: reduce) {
+    .hb-driving__dot {
+        animation: none;
+    }
+}
+
 .hb-btn--dots {
     width: 32px;
     height: 32px;

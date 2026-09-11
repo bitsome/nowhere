@@ -43,6 +43,14 @@ class OrderTransitionService
         // 관리자 보류(B-2) — 진행을 동결한다. 해제 전까지 일반 사용자는 어떤 상태 변경도 할 수 없다.
         abort_if((bool) $order->admin_hold, 409, '관리자가 보류한 운행입니다. 해결 전까지 진행할 수 없습니다.');
 
+        // 등록자가 자기 공개 운행을 직접 수행 — 기사 모집 없이 바로 운행 확정으로 넘긴다.
+        // 가져오기 신청·승인 단계를 건너뛰므로 claim 서비스가 전담한다.
+        if ($order->status === Order::STATUS_PUBLISHED && $status === Order::STATUS_ACCEPTED) {
+            $this->claimService->selfDrive($actor, $order);
+
+            return;
+        }
+
         // 수락 대기(가져오기 요청) 상태의 승인/복귀는 claim 서비스가 전담한다 —
         // 신청 건 정리·알림·채팅 카드 확정까지 함께 처리되어야 하므로 이 경로로 위임한다.
         if ($order->status === Order::STATUS_ACCEPTANCE_PENDING

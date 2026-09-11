@@ -530,6 +530,8 @@ onMounted(() => load());
                     type="button"
                     class="qmp-switch"
                     :class="{ 'qmp-switch--on': matchEnabled }"
+                    role="switch"
+                    :aria-checked="matchEnabled"
                     aria-label="빠른 매칭"
                     :disabled="loading"
                     @click="toggleMatch(!matchEnabled)"
@@ -538,15 +540,16 @@ onMounted(() => load());
                 </button>
             </div>
 
-            <!-- 원큐 설정 — 활성 조건이 없을 때 프리셋 하나로 바로 매칭 시작 -->
-            <div v-if="!loading && !preference" class="qmp-quick">
-                <p class="qmp-quick__title">원큐 설정 — 희망 시간대를 고르면 바로 매칭이 켜져요</p>
-                <div class="qmp-quick__row">
+            <!-- 원큐 설정 — 활성 조건이 없을 때 프리셋 하나로 바로 매칭 시작
+                 (클래스 이름을 모달의 .qmp-quick과 분리 — scoped 규칙이 텔레포트된 모달에 새는 것을 막는다) -->
+            <div v-if="!loading && !preference" class="qmp-preset">
+                <p class="qmp-preset__title">원큐 설정 — 희망 시간대를 고르면 바로 매칭이 켜져요</p>
+                <div class="qmp-preset__row">
                     <button
                         v-for="preset in QUICK_START_PRESETS"
                         :key="preset.label"
                         type="button"
-                        class="qmp-quick__btn"
+                        class="qmp-preset__btn"
                         :disabled="startingQuick"
                         @click="startQuickMatching(preset)"
                     >
@@ -903,17 +906,19 @@ html.dark .qmp-switch--on span {
     background: #07120e;
 }
 
-/* 원큐 설정 — 활성 조건이 없을 때 노출 */
-.qmp-quick {
+/* 원큐 설정 — 활성 조건이 없을 때 노출.
+   모달(텔레포트)의 .qmp-quick 과 이름을 분리한다 — scoped 선택자는 data-v 속성을 통해
+   텔레포트된 모달 본문에도 적용되므로, 같은 이름을 쓰면 모달 콘텐츠가 이 구분선/여백을 함께 받는다. */
+.qmp-preset {
     margin-top: 12px;
     padding-top: 12px;
     border-top: 1px solid var(--border);
 }
-.qmp-quick__title {
+.qmp-preset__title {
     font-size: 11px;
     color: var(--text-muted);
 }
-.qmp-quick__row {
+.qmp-preset__row {
     display: flex;
     gap: 6px;
     margin-top: 8px;
@@ -921,10 +926,10 @@ html.dark .qmp-switch--on span {
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
 }
-.qmp-quick__row::-webkit-scrollbar {
+.qmp-preset__row::-webkit-scrollbar {
     display: none;
 }
-.qmp-quick__btn {
+.qmp-preset__btn {
     flex-shrink: 0;
     display: inline-flex;
     align-items: center;
@@ -937,19 +942,19 @@ html.dark .qmp-switch--on span {
     cursor: pointer;
     transition: border-color 0.15s ease, background 0.15s ease;
 }
-.qmp-quick__btn b {
+.qmp-preset__btn b {
     font-size: 12px;
     font-weight: 700;
     color: var(--text);
 }
-.qmp-quick__btn span {
+.qmp-preset__btn span {
     font-size: 10px;
     color: var(--text-muted);
 }
-.qmp-quick__btn:hover:not(:disabled) {
+.qmp-preset__btn:hover:not(:disabled) {
     border-color: var(--brand);
 }
-.qmp-quick__btn:disabled {
+.qmp-preset__btn:disabled {
     opacity: 0.6;
     cursor: default;
 }
@@ -1024,15 +1029,13 @@ html.dark .qmp-switch--on span {
     border: 0;
     border-radius: 10px;
     background: var(--brand);
-    color: #fff;
+    /* brand는 라이트(#36adff)·다크(#63e2b7) 모두 밝아 흰 글자 대비 약함 — 앱 표준 #07120e를 두 모드 공통 사용 */
+    color: #07120e;
     font-family: inherit;
     font-size: 12.5px;
     font-weight: 700;
     cursor: pointer;
     transition: opacity 0.15s ease;
-}
-html.dark .qmp-card__view {
-    color: #07120e;
 }
 .qmp-card__view:hover {
     opacity: 0.9;

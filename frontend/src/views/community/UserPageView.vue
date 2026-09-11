@@ -333,6 +333,11 @@ onMounted(load);
     flex-shrink: 0;
 }
 
+/* 다크 — 그라디언트가 밝은 틸로 바뀌어 흰 글자 대비가 ≈1.6:1로 떨어짐 → 앱 표준 어두운 글자 */
+html.dark .user-hero__avatar {
+    color: #07120e;
+}
+
 .user-hero__info {
     min-width: 0;
 }

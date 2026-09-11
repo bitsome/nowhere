@@ -10,12 +10,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * 정산 원장 — 정산(settled)된 운행별 금액 확정 기록.
  * 운행금액·플랫폼 수수료·실지급액을 확정하고, 출금 신청(지급) 상태를 관리한다.
  */
-#[Fillable(['order_id', 'driver_id', 'registrant_id', 'gross_amount', 'fee_amount', 'net_amount', 'status', 'payout_id', 'paid_at', 'hold_reason'])]
+#[Fillable(['order_id', 'driver_id', 'registrant_id', 'gross_amount', 'fee_amount', 'fee_rate', 'net_amount', 'status', 'collection_status', 'collected_at', 'collected_by', 'collection_note', 'payout_id', 'paid_at', 'hold_reason'])]
 class Settlement extends Model
 {
     public const STATUS_PENDING = 'pending';
 
     public const STATUS_PAID = 'paid';
+
+    public const COLLECTION_PENDING = 'pending';
+
+    public const COLLECTION_PAID = 'paid';
 
     /**
      * @return array<string, string>
@@ -23,7 +27,9 @@ class Settlement extends Model
     protected function casts(): array
     {
         return [
+            'fee_rate' => 'float',
             'paid_at' => 'datetime',
+            'collected_at' => 'datetime',
         ];
     }
 
@@ -59,5 +65,15 @@ class Settlement extends Model
     public function payout(): BelongsTo
     {
         return $this->belongsTo(PayoutRequest::class);
+    }
+
+    /**
+     * 입금 확인을 처리한 관리자.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function collector(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'collected_by');
     }
 }

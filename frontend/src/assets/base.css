@@ -1,4 +1,6 @@
 :root {
+    /* 네이티브 UI(스크롤바·날짜/시간 피커·파일 선택 버튼)를 앱 테마에 맞춘다 — 라이트 기본 */
+    color-scheme: light;
     /* 공용 페이지 폭 — 하위 화면들이 이 값을 공유한다 */
     --page-max-width: 880px;
     /* 공용 카드 간격 — 모든 페이지의 카드 목록/그리드가 같은 카드 사이 여백을 쓴다 */
@@ -40,6 +42,8 @@
 }
 
 html.dark {
+    /* 다크에서는 스크롤바·네이티브 피커까지 어둡게 (:root의 color-scheme: light 대응) */
+    color-scheme: dark;
     /* 틸 계조 — #63e2b7 기준 아래(어두운) 단계만 사용 (utils/colors.js tealScale와 동일) */
     --brand: #63e2b7;
     --brand-hover: #54cf9f;
@@ -116,7 +120,9 @@ img {
 }
 
 .app-shell {
+    /* 모바일 주소창이 보이는 실제 높이(dvh) 기준 — 100vh는 주소창 높이만큼 항상 더 길어 빈 스크롤이 생긴다 */
     min-height: 100vh;
+    min-height: 100dvh;
     opacity: 0;
     transition: opacity 0.08s ease;
 }

@@ -287,7 +287,9 @@ const send = async () => {
 .rq-sheet {
     width: 100%;
     max-width: 480px;
+    /* 시트 높이도 실제 보이는 높이(dvh) 기준 — 82vh는 주소창이 있는 모바일에서 화면 밖으로 넘친다 */
     max-height: 82vh;
+    max-height: 82dvh;
     margin: 0 auto;
     /* 바텀시트 — 스크롤 컨테이너(행 flex)에서 아래쪽에 고정 */
     align-self: flex-end;
@@ -309,14 +311,15 @@ const send = async () => {
 .rq-sheet__back { border: 0; background: none; font-size: 14px; color: var(--text-muted); cursor: pointer; width: 28px; }
 .rq-sheet__close { border: 0; background: none; font-size: 11px; color: var(--text-muted); cursor: pointer; width: 28px; }
 
-.rq-menu { padding: 12px 16px calc(20px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+/* 시트 안쪽 스크롤이 끝에서 뒤 화면으로 이어지지 않게 (모바일 스크롤 체이닝·당겨서 새로고침 방지) */
+.rq-menu { padding: 12px 16px calc(20px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; overflow-y: auto; overscroll-behavior: contain; }
 .rq-menu__hint { margin: 8px 0; color: var(--text-muted); font-size: 11px; text-align: center; }
 .rq-menu__item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 13px 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg); text-align: left; cursor: pointer; }
 .rq-menu__item--danger .rq-menu__label { color: var(--danger); }
 .rq-menu__label { font-size: 11px; font-weight: 700; color: var(--text); }
 .rq-menu__desc { font-size: 11px; color: var(--text-muted); margin-left: auto; }
 
-.rq-form { padding: 14px 18px calc(24px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+.rq-form { padding: 14px 18px calc(24px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 10px; overflow-y: auto; overscroll-behavior: contain; }
 .rq-form__sub { margin: 0; font-size: 11px; color: var(--text-muted); }
 .rq-form__order { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); }
 .rq-form__route { font-size: 11px; font-weight: 700; color: var(--text); }

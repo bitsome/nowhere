@@ -286,6 +286,12 @@ test('admin can hold a settlement which excludes it from payout requests', funct
     ])->assertOk()
         ->assertJsonPath('data.hold_reason', null);
 
+    // 등록자 입금 확인(수금 확정) 후에야 기사가 출금 신청할 수 있다
+    $settlement->forceFill([
+        'collection_status' => Settlement::COLLECTION_PAID,
+        'collected_at' => now(),
+    ])->save();
+
     Sanctum::actingAs($this->driver);
     $this->postJson('/api/me/payouts')->assertCreated();
 });
@@ -357,8 +363,38 @@ test('metrics summarizes pipeline, matching, settlement, reports and users (Q-6)
         ->assertJsonPath('data.pipeline.acceptance_pending', 1)
         ->assertJsonPath('data.matching_30d.pending', 1)
         ->assertJsonPath('data.settlement.pending_amount', 76000)
+        ->assertJsonPath('data.revenue.month_gross', 80000)
+        ->assertJsonPath('data.revenue.month_fee', 4000)
+        ->assertJsonPath('data.revenue.effective_rate', 0.05)
+        ->assertJsonPath('data.revenue.total_fee', 4000)
         ->assertJsonPath('data.reports.pending', 1)
         ->assertJsonPath('data.users.customers_today', 1);
+});
+
+test('admin can set and clear a registrant specific fee rate', function () {
+    Sanctum::actingAs($this->admin);
+
+    $this->patchJson("/api/admin/users/{$this->customer->id}/fee-rate", ['fee_rate' => 0.03])
+        ->assertOk()
+        ->assertJsonPath('data.fee_rate', 0.03);
+
+    expect((float) $this->customer->fresh()?->fee_rate)->toBe(0.03);
+
+    // 해제하면 전역 정책 요율을 따르도록 null이 된다
+    $this->patchJson("/api/admin/users/{$this->customer->id}/fee-rate", ['fee_rate' => null])
+        ->assertOk()
+        ->assertJsonPath('data.fee_rate', null);
+
+    expect($this->customer->fresh()?->fee_rate)->toBeNull();
+});
+
+test('non-admin cannot change a registrant fee rate', function () {
+    Sanctum::actingAs($this->driver);
+
+    $this->patchJson("/api/admin/users/{$this->customer->id}/fee-rate", ['fee_rate' => 0.01])
+        ->assertForbidden();
+
+    expect($this->customer->fresh()?->fee_rate)->toBeNull();
 });
 
 test('metrics requires admin role', function () {

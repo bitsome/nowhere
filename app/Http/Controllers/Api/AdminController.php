@@ -44,6 +44,7 @@ class AdminController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'company_name' => $user->company_name,
+                'fee_rate' => $user->fee_rate !== null ? (float) $user->fee_rate : null,
                 'email' => $user->email,
                 'role' => $user->role,
                 'is_vehicle_verified' => (bool) $user->is_vehicle_verified,
@@ -108,6 +109,44 @@ class AdminController extends Controller
                 'name' => $user->name,
                 'role' => $user->role,
                 'role_label' => User::roleLabel($user->role),
+            ],
+        ]);
+    }
+
+    /**
+     * 등록자 개별 수수료율 지정/해제 — 값이 없으면(null) 전역 정책 요율을 따른다.
+     * 업체와 개별 계약한 요율을 반영하는 지점이며, 적용 시점의 요율은 정산 원장에 스냅샷으로 남는다.
+     *
+     * @return JsonResponse{data: array<string, mixed>}
+     */
+    public function setUserFeeRate(Request $request, User $user): JsonResponse
+    {
+        $this->authorizeAdmin($request->user());
+
+        $data = $request->validate([
+            'fee_rate' => ['nullable', 'numeric', 'min:0', 'max:1'],
+        ]);
+
+        $before = $user->fee_rate;
+        $rate = isset($data['fee_rate']) ? round((float) $data['fee_rate'], 4) : null;
+
+        $user->forceFill(['fee_rate' => $rate])->save();
+
+        $beforeRate = $before !== null ? (float) $before : (float) config('settlement.fee_rate', 0.05);
+
+        AuditService::record(
+            $request->user(),
+            'user.fee-rate',
+            $rate !== null
+                ? "{$user->name}님의 수수료율을 ".($beforeRate * 100).'% → '.($rate * 100).'%(으)로 변경'
+                : "{$user->name}님의 개별 수수료율을 해제해 기본 요율(".($beforeRate * 100).'%)을 적용',
+            ['user_id' => $user->id, 'before' => $before, 'after' => $rate],
+        );
+
+        return response()->json([
+            'data' => [
+                'id' => $user->id,
+                'fee_rate' => $rate,
             ],
         ]);
     }

@@ -1001,6 +1001,8 @@ onBeforeUnmount(() => {
     color: var(--text-muted);
     font-size: 11px;
     font-weight: 600;
+    /* 운행 시작까지 남은 시간이 갱신될 때 우측 라벨 폭이 흔들리지 않도록 */
+    font-variant-numeric: tabular-nums;
 }
 .home-hero__route {
     margin: 6px 0 0;
@@ -1220,6 +1222,8 @@ html.dark .home-rec-group__claim--sent {
     border-radius: 999px;
     font-size: 10px;
     font-weight: 400;
+    /* 남은 초가 매초 바뀌어도 숫자 폭이 고정되도록 — 칩이 좌우로 흔들리지 않게 */
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
 .home-rec-group__stat--remain {

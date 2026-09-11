@@ -55,6 +55,7 @@ Thumbs.db
 /*.tar.gz
 /frontend/api_*.cjs
 /frontend/verify_*.cjs
+/frontend/_*.cjs
 /frontend/vite.config.deploy.js
 /frontend/*.tar.gz
 

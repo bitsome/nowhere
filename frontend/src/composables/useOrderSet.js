@@ -4,15 +4,18 @@ import { getApiErrorMessage } from '../api/client';
 import { parseSetLine, toIsoDate, VEHICLE_HINTS } from '../utils/orderCreate';
 
 /**
- * 셋트 운행 등록 — 여러 줄 일괄 입력 파싱과 셋트 저장을 담당한다.
+ * 묶음(셋트) 운행 등록 — 여러 줄 일괄 입력 파싱과 묶음 저장을 담당한다.
  *
  * @param {object} options
  * @param {import('vue').Ref<boolean>} options.saving
  * @param {import('vue').Ref<string>} options.error
- * @param {import('vue-router').Router} options.router
+ * @param {import('vue').Ref<string>} options.success
+ * @param {import('vue').Ref<string>} options.screen 폼↔목록 전환 ref
+ * @param {import('vue').Ref<boolean>} options.publishNow 등록 즉시 공개 여부
+ * @param {() => Promise<void>} options.loadMyOrders 저장 후 목록 새로고침
  * @param {object} options.message naive-ui 메시지
  */
-export function useOrderSet({ saving, error, router, message }) {
+export function useOrderSet({ saving, error, success, screen, publishNow, loadMyOrders, message }) {
     const setName = ref('');
     const setLineItems = ref([]);
 
@@ -64,7 +67,7 @@ export function useOrderSet({ saving, error, router, message }) {
         });
 
         if (added.length) {
-            message.success(`셋트 일정 ${added.length}건이 추가되었습니다.`);
+            message.success(`운행 ${added.length}건이 추가되었습니다.`);
             bulkInput.value = '';
         }
     };
@@ -76,6 +79,7 @@ export function useOrderSet({ saving, error, router, message }) {
     const saveSet = async () => {
         saving.value = true;
         error.value = '';
+        success.value = '';
 
         try {
             const orders = setLineItems.value.map((item) => {
@@ -103,10 +107,25 @@ export function useOrderSet({ saving, error, router, message }) {
                 return payload;
             });
 
-            await apiCreateSetOrders({ group_name: setName.value, orders });
-            router.push({ name: 'market' });
+            const { data } = await apiCreateSetOrders({
+                group_name: setName.value,
+                orders,
+                publish: publishNow.value,
+            });
+
+            const result = data.data;
+            const draftCount = result.draft_ids?.length ?? 0;
+
+            success.value = draftCount
+                ? `${result.order_count}건을 등록했습니다. ${draftCount}건은 필수 정보가 없어 초안으로 남겼습니다.`
+                : `${result.order_count}건을 등록했습니다.`;
+
+            setName.value = '';
+            setLineItems.value = [];
+            screen.value = 'list';
+            await loadMyOrders();
         } catch (e) {
-            error.value = getApiErrorMessage(e, '셋트 등록에 실패했습니다.');
+            error.value = getApiErrorMessage(e, '묶음 등록에 실패했습니다.');
         } finally {
             saving.value = false;
         }

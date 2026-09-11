@@ -8,6 +8,7 @@ import { useOrderForm } from '../../composables/useOrderForm';
 import { useOrderSet } from '../../composables/useOrderSet';
 import OrderCard from '../../components/orders/OrderCard.vue';
 import OrderCardSkeleton from '../../components/orders/OrderCardSkeleton.vue';
+import OrderFieldsForm from '../../components/orders/OrderFieldsForm.vue';
 import SetGroupCard from '../../components/orders/SetGroupCard.vue';
 import BaseIcon from '../../components/common/BaseIcon.vue';
 import EmptyState from '../../components/common/EmptyState.vue';
@@ -60,7 +61,15 @@ const orderForm = useOrderForm({
     saving,
     loadMyOrders: schedule.loadMyOrders,
 });
-const orderSet = useOrderSet({ saving, error, router, message });
+const orderSet = useOrderSet({
+    saving,
+    error,
+    success,
+    screen,
+    publishNow: orderForm.publishNow,
+    loadMyOrders: schedule.loadMyOrders,
+    message,
+});
 
 // 템플릿 바인딩용 — 각 컴포저블에서 꺼낸다
 const VIEW_MODES = [
@@ -79,7 +88,7 @@ const {
 
 const {
     editId, isEdit, SERVICE_OPTIONS, VEHICLE_OPTIONS, summary, structuring, lineItems, publishNow, loading, mode,
-    form, weekdayLabel, structuredPreview, lineItemRows, structure, save, loadForEdit,
+    form, aiOrders, removeAiOrder, lineItemRows, structure, save, saveAiOrders, loadForEdit,
     ORDER_TAGS, customTag, toggleTag, addCustomTag, removeTag,
     templates, templateOpen, templateName, templateSaving, loadTemplates, applyTemplate, saveTemplate, removeTemplate,
 } = orderForm;
@@ -89,8 +98,18 @@ const {
     convertBulkToSet, removeSetLine, saveSet,
 } = orderSet;
 
+// 카드 헤더 요약 — 여러 건을 나눠 등록할 때 어떤 운행인지 스크롤 중에도 알아볼 수 있게
+const orderSummary = (order) => {
+    const route = [order.pickup_location, order.dropoff_location].filter(Boolean).join(' → ');
+    const when = [order.service_date, order.service_time].filter(Boolean).join(' ');
+
+    return [route, when].filter(Boolean).join(' · ');
+};
+
 onMounted(() => {
     if (isEdit.value) {
+        // 수정은 직접 입력 폼으로 진행한다 — AI 구조화는 새 운행을 만들 때만 쓴다
+        mode.value = 'manual';
         loadForEdit();
     } else {
         loadFirstPage();
@@ -262,11 +281,11 @@ onMounted(() => {
                 <p class="page-head__desc">요약 텍스트를 AI로 구조화하거나 직접 입력해 등록합니다.</p>
             </div>
 
-            <div class="create-tabs">
+            <div v-if="!isEdit" class="create-tabs">
             <n-radio-group v-model:value="mode" size="large">
-                <n-radio-button value="ai">AI 구조화 등록</n-radio-button>
-                <n-radio-button value="manual">직접 입력 등록</n-radio-button>
-                <n-radio-button value="set">셋트 등록</n-radio-button>
+                <n-radio-button value="ai">붙여넣기로 등록</n-radio-button>
+                <n-radio-button value="manual">직접 입력</n-radio-button>
+                <n-radio-button value="set">여러 건 묶어서</n-radio-button>
             </n-radio-group>
         </div>
 
@@ -278,12 +297,15 @@ onMounted(() => {
                 {{ success }}
             </n-alert>
 
-        <n-card v-if="mode === 'ai'" :bordered="true" class="create-block" title="AI 구조화">
+        <n-card v-if="mode === 'ai'" :bordered="true" class="create-block" title="운행 문구 붙여넣기">
+            <p class="create-hint">
+                위챗·카톡에 올라온 문구를 그대로 붙여넣으세요. 여러 건이면 알아서 나눠 드립니다.
+            </p>
             <n-input
                 v-model:value="summary"
                 type="textarea"
                 :rows="4"
-                placeholder="예) 8월 10일 오전 9시 강남구에서 강릉 정동진 픽업, 성인 3명 짐 2개, 카니발"
+                placeholder="예) 3.30送机 蚕室 3人 2行李 9万"
             />
             <n-button
                 class="create-structure-btn"
@@ -291,53 +313,39 @@ onMounted(() => {
                 :disabled="!summary.trim()"
                 @click="structure"
             >
-                AI 구조화
+                문구 해석하기
             </n-button>
         </n-card>
 
-        <!-- AI 구조화 결과 요약 (읽기 전용) -->
-        <n-card v-if="structuredPreview" :bordered="true" class="create-block" title="구조화 결과">
-            <div class="preview-grid">
-                <div v-if="structuredPreview.route" class="preview-item">
-                    <span class="preview-item__label">노선</span>
-                    <strong class="preview-item__value">{{ structuredPreview.route }}</strong>
-                </div>
-                <div v-if="structuredPreview.service_date" class="preview-item">
-                    <span class="preview-item__label">날짜·시간</span>
-                    <strong class="preview-item__value">
-                        {{ structuredPreview.service_date }}
-                        <template v-if="structuredPreview.service_time">{{ structuredPreview.service_time }}</template>
-                    </strong>
-                </div>
-                <div v-if="structuredPreview.service_type" class="preview-item">
-                    <span class="preview-item__label">구분</span>
-                    <strong class="preview-item__value">{{ structuredPreview.service_type }}</strong>
-                </div>
-                <div v-if="structuredPreview.vehicle_type" class="preview-item">
-                    <span class="preview-item__label">차량</span>
-                    <strong class="preview-item__value">{{ structuredPreview.vehicle_type }}</strong>
-                </div>
-                <div v-if="structuredPreview.passenger_count != null" class="preview-item">
-                    <span class="preview-item__label">인원</span>
-                    <strong class="preview-item__value">{{ structuredPreview.passenger_count }}명</strong>
-                </div>
-                <div v-if="structuredPreview.luggage_count != null" class="preview-item">
-                    <span class="preview-item__label">짐</span>
-                    <strong class="preview-item__value">{{ structuredPreview.luggage_count }}개</strong>
-                </div>
-                <div v-if="structuredPreview.flight_number" class="preview-item">
-                    <span class="preview-item__label">항공편</span>
-                    <strong class="preview-item__value">{{ structuredPreview.flight_number }}</strong>
-                </div>
-                <div v-if="structuredPreview.expected_revenue != null" class="preview-item">
-                    <span class="preview-item__label">금액</span>
-                    <strong class="preview-item__value">{{ Number(structuredPreview.expected_revenue).toLocaleString() }}원</strong>
-                </div>
-            </div>
-        </n-card>
+        <!-- 해석 결과 — 그 자리에서 고쳐 등록한다. 여러 건이면 각각 독립 운행이 된다 -->
+        <template v-if="mode === 'ai'">
+            <n-alert v-if="aiOrders.length > 1" type="info" :show-icon="true" class="create-block">
+                문구에서 {{ aiOrders.length }}건을 찾았습니다. 각각 따로 등록되며, 필요 없는 건은 삭제할 수 있습니다.
+            </n-alert>
 
-        <!-- 템플릿 — AI 구조화/직접 입력 모두에서 재사용 (수정 모드는 제외) -->
-        <n-card v-if="!isEdit" :bordered="true" class="create-block">
+            <n-card
+                v-for="(order, index) in aiOrders"
+                :key="index"
+                :bordered="true"
+                class="create-block"
+            >
+                <template #header>
+                    <div class="create-order-head">
+                        <strong>{{ aiOrders.length > 1 ? `운행 ${index + 1}` : '해석 결과' }}</strong>
+                        <span v-if="orderSummary(order)" class="create-order-head__summary">{{ orderSummary(order) }}</span>
+                    </div>
+                </template>
+                <template v-if="aiOrders.length > 1" #header-extra>
+                    <n-button text type="error" @click="removeAiOrder(index)">삭제</n-button>
+                </template>
+                <n-form label-placement="top">
+                    <OrderFieldsForm :model="order" />
+                </n-form>
+            </n-card>
+        </template>
+
+        <!-- 템플릿 — 직접 입력 폼에서 현재 입력값을 저장·재사용한다 (AI 결과·수정 모드 제외) -->
+        <n-card v-if="mode === 'manual' && !isEdit" :bordered="true" class="create-block">
             <div class="template-head">
                 <strong>템플릿</strong>
                 <n-button size="small" secondary :disabled="!form.pickup_location && !form.dropoff_location" @click="templateOpen = true">
@@ -360,78 +368,7 @@ onMounted(() => {
 
         <n-card v-if="mode === 'manual'" :bordered="true" class="create-block" title="운행 정보">
             <n-form label-placement="top" label-width="auto">
-                <div class="create-grid">
-                    <n-form-item label="날짜">
-                        <n-date-picker
-                            v-model:value="form.service_date"
-                            value-format="yyyy-MM-dd"
-                            type="date"
-                            placeholder="날짜 선택"
-                            :clearable="true"
-                            class="create-full"
-                        />
-                        <n-tag v-if="weekdayLabel" size="small" round class="create-weekday">
-                            {{ weekdayLabel }}
-                        </n-tag>
-                    </n-form-item>
-                    <n-form-item label="시간">
-                        <n-time-picker
-                            v-model:value="form.service_time"
-                            value-format="HH:mm"
-                            placeholder="시간 선택"
-                            class="create-full"
-                        />
-                    </n-form-item>
-                    <n-form-item label="구분">
-                        <n-select
-                            v-model:value="form.service_type"
-                            :options="SERVICE_OPTIONS"
-                            placeholder="구분 선택"
-                        />
-                    </n-form-item>
-                    <n-form-item label="차량">
-                        <n-select
-                            v-model:value="form.vehicle_type"
-                            :options="VEHICLE_OPTIONS"
-                            placeholder="차량 선택 (직접 입력도 가능)"
-                            clearable
-                            filterable
-                            tag
-                        />
-                    </n-form-item>
-                    <n-form-item label="출발">
-                        <n-input v-model:value="form.pickup_location" placeholder="출발지" />
-                    </n-form-item>
-                    <n-form-item label="도착">
-                        <n-input v-model:value="form.dropoff_location" placeholder="도착지" />
-                    </n-form-item>
-                    <n-form-item label="항공편">
-                        <n-input v-model:value="form.flight_number" placeholder="예) KE101" />
-                    </n-form-item>
-                    <n-form-item label="고객명">
-                        <n-input v-model:value="form.customer_name" placeholder="예) 홍길동" />
-                    </n-form-item>
-                    <n-form-item label="고객 연락처">
-                        <n-input v-model:value="form.customer_phone" placeholder="예) 010-1234-5678" />
-                    </n-form-item>
-                    <n-form-item label="인원">
-                        <n-input-number v-model:value="form.passenger_count" :min="0" class="create-full" />
-                    </n-form-item>
-                    <n-form-item label="짐">
-                        <n-input-number v-model:value="form.luggage_count" :min="0" class="create-full" />
-                    </n-form-item>
-                    <n-form-item label="금액">
-                        <n-input-number
-                            v-model:value="form.expected_revenue"
-                            :min="0"
-                            class="create-full"
-                            placeholder="금액"
-                        />
-                    </n-form-item>
-                    <n-form-item label="긴급">
-                        <n-checkbox v-model:checked="form.is_priority">긴급 운행으로 등록</n-checkbox>
-                    </n-form-item>
-                </div>
+                <OrderFieldsForm :model="form" />
                 <n-form-item label="태그">
                     <div class="create-tags">
                         <div class="create-tags__chips">
@@ -478,7 +415,7 @@ onMounted(() => {
             </n-form>
         </n-card>
 
-        <n-card v-if="lineItems.length && (mode === 'ai' || mode === 'manual')" :bordered="true" class="create-block" title="일정 (AI 구조화)">
+        <n-card v-if="isEdit && lineItems.length" :bordered="true" class="create-block" title="일정">
             <div class="schedule-list">
                 <n-card
                     v-for="(item, index) in lineItemRows"
@@ -513,10 +450,10 @@ onMounted(() => {
             </div>
         </n-card>
 
-        <n-card v-if="mode === 'set'" :bordered="true" class="create-block" title="셋트 정보">
+        <n-card v-if="mode === 'set'" :bordered="true" class="create-block" title="묶음 정보">
             <n-form label-placement="top">
-                <n-form-item label="셋트명" required>
-                    <n-input v-model:value="setName" placeholder="예) KLOOK 8월 셋트" />
+                <n-form-item label="묶음 이름" required>
+                    <n-input v-model:value="setName" placeholder="예) KLOOK 8월" />
                 </n-form-item>
             </n-form>
         </n-card>
@@ -538,14 +475,14 @@ onMounted(() => {
                 :disabled="!bulkInput.trim()"
                 @click="convertBulkToSet"
             >
-                셋트로 변환
+                운행으로 나누기
             </n-button>
             <p class="bulk-hint">
-                날짜 / 시간 / 출발→도착 / 차량 / 인원 / 금액 — 알아서 해석됩니다. 변환 후 아래 '셋트 일정'에서 수정할 수 있습니다.
+                날짜 / 시간 / 출발→도착 / 차량 / 인원 / 금액 — 알아서 해석됩니다. 변환 후 아래 '묶을 운행'에서 수정할 수 있습니다.
             </p>
         </n-card>
 
-        <n-card v-if="mode === 'set' && setLineItems.length" bordered class="create-block" title="셋트 일정">
+        <n-card v-if="mode === 'set' && setLineItems.length" bordered class="create-block" title="묶을 운행">
             <div class="set-list">
                 <n-card
                     v-for="(item, index) in setLineItems"
@@ -613,19 +550,41 @@ onMounted(() => {
             class="create-block-btn"
             @click="addSetLine"
         >
-            + 일정 추가
+            + 운행 추가
         </n-button>
 
-        <n-checkbox v-if="mode !== 'set' && !isEdit" v-model:checked="publishNow" class="create-block">
+        <n-checkbox v-if="!isEdit" v-model:checked="publishNow" class="create-block">
             등록 즉시 마켓에 공개
         </n-checkbox>
 
-        <n-button v-if="mode !== 'set'" type="primary" size="large" :loading="saving" @click="save">
+        <p v-if="publishNow" class="create-hint create-hint--publish">
+            출발·도착·일시·차량·구분·금액을 채우면 바로 공개됩니다. 비어 있는 운행은 초안으로 남습니다.
+        </p>
+
+        <n-button
+            v-if="mode === 'ai'"
+            type="primary"
+            size="large"
+            :loading="saving"
+            :disabled="!aiOrders.length"
+            @click="saveAiOrders"
+        >
+            {{ aiOrders.length > 1 ? `${aiOrders.length}건 등록` : '운행 등록' }}
+        </n-button>
+
+        <n-button v-else-if="mode === 'manual'" type="primary" size="large" :loading="saving" @click="save">
             {{ isEdit ? '수정 저장' : '운행 등록' }}
         </n-button>
 
-        <n-button v-if="mode === 'set'" type="primary" size="large" :loading="saving" @click="saveSet">
-            셋트 등록
+        <n-button
+            v-if="mode === 'set'"
+            type="primary"
+            size="large"
+            :loading="saving"
+            :disabled="!setName.trim() || !setLineItems.length"
+            @click="saveSet"
+        >
+            {{ setLineItems.length ? `${setLineItems.length}건 묶어서 등록` : '묶어서 등록' }}
         </n-button>
 
         <!-- 템플릿 저장 모달 -->
@@ -712,34 +671,6 @@ onMounted(() => {
     font-size: 11px;
     line-height: 1.6;
 }
-/* 구조화 결과 요약 */
-.preview-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-    gap: 14px;
-}
-
-.preview-item {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: rgba(128, 128, 128, 0.05);
-}
-
-.preview-item__label {
-    color: var(--text-muted);
-    font-size: 11px;
-    font-weight: 600;
-}
-
-.preview-item__value {
-    font-size: 11px;
-    word-break: break-word;
-}
-
 /* 한 번에 입력 (셋트) */
 .bulk-error {
     margin: 8px 0 0;
@@ -919,18 +850,38 @@ onMounted(() => {
     margin-top: 12px;
 }
 
-.create-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 0 16px;
+/* 입력 안내 — 등록자가 무엇을 채워야 하는지 한 줄로 알려 준다 */
+.create-hint {
+    margin: 0 0 10px;
+    color: var(--text-muted);
+    font-size: 11.5px;
+    line-height: 1.6;
 }
 
-.create-full {
-    width: 100%;
+.create-hint--publish {
+    margin: -6px 0 14px;
 }
 
-.create-weekday {
-    margin-top: 6px;
+/* 해석 결과 카드 헤더 — 제목 + 노선·일시 요약 */
+.create-order-head {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.create-order-head strong {
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.create-order-head__summary {
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 400;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* 태그 — 운행 어필용 프리셋 칩 + 직접 입력 */

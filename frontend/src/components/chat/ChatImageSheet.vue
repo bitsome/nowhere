@@ -805,7 +805,9 @@ const send = async () => {
     position: relative;
     width: 100%;
     max-width: 480px;
+    /* 시트 높이도 실제 보이는 높이(dvh) 기준 — 82vh는 주소창이 있는 모바일에서 화면 밖으로 넘친다 */
     max-height: 82vh;
+    max-height: 82dvh;
     margin: 0 auto;
     align-self: flex-end;
     display: flex;
@@ -825,12 +827,14 @@ const send = async () => {
 .img-sheet__head b { flex: 1; text-align: center; font-size: 11px; }
 .img-sheet__close { border: 0; background: none; font-size: 11px; color: var(--text-muted); cursor: pointer; width: 28px; }
 
+/* 시트 안쪽 스크롤이 끝에서 뒤 화면으로 이어지지 않게 (모바일 스크롤 체이닝·당겨서 새로고침 방지) */
 .img-sheet__body {
     padding: 16px 18px calc(20px + env(safe-area-inset-bottom));
     display: flex;
     flex-direction: column;
     gap: 12px;
     overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 /* 탭 — 사진 / 보관함 */

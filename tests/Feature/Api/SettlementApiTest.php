@@ -26,6 +26,16 @@ function completedOrder($driver, $registrant, int $amount = 100000): Order
     ]);
 }
 
+// 등록자 입금을 수금 확정 처리한다 (관리자 입금 확인에 해당)
+function collectSettlement(Settlement $settlement): void
+{
+    $settlement->forceFill([
+        'collection_status' => Settlement::COLLECTION_PAID,
+        'collected_at' => now(),
+        'collected_by' => 1,
+    ])->save();
+}
+
 test('settling an order creates the settlement ledger with a 5% fee', function () {
     $order = completedOrder($this->driver, $this->registrant);
 
@@ -43,6 +53,7 @@ test('settling an order creates the settlement ledger with a 5% fee', function (
     expect($settlement->fee_amount)->toBe(5000);
     expect($settlement->net_amount)->toBe(95000);
     expect($settlement->status)->toBe(Settlement::STATUS_PENDING);
+    expect($settlement->collection_status)->toBe(Settlement::COLLECTION_PENDING);
     expect($order->fresh()?->status)->toBe(Order::STATUS_SETTLED);
 });
 
@@ -56,12 +67,21 @@ test('driver settlement summary reports pending payout amount and this month sta
 
     Sanctum::actingAs($this->driver);
 
+    // 입금 전에는 출금 가능 금액이 0이고, 수금 대기로 집계된다
     $this->getJson('/api/me/settlement')
         ->assertOk()
-        ->assertJsonPath('data.pending_total', 57000) // 60000 - 5%
-        ->assertJsonPath('data.pending_count', 1)
+        ->assertJsonPath('data.pending_total', 0)
+        ->assertJsonPath('data.awaiting_collection_total', 57000)
         ->assertJsonPath('data.this_month.count', 1)
         ->assertJsonPath('data.this_month.net', 57000);
+
+    // 등록자 입금이 확인되면 출금 가능 금액이 된다
+    collectSettlement(Settlement::query()->firstOrFail());
+
+    $this->getJson('/api/me/settlement')
+        ->assertOk()
+        ->assertJsonPath('data.pending_total', 57000)
+        ->assertJsonPath('data.pending_count', 1);
 });
 
 test('driver can register an account and request a payout of the pending amount', function () {
@@ -69,6 +89,7 @@ test('driver can register an account and request a payout of the pending amount'
 
     Sanctum::actingAs($this->registrant);
     $this->postJson('/api/orders/batch-settle', ['ids' => [$order->id]])->assertOk();
+    collectSettlement(Settlement::query()->firstOrFail());
 
     Sanctum::actingAs($this->driver);
 
@@ -113,6 +134,7 @@ test('admin can pay out a payout request and mark its settlements paid', functio
 
     Sanctum::actingAs($this->registrant);
     $this->postJson('/api/orders/batch-settle', ['ids' => [$order->id]])->assertOk();
+    collectSettlement(Settlement::query()->firstOrFail());
 
     Sanctum::actingAs($this->driver);
     $this->postJson('/api/me/bank-account', [
@@ -142,6 +164,7 @@ test('admin can reject a payout and free its settlements for a later request', f
 
     Sanctum::actingAs($this->registrant);
     $this->postJson('/api/orders/batch-settle', ['ids' => [$order->id]])->assertOk();
+    collectSettlement(Settlement::query()->firstOrFail());
 
     Sanctum::actingAs($this->driver);
     $this->postJson('/api/me/bank-account', [
@@ -171,6 +194,7 @@ test('non-admin cannot access payout processing', function () {
 
     Sanctum::actingAs($this->registrant);
     $this->postJson('/api/orders/batch-settle', ['ids' => [$order->id]])->assertOk();
+    collectSettlement(Settlement::query()->firstOrFail());
 
     Sanctum::actingAs($this->driver);
     $this->postJson('/api/me/bank-account', [
@@ -188,6 +212,206 @@ test('non-admin cannot access payout processing', function () {
     $this->postJson("/api/admin/payouts/{$payout->id}/reject")->assertForbidden();
 });
 
-test('settlement fee rate constant is applied via the service', function () {
-    expect(SettlementService::FEE_RATE)->toBe(0.05);
+test('fee rate comes from config and is snapshotted on the ledger', function () {
+    config(['settlement.fee_rate' => 0.1]);
+
+    $order = completedOrder($this->driver, $this->registrant, 100000);
+
+    Sanctum::actingAs($this->registrant);
+    $this->postJson('/api/orders/batch-settle', ['ids' => [$order->id]])->assertOk();
+
+    $settlement = Settlement::query()->firstOrFail();
+
+    expect($settlement->fee_amount)->toBe(10000);
+    expect($settlement->net_amount)->toBe(90000);
+    expect($settlement->fee_rate)->toBe(0.1); // 정산 시점 요율이 원장에 남는다
+});
+
+test('past settlement keeps its rate snapshot when the policy changes', function () {
+    $order = completedOrder($this->driver, $this->registrant, 100000);
+
+    Sanctum::actingAs($this->registrant);
+    $this->postJson('/api/orders/batch-settle', ['ids' => [$order->id]])->assertOk();
+
+    // 운영 중 요율을 올려도 이미 확정된 정산 금액은 그대로 유지된다
+    config(['settlement.fee_rate' => 0.2]);
+
+    Sanctum::actingAs($this->driver);
+    $this->getJson('/api/me/settlement')
+        ->assertOk()
+        ->assertJsonPath('data.recent.0.fee_amount', 5000)
+        ->assertJsonPath('data.recent.0.fee_rate', 0.05)
+        ->assertJsonPath('data.fee_rate', 0.2); // 화면 안내용 현재 요율은 새 값
+});
+
+test('fee policy applies the rate, the minimum fee, and the gross cap', function () {
+    config(['settlement.fee_rate' => 0.07, 'settlement.min_fee' => 2000]);
+
+    $service = app(SettlementService::class);
+
+    expect($service->feeRate())->toBe(0.07);
+    expect($service->calculateFee(100000))->toBe(7000); // 요율 적용
+    expect($service->calculateFee(10000))->toBe(2000);  // 최소 수수료 보장 (7% = 700원)
+    expect($service->calculateFee(1000))->toBe(1000);   // 수수료가 운행금액을 넘지 않는다
+});
+
+test('registrant specific fee rate overrides the global policy', function () {
+    $this->registrant->forceFill(['fee_rate' => 0.02])->save();
+
+    $order = completedOrder($this->driver, $this->registrant, 100000);
+
+    Sanctum::actingAs($this->registrant);
+    $this->postJson('/api/orders/batch-settle', ['ids' => [$order->id]])->assertOk();
+
+    $settlement = Settlement::query()->firstOrFail();
+
+    expect($settlement->fee_amount)->toBe(2000);
+    expect($settlement->net_amount)->toBe(98000);
+    expect($settlement->fee_rate)->toBe(0.02);
+});
+
+test('registrant without a fee rate uses the global policy rate', function () {
+    $order = completedOrder($this->driver, $this->registrant, 100000);
+
+    Sanctum::actingAs($this->registrant);
+    $this->postJson('/api/orders/batch-settle', ['ids' => [$order->id]])->assertOk();
+
+    expect(Settlement::query()->firstOrFail()->fee_rate)->toBe(0.05);
+});
+
+test('driver cannot request a payout until the collection is confirmed', function () {
+    $order = completedOrder($this->driver, $this->registrant, 100000);
+
+    Sanctum::actingAs($this->registrant);
+    $this->postJson('/api/orders/batch-settle', ['ids' => [$order->id]])->assertOk();
+
+    Sanctum::actingAs($this->driver);
+    $this->postJson('/api/me/bank-account', [
+        'bank_name' => '국민은행',
+        'account_number' => '111-22-333333',
+        'account_holder' => '홍길동',
+    ])->assertOk();
+
+    // 입금 확인 전에는 출금할 정산 금액이 없다
+    $this->postJson('/api/me/payouts')->assertStatus(409);
+});
+
+test('admin confirms collection through the api which unlocks driver payout', function () {
+    $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+    $order = completedOrder($this->driver, $this->registrant, 100000);
+
+    Sanctum::actingAs($this->registrant);
+    $this->postJson('/api/orders/batch-settle', ['ids' => [$order->id]])->assertOk();
+
+    $settlement = Settlement::query()->firstOrFail();
+
+    Sanctum::actingAs($admin);
+
+    // 입금 확인 대기 목록에 보인다
+    $this->getJson('/api/admin/settlements/pending-collection')
+        ->assertOk()
+        ->assertJsonCount(1, 'data')
+        ->assertJsonPath('data.0.gross_amount', 100000);
+
+    // 입금 확인 처리
+    $this->postJson("/api/admin/settlements/{$settlement->id}/collect", ['note' => '입금 확인'])
+        ->assertOk();
+
+    expect($settlement->fresh()?->collection_status)->toBe(Settlement::COLLECTION_PAID);
+    expect($settlement->fresh()?->collected_at)->not->toBeNull();
+    expect($settlement->fresh()?->collected_by)->toBe($admin->id);
+
+    // 재확인 시도는 거절된다
+    $this->postJson("/api/admin/settlements/{$settlement->id}/collect")->assertStatus(409);
+});
+
+test('non-admin cannot confirm collection', function () {
+    $order = completedOrder($this->driver, $this->registrant, 100000);
+
+    Sanctum::actingAs($this->registrant);
+    $this->postJson('/api/orders/batch-settle', ['ids' => [$order->id]])->assertOk();
+
+    $settlement = Settlement::query()->firstOrFail();
+
+    Sanctum::actingAs($this->driver);
+    $this->postJson("/api/admin/settlements/{$settlement->id}/collect")->assertForbidden();
+
+    expect($settlement->fresh()?->collection_status)->toBe(Settlement::COLLECTION_PENDING);
+});
+
+test('registrant payables lists unpaid settlements and totals', function () {
+    $order = completedOrder($this->driver, $this->registrant, 100000);
+    $order2 = completedOrder($this->driver, $this->registrant, 60000);
+
+    Sanctum::actingAs($this->registrant);
+    $this->postJson('/api/orders/batch-settle', ['ids' => [$order->id, $order2->id]])->assertOk();
+
+    $this->getJson('/api/me/payables')
+        ->assertOk()
+        ->assertJsonPath('data.unpaid_count', 2)
+        ->assertJsonPath('data.unpaid_total', 160000)
+        ->assertJsonCount(2, 'data.recent');
+
+    // 1건 입금 확인 후 미수금 합계가 줄어든다
+    collectSettlement(Settlement::query()->firstOrFail());
+
+    $this->getJson('/api/me/payables')
+        ->assertOk()
+        ->assertJsonPath('data.unpaid_count', 1)
+        ->assertJsonPath('data.unpaid_total', 60000);
+});
+
+test('first revenue lifecycle completes the full money flow', function () {
+    $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+    $order = completedOrder($this->driver, $this->registrant, 100000);
+
+    // 1) 등록자가 운행을 정산 → 원장(gross 10만 / fee 5천 / net 9.5만), 입금 대기
+    Sanctum::actingAs($this->registrant);
+    $this->postJson('/api/orders/batch-settle', ['ids' => [$order->id]])->assertOk();
+
+    $settlement = Settlement::query()->firstOrFail();
+    expect($settlement->collection_status)->toBe(Settlement::COLLECTION_PENDING);
+
+    // 2) 등록자에게 입금 안내, 기사에게 정산 완료(입금 확인 후 출금) 알림
+    expect($this->registrant->notifications()->where('data->title', '운행 대금 입금 안내')->count())->toBe(1);
+    expect($this->driver->notifications()->where('data->title', '정산 완료')->count())->toBe(1);
+
+    // 3) 기사는 입금 전 출금 불가
+    Sanctum::actingAs($this->driver);
+    $this->postJson('/api/me/bank-account', [
+        'bank_name' => '국민은행',
+        'account_number' => '111-22-333333',
+        'account_holder' => '홍길동',
+    ])->assertOk();
+    $this->postJson('/api/me/payouts')->assertStatus(409);
+
+    // 4) 관리자가 등록자 입금을 확인 → 수금 확정 (첫 수익 발생 지점)
+    Sanctum::actingAs($admin);
+    $this->getJson('/api/admin/settlements/pending-collection')->assertJsonCount(1, 'data');
+    $this->postJson("/api/admin/settlements/{$settlement->id}/collect")->assertOk();
+
+    expect($settlement->fresh()?->collection_status)->toBe(Settlement::COLLECTION_PAID);
+
+    // 5) 기사 출금 가능 금액 반영 → 출금 신청
+    Sanctum::actingAs($this->driver);
+    $this->getJson('/api/me/settlement')->assertJsonPath('data.pending_total', 95000);
+    $this->postJson('/api/me/payouts')->assertCreated()->assertJsonPath('data.amount', 95000);
+
+    // 6) 관리자가 기사 출금을 지급 → 정산 지급 완료
+    $payout = PayoutRequest::query()->firstOrFail();
+    Sanctum::actingAs($admin);
+    $this->postJson("/api/admin/payouts/{$payout->id}/pay")->assertOk();
+
+    expect($settlement->fresh()?->status)->toBe(Settlement::STATUS_PAID);
+    expect($settlement->fresh()?->paid_at)->not->toBeNull();
+
+    // 7) 등록자 미수금 0 + 관리자 매출 지표에 수수료 5천 반영
+    Sanctum::actingAs($this->registrant);
+    $this->getJson('/api/me/payables')->assertJsonPath('data.unpaid_count', 0);
+
+    Sanctum::actingAs($admin);
+    $this->getJson('/api/admin/operations/metrics')
+        ->assertOk()
+        ->assertJsonPath('data.revenue.month_fee', 5000)
+        ->assertJsonPath('data.revenue.month_gross', 100000);
 });

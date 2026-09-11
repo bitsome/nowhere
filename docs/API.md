@@ -104,18 +104,42 @@
 
 응답 201: `{ "data": { "id", "orderNumber", "status" } }` — 등록 시 XP +10.
 
-### POST /orders/batch — 셋트 일괄 생성
+### POST /orders/batch — 묶음(셋트) 일괄 생성
 | 파라미터 | 설명 |
 |---|---|
-| `group_name*` | 셋트 이름 (≤100) |
+| `group_name*` | 묶음 이름 (≤100) |
 | `orders*` | 2~30개 배열, 각 항목은 운행 필드 동일 (line_items 포함 가능) |
+| `publish` | `true`면 공개 (기본 `false` = 초안) |
 
-### POST /orders/structure — AI 구조화
+응답 201: `{ "data": { "group_id", "group_name", "order_count", "published", "draft_ids" } }`
+
+- 생성된 운행은 하나의 그룹으로 묶인다(붙여넣기 `POST /orders/bulk`는 묶지 않음).
+- `publish: true`여도 공개 요건을 못 채운 운행은 공개하지 않고 `draft_ids`로 돌려준다.
+
+### POST /orders/bulk — N건 일괄 등록
+붙여넣은 문구를 여러 건으로 나눠 등록할 때 쓴다. 각 운행은 **셋트로 묶이지 않는 독립 운행**이 되므로 마켓에서 따로 가져가진다. 중간에 실패하면 전부 등록되지 않는다.
+
+| 파라미터 | 설명 |
+|---|---|
+| `orders*` | 1~30개 배열, 각 항목은 운행 필드 동일 (line_items 포함 가능) |
+| `publish` | `true`면 공개 (기본 `false` = 초안) |
+
+응답 201: `{ "data": { "order_ids": [...], "published": N, "draft_ids": [...] } }`
+
+- `publish: true`여도 마켓 공개 요건(출발·도착·차량·구분·일시·금액)을 못 채운 운행은 공개하지 않고 `draft_ids`로 돌려준다 — 빈 운행이 마켓에 노출되지 않게 한다.
+- 등록 시 **건별** XP +10.
+
+### POST /orders/structure — 운행 요약 구조화 (AI + 규칙 파서 폴백)
 | 파라미터 | 설명 |
 |---|---|
 | `summary*` | 원문 요약 텍스트 (≤2000) |
 
-응답: `{ "data": { "structured": {...} } }` (구조화 실패 시 422)
+응답: `{ "data": { "structured": { ..., "parsed_by": "ai" | "local" } } }`
+
+- `parsed_by: "ai"` — AI가 해석 (OpenAI 호환 API)
+- `parsed_by: "local"` — AI에 닿지 않아 **규칙·사전 파서**로 대체 (예: 중국 본토 서버에서 OpenAI 차단). 정확도가 낮으므로 화면에서 사람이 확인해야 한다.
+- `line_items[]` — 문구에서 찾은 일정 목록. 항목마다 `service_date`·`scheduled_time`·`service_type`·`pickup_location`·`dropoff_location`·`passenger_count`·`luggage_count`·`vehicle_type`·`flight_number`·`amount_text`·`amount_value`를 가진다. **여러 건이면 각 항목이 별도 운행 초안이 된다** (`POST /orders/bulk`).
+- 입력 검증 실패(2000자 초과 등)는 422. AI·규칙 모두 해석에 실패하는 경우만 오류로 응답한다.
 
 ### POST /orders/batch-settle — 완료 운행 일괄 정산 (등록자)
 | 파라미터 | 설명 |

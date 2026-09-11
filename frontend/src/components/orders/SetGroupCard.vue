@@ -205,6 +205,11 @@ const routeDateLabel = (route) => relativeDateLabel(route.date, route.sortDate);
     flex-shrink: 0;
 }
 
+/* 다크 — 그라디언트가 밝은 틸로 바뀌어 흰 글자 대비가 ≈1.6:1로 떨어짐 → 앱 표준 어두운 글자 */
+html.dark .set-card__avatar {
+    color: #07120e;
+}
+
 .set-card__title {
     display: flex;
     flex-direction: column;
@@ -259,17 +264,25 @@ const routeDateLabel = (route) => relativeDateLabel(route.date, route.sortDate);
     font-size: 10px;
     font-weight: 400;
     letter-spacing: -0.2px;
-    box-shadow: 0 1px 4px rgba(229, 72, 77, 0.4);
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--danger) 40%, transparent);
     animation: urgent-pulse 1.6s ease-in-out infinite;
 }
 
 @keyframes urgent-pulse {
     0%,
     100% {
-        box-shadow: 0 1px 4px rgba(229, 72, 77, 0.4);
+        box-shadow: 0 1px 4px color-mix(in srgb, var(--danger) 40%, transparent);
     }
     50% {
-        box-shadow: 0 1px 8px rgba(229, 72, 77, 0.8);
+        box-shadow: 0 1px 8px color-mix(in srgb, var(--danger) 80%, transparent);
+    }
+}
+
+/* 모션 감소 설정 — 임박 배지·신규 하이라이트의 반복 깜빡임 정지 (base.css 스켈레톤과 동일 규칙) */
+@media (prefers-reduced-motion: reduce) {
+    .set-card--highlight,
+    .set-card__urgent {
+        animation: none;
     }
 }
 

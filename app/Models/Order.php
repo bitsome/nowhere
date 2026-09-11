@@ -17,6 +17,7 @@ use InvalidArgumentException;
 
 #[Fillable([
     'order_number',
+    'share_token',
     'original_summary',
     'structured_payload',
     'group_id',
@@ -354,6 +355,33 @@ class Order extends Model
             : ((int) substr($latestOrderNumber, -4)) + 1;
 
         return $prefix.str_pad((string) $nextSequence, 4, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * 외부 공유 링크용 토큰을 만든다 — 운행 id를 노출하지 않기 위한 추측 불가능한 임의 문자열.
+     */
+    public static function generateShareToken(): string
+    {
+        do {
+            $token = bin2hex(random_bytes(8));
+        } while (self::query()->where('share_token', $token)->exists());
+
+        return $token;
+    }
+
+    /**
+     * 공유 토큰을 반환한다. 아직 없으면 이 운행에만 발급해 저장한다.
+     * 등록자가 '공유'를 누르는 시점에 지연 발급하므로 기존 운행도 그대로 쓸 수 있다.
+     */
+    public function ensureShareToken(): string
+    {
+        if (filled($this->share_token)) {
+            return $this->share_token;
+        }
+
+        $this->forceFill(['share_token' => self::generateShareToken()])->save();
+
+        return $this->share_token;
     }
 
     /**

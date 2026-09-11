@@ -327,6 +327,11 @@ onMounted(loadDetail);
     transition: transform 0.15s ease;
 }
 
+/* 다크 — 그라디언트가 밝은 틸로 바뀌어 흰 글자 대비가 ≈1.6:1로 떨어짐 → 앱 표준 어두운 글자 */
+html.dark .feed-avatar {
+    color: #07120e;
+}
+
 .feed-avatar--link { border: 0; padding: 0; cursor: pointer; }
 .feed-avatar--link:hover { transform: scale(1.05); }
 
@@ -565,9 +570,10 @@ html.dark .feed-card__comments { background: rgba(255, 255, 255, 0.03); }
 .comment-row strong { flex-shrink: 0; color: var(--text); font-size: 11px; }
 .comment-row span { word-break: break-word; color: var(--text); }
 
-.comment-row__time {
-    color: var(--text-muted) !important;
-    font-size: 11px !important;
+/* 댓글 시간 — 위 `.comment-row span`(본문 글자색)보다 우선하도록 범위를 좁힌다 (선택자 우선순위로 해결) */
+.comment-row span.comment-row__time {
+    color: var(--text-muted);
+    font-size: 11px;
     flex-shrink: 0;
 }
 

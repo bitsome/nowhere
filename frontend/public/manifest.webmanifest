@@ -1,7 +1,7 @@
 {
-    "name": "NoWhere 마켓",
+    "name": "NoWhere — 운행 최적화 플랫폼",
     "short_name": "NoWhere",
-    "description": "드라이버 오더 마켓 — 오더 등록/수주/채팅/커뮤니티",
+    "description": "기사님이 오늘 받을 운행을 앱이 먼저 골라주는 운행 최적화 플랫폼. 운행 추천·신청·채팅·정산까지 한 번에.",
     "start_url": "/",
     "scope": "/",
     "id": "/",

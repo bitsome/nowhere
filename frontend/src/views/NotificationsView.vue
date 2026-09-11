@@ -116,6 +116,8 @@ const priorityCls = (n) => ({
     warning: 'warn',
     cancel: 'danger',
     price: 'price',
+    // 신고는 문제 신호라 레드(danger) — KIND/TAG_VARIANT와 동일 분류를 유지한다
+    report: 'danger',
 }[classify(n)]);
 
 // 진행 상태 배지 색상 — 운행 상태값 기준
@@ -327,7 +329,7 @@ const goActions = () => {
 
                 <!-- 날짜 그룹 목록 — 오늘만 펼침, 어제·이전 날짜는 접힘 -->
                 <template v-for="group in dayGroups" :key="group.label">
-                    <button type="button" class="v8-day v8-day--toggle" @click="toggleDay(group.label)">
+                    <button type="button" class="v8-day v8-day--toggle" :aria-expanded="isExpanded(group.label)" @click="toggleDay(group.label)">
                         <span class="v8-day__label">{{ group.label }}</span>
                         <span class="v8-day__count">{{ group.items.length }}건</span>
                         <span class="v8-day__arrow">{{ isExpanded(group.label) ? '▾' : '▸' }}</span>

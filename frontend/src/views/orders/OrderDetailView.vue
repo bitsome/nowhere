@@ -6,6 +6,7 @@ import { useChatsStore } from '../../stores/chats';
 import { useMessage as useNaiveMessage } from 'naive-ui';
 import { useOrderDetail } from '../../composables/useOrderDetail';
 import { useOrderMap } from '../../composables/useOrderMap';
+import { useOrderShare } from '../../composables/useOrderShare';
 import { apiAdvanceRideStep, apiTransitionOrder } from '../../api/orders';
 import { getApiErrorMessage } from '../../api/client';
 import BaseIcon from '../../components/common/BaseIcon.vue';
@@ -23,6 +24,8 @@ const naiveMessage = useNaiveMessage();
 // ── 모듈: 운행 상세(로드·파생·상태변경·리뷰·취소·분리) / 경로 지도 ──
 const detail = useOrderDetail({ route, router, auth, chats, naiveMessage });
 const map = useOrderMap({ order: detail.order });
+// 등록자가 운행을 외부(카카오 오픈채팅·카페)에 공유할 때 쓸 공개 링크를 발급한다
+const { sharing, share } = useOrderShare();
 
 const {
     order, group, statusOptions, nextTransitions, timeline, loading, error, acting, message, messageType,
@@ -56,6 +59,12 @@ const ridePanelOrder = computed(() => {
     const o = order.value;
 
     if (!o || !isPerformer.value || !['accepted', 'driving', 'completed'].includes(o.status)) {
+        return null;
+    }
+
+    // 직접 수행은 완료 후 정산까지 본인이 처리한다 — 하단 운행 바 대신 정산 버튼을 노출한다.
+    // (남의 운행을 수행한 기사는 완료가 마지막이라 '운행 완료' 안내를 그대로 유지한다)
+    if (o.status === 'completed' && isRegistrant.value) {
         return null;
     }
 
@@ -916,6 +925,17 @@ const formatClaimTime = (iso) => {
                         >
                             수정
                         </n-button>
+                        <!-- 공유 — 등록자가 공개한 운행을 외부(카카오 오픈채팅·카페)에 뿌려 기사를 모은다 -->
+                        <n-button
+                            v-if="isRegistrant && order && order.status === 'published'"
+                            size="large"
+                            secondary
+                            block
+                            :loading="sharing"
+                            @click="share(order.id)"
+                        >
+                            공유
+                        </n-button>
                     </div>
                 </div>
 
@@ -974,7 +994,7 @@ const formatClaimTime = (iso) => {
                                     <strong>{{ Number(offer.amount).toLocaleString() }}원</strong>
                                     <span class="offer-item__driver">{{ offer.driver?.name || '기사' }}</span>
                                     <span v-if="offer.driver?.rating" class="offer-item__rating">
-                                        ★ {{ offer.driver.rating }} ({{ offer.driver.review_count }})
+                                        ★ {{ offer.driver.rating }} ({{ offer.driver.review_count }}리뷰)
                                     </span>
                                     <span class="offer-item__vehicle">
                                         {{ vehicleText(offer.driver?.vehicle) }}
@@ -1053,7 +1073,7 @@ const formatClaimTime = (iso) => {
                             <div v-if="claim.rating" class="detail-claim-item__rating">
                                 <BaseIcon name="star" :size="13" />
                                 <strong>{{ claim.rating }}</strong>
-                                <span v-if="claim.review_count">({{ claim.review_count }})</span>
+                                <span v-if="claim.review_count">({{ claim.review_count }}리뷰)</span>
                             </div>
                         </div>
                         <div v-if="claim.vehicle" class="detail-claim-item__vehicle">
@@ -2142,6 +2162,13 @@ html.dark .detail-claim-card :deep(.n-card__footer) {
     }
     50% {
         box-shadow: 0 0 0 6px rgba(229, 72, 77, 0);
+    }
+}
+
+/* 모션 감소 설정 — 임박 히어로 배지의 반복 펄스 정지 (base.css 스켈레톤과 동일 규칙) */
+@media (prefers-reduced-motion: reduce) {
+    .hero-badge--urgent {
+        animation: none;
     }
 }
 

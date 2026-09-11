@@ -103,6 +103,12 @@ const MENU = [
     cursor: pointer;
 }
 
+/* 다크 모드 — --accent가 밝은 틸(#63e2b7)로 바뀌어 흰 글자 대비가 약해짐.
+   라이트는 어두운(#1f1f1f) 채움이라 흰 글자 유지, 다크만 채움 위 어두운 글자(#07120e) 표준 적용 */
+html.dark .customer-hero__cta {
+    color: #07120e;
+}
+
 /* 빠른 메뉴 — 한 줄에 하나씩 (홈 빠른 메뉴의 확장형) */
 .customer-menu {
     display: flex;

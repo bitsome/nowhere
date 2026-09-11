@@ -124,13 +124,20 @@
 
 ### 1축 — 운행 거래 수수료 (기본 엔진, 지금 수익이 나는 유일한 축)
 - 구조: 완료·정산된 운행의 **운행금액 × 수수료율**을 플랫폼이 가져가고, 나머지를 기사에게 지급한다.
-- 흐름: 운행 완료 → 정산 생성(gross·fee·net 확정) → 기사 출금 요청 → 관리자 지급.
+- 흐름: 운행 완료 → 정산 생성(gross·fee·net 확정) → 등록자 대금 입금(수금 확인) → 기사 출금 요청 → 관리자 지급.
 - 매출 공식: `월 수수료 매출 = 완료 운행 건수 × 평균 운행금액 × 실효 수수료율`
-- 현재 구현: 요율 5% 고정(`app/Services/Settlement/SettlementService.php`의 `FEE_RATE` 상수), `settlements`(gross_amount / fee_amount / net_amount), 자동 정산(`config/settlement.php`의 `auto_after_hours`), 기사 출금(`payout_requests`)까지 동작한다.
-- 즉시 보완(돈을 더 벌기보다 **요율을 다룰 수 있게** 만드는 일):
-  - `FEE_RATE` 상수 → `config('settlement.fee_rate')`로 승격.
-  - 등록자별 요율 적용 — `settlements.registrant_id`가 이미 있으므로 등록자 등급별 요율 조회로 확장 가능.
-  - 관리자 화면에서 요율·정산 보류를 다루도록 노출(현재는 조회·보류만 있고 요율 조작 UI 없음).
+- 현재 구현:
+  - 요율·최소 수수료는 config에서 읽는다 — `settlement.fee_rate`(기본 0.05), `settlement.min_fee`(기본 0 = 미적용). 계산은 `SettlementService::feeRate()/calculateFee()` 한 곳에서만 한다(수수료가 운행금액을 넘지 않도록 보정).
+  - `settlements`(gross_amount / fee_amount / **fee_rate 스냅샷** / net_amount) — 정산 시점 요율이 원장에 남아, 운영 중 요율을 바꿔도 이미 확정된 정산 금액은 바뀌지 않는다.
+  - 자동 정산(`settlement.auto_after_hours`), 기사 출금(`payout_requests`)까지 동작한다.
+  - 기사 정산 화면(`frontend/src/views/SettlementView.vue`)에 적용 요율과 "운행금액에서 차감 후 지급" 안내를 노출한다.
+  - 등록자별 요율 — 등록자 개별 요율(`users.fee_rate`)이 있으면 기본 요율 대신 적용한다. 관리자 '사용자 관리' 탭의 '수수료율' 버튼으로 지정/해제하고, 변경 내역은 감사 로그에 남는다.
+  - 수금(입금 확인) — 등록자가 운행 대금(gross)을 매입 계좌(`settlement.platform_account`)로 입금하면 관리자가 '수금 확인' 탭에서 확정한다. **수금이 확인된 정산만 기사 출금 재원이 된다.** 등록자 화면(`/registrant-settlement`)에 입금 대기 합계·계좌 안내를 노출한다.
+  - 매출 가시화 — 관리자 운영 지표에 '수수료 매출' 그룹(이번 달 수수료 매출·실효 요율·이번 달 거래액·누적 수수료)을 노출한다.
+- 남은 보완(2축 구독과 함께 여는 것이 자연스럽다):
+  - 등록자 등급(플랜) 테이블 — 지금의 개별 요율을 플랜별 요율(무료 5% / Basic 4% / Pro 3% / Business 2%)로 확장.
+  - 수금을 PG 자동 입금 확인(가상계좌·웹훅)으로 대체 — 지금은 수동 입금 확인 방식.
+  - 요율 변경 이력 전용 조회(현재는 감사 로그로 확인).
 
 ### 2축 — 등록자(업체) 구독 (반복 매출의 본체)
 기사는 무료, **운행을 등록하는 업체가 구독료를 낸다.** 구독의 실질 혜택은 "수수료 인하 + 운영 대행"이다. 수수료율만 내려도 구독료보다 이득이 되는 지점이 생겨야 팔린다.
@@ -161,9 +168,10 @@
 
 ## 정산·수익 배분 규칙
 - `운행금액(gross)` = 등록자가 지불한 총액 → `플랫폼 수수료(fee)` = gross × 요율 → `기사 지급액(net)` = gross − fee.
+- 수금: 등록자가 gross를 플랫폼 매입 계좌로 입금하고 관리자가 확인(`collection_status: pending → paid`)해야 기사 출금 재원이 된다. 입금 전에는 기사가 출금할 수 없다.
 - 구독료는 운행금액과 분리해 별도 청구한다(운행 정산에 섞지 않는다).
 - 분쟁·보류: 관리자 정산 보류(`admin_hold`) 상태는 출금 대상에서 제외하고, 해제 후 지급한다.
-- 상태: 정산 `pending → paid`, 출금 요청 `pending → paid / rejected`(거절 시 사유 기록, 정산은 pending으로 복귀).
+- 상태: 수금 `pending → paid`, 정산 `pending → paid`, 출금 요청 `pending → paid / rejected`(거절 시 사유 기록, 정산은 pending으로 복귀).
 
 ## 단위 경제 (예시 — 실제 데이터가 아닌 가정)
 - 가정: 인천공항 → 서울 1건 평균 12만원, 수수료율 5% → **건당 6,000원**.

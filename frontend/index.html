@@ -9,8 +9,37 @@
         <link rel="manifest" href="/manifest.webmanifest" />
         <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+        <!-- iOS 홈 화면 앱 — 주소창 없이 전체 화면으로 열리고, 아이콘 이름이 짧게 표시된다.
+             상태 표시줄은 default(불투명)로 둔다 — 헤더가 상단 안전영역을 침범하지 않도록 -->
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="NoWhere" />
         <meta name="theme-color" content="#36adff" />
-        <title>NoWhere 마켓</title>
+        <meta
+            name="description"
+            content="기사님이 오늘 어떤 운행을 받을지 앱이 먼저 골라주는 운행 최적화 플랫폼. 인천공항↔서울 운행 추천·신청·채팅·정산까지 한 번에."
+        />
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="NoWhere" />
+        <meta property="og:locale" content="ko_KR" />
+        <meta property="og:image" content="/og-cover.jpg" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content="NoWhere — 오늘 받을 운행을 앱이 먼저 골라드립니다" />
+        <meta property="og:title" content="NoWhere — 오늘 받을 운행을 앱이 먼저 골라드려요" />
+        <meta
+            property="og:description"
+            content="기사님 판단 피로도를 줄이는 운행 최적화 플랫폼. 추천 → 신청 → 승인 → 운행 → 정산까지."
+        />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:image" content="/og-cover.jpg" />
+        <meta name="twitter:title" content="NoWhere — 오늘 받을 운행을 앱이 먼저 골라드려요" />
+        <meta
+            name="twitter:description"
+            content="기사님 판단 피로도를 줄이는 운행 최적화 플랫폼."
+        />
+        <title>NoWhere — 오늘 받을 운행을 앱이 먼저 골라드립니다</title>
     </head>
     <body>
         <div id="app"></div>

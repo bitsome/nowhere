@@ -1,5 +1,6 @@
 import axios from 'axios';
-import router from '../router';
+import router, { AUTH_PAGES } from '../router';
+import { safeRedirectPath } from '../utils/redirect';
 
 /**
  * API 클라이언트 — 독립 SPA 전용.
@@ -31,10 +32,14 @@ apiClient.interceptors.response.use(
 
             // SPA 이동 — 전체 리로드(window.location.href)는 진행 중이던 요청을
             // ERR_ABORTED로 취소시키므로 라우터 push로 전환한다.
-            const name = router.currentRoute.value.name;
+            const current = router.currentRoute.value;
 
-            if (name !== 'login' && name !== 'register') {
-                router.push({ name: 'login' });
+            // 로그인·가입·랜딩 화면은 돌아갈 목적지가 아니므로 그대로 둔다
+            if (!AUTH_PAGES.includes(current.name)) {
+                // 세션 만료 — 보던 화면을 기억해 로그인 후 그 자리로 돌려보낸다
+                const redirectPath = safeRedirectPath(current.fullPath);
+
+                router.push({ name: 'login', query: redirectPath ? { redirect: redirectPath } : {} });
             }
         }
 

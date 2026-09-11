@@ -2,6 +2,14 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import BaseIcon from './BaseIcon.vue';
 
+defineProps({
+    /** 페이지가 자체 플로팅 버튼(FAB)을 띄우면 그 위로 올려 자리 겹침을 피한다 */
+    raised: {
+        type: Boolean,
+        default: false,
+    },
+});
+
 const visible = ref(false);
 let ticking = false;
 
@@ -32,6 +40,7 @@ onBeforeUnmount(() => window.removeEventListener('scroll', onScroll));
             v-if="visible"
             type="button"
             class="scroll-top-btn"
+            :class="{ 'scroll-top-btn--raised': raised }"
             aria-label="맨 위로"
             @click="scrollTop"
         >
@@ -57,6 +66,11 @@ onBeforeUnmount(() => window.removeEventListener('scroll', onScroll));
     color: var(--text);
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
     cursor: pointer;
+}
+
+/* 페이지 FAB(하단 우측 · 지름 54px)가 있는 화면 — 그 위로 올려 자리 겹침을 피한다 */
+.scroll-top-btn--raised {
+    bottom: calc(146px + env(safe-area-inset-bottom));
 }
 
 .scroll-top-btn svg {

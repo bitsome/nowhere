@@ -32,9 +32,15 @@ function arrayToBase64(array) {
     return btoa(binary);
 }
 
-// 푸시 지원 여부
+// 푸시 지원 여부 — Service Worker/Push 는 보안 컨텍스트(HTTPS·localhost)에서만 동작한다.
+// HTTP 로 접속하면 'serviceWorker' in navigator 는 true 지만 등록이 실패해서
+// navigator.serviceWorker.ready 가 영원히 대기하므로, 지원하지 않는 것으로 본다.
 export function isPushSupported() {
-    return 'serviceWorker' in navigator && 'PushManager' in window;
+    return (
+        window.isSecureContext === true &&
+        'serviceWorker' in navigator &&
+        'PushManager' in window
+    );
 }
 
 // 이미 활성화된 구독이 있는지

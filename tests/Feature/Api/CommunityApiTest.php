@@ -4,6 +4,7 @@ use App\Models\CommunityPost;
 use App\Models\Order;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
 uses(RefreshDatabase::class);
 
@@ -220,4 +221,27 @@ test('user page returns profile badges, posts and registered orders', function (
     expect($response->json('data.posts'))->toHaveCount(1);
     expect($response->json('data.orders'))->toHaveCount(1);
     expect($response->json('data.orders.0.order_number'))->toBe($order->order_number);
+});
+
+test('카테고리 집계 쿼리가 ONLY_FULL_GROUP_BY 를 위반하지 않는다', function () {
+    // 운영(MySQL)은 sql_mode 에 ONLY_FULL_GROUP_BY 가 켜져 있다(strict). 집계 쿼리에 community_posts.* 가
+    // 함께 나가면 1055 오류로 커뮤니티 피드 전체가 500이 된다 — SQLite 로컬 테스트에서 드러나지 않던 운영 장애.
+    CommunityPost::create(['user_id' => $this->actor->id, 'content' => '자유 글', 'category' => 'free']);
+    CommunityPost::create(['user_id' => $this->peer->id, 'content' => '노선 글', 'category' => 'route']);
+
+    $executed = [];
+    DB::listen(function ($query) use (&$executed) {
+        $executed[] = $query->sql;
+    });
+
+    $response = $this->getJson('/api/community/posts')->assertOk();
+
+    $countSql = collect($executed)->first(fn (string $sql) => str_contains($sql, 'count(*) as total'));
+
+    expect($countSql)->not->toBeNull();
+    expect($countSql)->not->toContain('.*');          // community_posts.* 가 함께 선택되면 안 된다
+    expect($countSql)->not->toContain('likes_count'); // withCount 집계 서브쿼리도 함께 나가면 안 된다
+
+    expect($response->json('meta.category_counts.free'))->toBe(1);
+    expect($response->json('meta.category_counts.route'))->toBe(1);
 });

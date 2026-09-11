@@ -104,9 +104,9 @@ test('completed order is auto settled after grace period', function () {
     expect($settlement?->driver_id)->toBe($this->driver->id);
     expect($settlement?->registrant_id)->toBe($this->customer->id);
 
-    // 당사자(수행 기사·등록자)에게 각각 정산 알림
+    // 당사자(수행 기사·등록자)에게 각각 정산/입금 안내 알림
     expect($this->driver->notifications()->where('data->title', '정산 완료')->count())->toBe(1);
-    expect($this->customer->notifications()->where('data->title', '자동 정산 완료')->count())->toBe(1);
+    expect($this->customer->notifications()->where('data->title', '운행 대금 입금 안내')->count())->toBe(1);
 });
 
 test('completed order inside grace period is not settled', function () {

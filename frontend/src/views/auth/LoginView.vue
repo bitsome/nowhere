@@ -1,12 +1,17 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../../stores/auth';
 import { getApiErrorMessage } from '../../api/client';
+import { safeRedirectPath } from '../../utils/redirect';
 import UiCard from '../../components/ui/UiCard.vue';
 
 const router = useRouter();
+const route = useRoute();
 const auth = useAuthStore();
+
+// 공유 링크에서 넘어온 경우 로그인 후 그 운행으로 돌아간다 (내부 경로만 허용)
+const redirectTo = safeRedirectPath(route.query.redirect);
 
 const login = ref('');
 const password = ref('');
@@ -58,7 +63,8 @@ const submit = async () => {
             localStorage.removeItem('nowhere_login_saved');
         }
 
-        router.push({ name: 'home' });
+        // 공유 링크로 온 기사는 그 운행으로, 아니면 홈으로
+        router.push(redirectTo ?? { name: 'home' });
     } catch (e) {
         error.value = getApiErrorMessage(e, '로그인에 실패했습니다.');
     } finally {
@@ -82,10 +88,11 @@ const submit = async () => {
 
             <n-form label-placement="top" size="large" @submit.prevent="submit">
                 <n-form-item label="아이디(이메일) 또는 전화번호">
+                    <!-- inputmode·autocomplete는 n-input의 prop이 아니라 input-props로 넘겨야 내부 <input>에 적용된다 -->
                     <n-input
                         v-model:value="login"
                         placeholder="이메일 또는 전화번호"
-                        autocomplete="email"
+                        :input-props="{ autocomplete: 'email' }"
                     />
                 </n-form-item>
 
@@ -95,7 +102,7 @@ const submit = async () => {
                         type="password"
                         show-password-on="click"
                         placeholder="비밀번호"
-                        autocomplete="current-password"
+                        :input-props="{ autocomplete: 'current-password' }"
                         @keyup.enter="submit"
                     />
                 </n-form-item>
@@ -111,9 +118,15 @@ const submit = async () => {
 
             <p class="login-footer">
                 계정이 없으신가요?
-                <router-link :to="{ name: 'register' }" class="login-link">회원가입</router-link>
+                <router-link
+                    :to="{ name: 'register', query: redirectTo ? { redirect: redirectTo } : {} }"
+                    class="login-link"
+                >회원가입</router-link>
                 <span class="login-footer__divider">·</span>
-                <router-link :to="{ name: 'password-reset' }" class="login-link">비밀번호 찾기</router-link>
+                <router-link
+                    :to="{ name: 'password-reset', query: redirectTo ? { redirect: redirectTo } : {} }"
+                    class="login-link"
+                >비밀번호 찾기</router-link>
             </p>
         </UiCard>
     </div>
@@ -163,6 +176,11 @@ const submit = async () => {
     font-size: 20px;
     font-weight: 700;
     box-shadow: 0 6px 18px color-mix(in srgb, var(--brand) 35%, transparent);
+}
+
+/* 다크 — 그라디언트가 밝은 틸로 바뀌어 흰 글자 대비가 ≈1.6:1로 떨어짐 → 앱 표준 어두운 글자 */
+html.dark .login-mark {
+    color: #07120e;
 }
 
 .login-title {

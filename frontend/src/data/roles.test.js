@@ -8,6 +8,7 @@ import {
     ROLE_OPERATOR,
     ROLE_SUPER_ADMIN,
     roleLabel,
+    signupRoleFromQuery,
 } from './roles';
 
 describe('data/roles — 역할 상수·라벨 단일 소스 (백엔드 User::ROLE_* · roleLabels()와 동일)', () => {
@@ -31,5 +32,18 @@ describe('data/roles — 역할 상수·라벨 단일 소스 (백엔드 User::RO
         expect(ROLE_SUPER_ADMIN).toBe('Super Admin');
         expect(ROLE_DRIVER).toBe('Driver');
         expect(ROLE_CUSTOMER).toBe('Customer');
+    });
+});
+
+describe('signupRoleFromQuery — 가입 화면 초기 역할', () => {
+    it('등록자 링크(?role=Customer)로 들어오면 등록자를 선택한다', () => {
+        expect(signupRoleFromQuery(ROLE_CUSTOMER)).toBe(ROLE_CUSTOMER);
+    });
+
+    it('역할이 없거나 알 수 없는 값이면 기사로 본다', () => {
+        expect(signupRoleFromQuery(undefined)).toBe(ROLE_DRIVER);
+        expect(signupRoleFromQuery('')).toBe(ROLE_DRIVER);
+        expect(signupRoleFromQuery('Admin')).toBe(ROLE_DRIVER);
+        expect(signupRoleFromQuery(['Customer'])).toBe(ROLE_DRIVER); // 배열 쿼리 방어
     });
 });

@@ -23,6 +23,16 @@ const form = reactive({ bank_name: '', account_number: '', account_holder: '' })
 
 const formatWon = (v) => `${Number(v ?? 0).toLocaleString('ko-KR')}원`;
 
+// 수수료 요율 라벨 — 5%, 7.5%처럼 정수면 소수점을 붙이지 않는다
+const rateLabel = (rate) => {
+    const pct = Number(rate ?? 0) * 100;
+
+    return `${Number.isInteger(pct) ? pct : pct.toFixed(1)}%`;
+};
+
+// 현재 적용 중인 플랫폼 수수료율 (운영 중 조정 가능)
+const feeRateLabel = computed(() => rateLabel(summary.value?.fee_rate ?? 0));
+
 const load = async () => {
     loading.value = true;
 
@@ -147,6 +157,9 @@ onMounted(load);
                         </span>
                     </div>
                 </div>
+                <p class="settle-hero__policy">
+                    플랫폼 수수료 {{ feeRateLabel }} · 운행금액에서 차감한 금액이 지급됩니다.
+                </p>
                 <button
                     type="button"
                     class="settle-hero__cta"
@@ -172,7 +185,7 @@ onMounted(load);
                     </button>
                     <div v-if="accountOpen" class="settle-account__form">
                         <input v-model="form.bank_name" class="settle-input" placeholder="은행명 (예: 국민은행)" />
-                        <input v-model="form.account_number" class="settle-input" placeholder="계좌번호" />
+                        <input v-model="form.account_number" class="settle-input" inputmode="numeric" placeholder="계좌번호" />
                         <input v-model="form.account_holder" class="settle-input" placeholder="예금주" />
                         <button type="button" class="settle-btn" :disabled="accountBusy" @click="saveAccount">
                             {{ accountBusy ? '저장 중...' : '계좌 저장' }}
@@ -183,7 +196,7 @@ onMounted(load);
                     <p class="settle-account__empty">출금을 받을 계좌를 등록해 주세요.</p>
                     <div class="settle-account__form">
                         <input v-model="form.bank_name" class="settle-input" placeholder="은행명 (예: 국민은행)" />
-                        <input v-model="form.account_number" class="settle-input" placeholder="계좌번호" />
+                        <input v-model="form.account_number" class="settle-input" inputmode="numeric" placeholder="계좌번호" />
                         <input v-model="form.account_holder" class="settle-input" placeholder="예금주" />
                         <button type="button" class="settle-btn" :disabled="accountBusy" @click="saveAccount">
                             {{ accountBusy ? '저장 중...' : '계좌 등록' }}
@@ -232,7 +245,7 @@ onMounted(load);
                         </p>
                         <div class="settle-recent__amounts">
                             <span>운행 {{ formatWon(item.gross_amount) }}</span>
-                            <span>수수료 {{ formatWon(item.fee_amount) }}</span>
+                            <span>수수료 {{ formatWon(item.fee_amount) }} ({{ rateLabel(item.fee_rate) }})</span>
                             <strong>{{ formatWon(item.net_amount) }}</strong>
                         </div>
                     </div>
@@ -336,6 +349,11 @@ onMounted(load);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+.settle-hero__policy {
+    margin: 0;
+    font-size: 10px;
+    color: var(--text-muted);
 }
 .settle-hero__cta {
     display: inline-flex;

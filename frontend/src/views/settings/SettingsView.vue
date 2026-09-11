@@ -145,6 +145,11 @@ const isCustomer = computed(() => auth.user?.role === ROLE_CUSTOMER);
     flex-shrink: 0;
 }
 
+/* 다크 — 그라디언트가 밝은 틸로 바뀌어 흰 아이콘 대비가 ≈1.6:1로 떨어짐 → 앱 표준 어두운 글자 */
+html.dark .settings-card__icon {
+    color: #07120e;
+}
+
 .settings-card__icon svg {
     width: 20px;
     height: 20px;

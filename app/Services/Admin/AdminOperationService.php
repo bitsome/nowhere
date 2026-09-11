@@ -450,6 +450,25 @@ class AdminOperationService
                 ->sum('fee_amount'),
         ];
 
+        // 수수료 매출 — 플랫폼이 실제로 가져가는 돈 (정산이 확정된 시점 기준, 지급 여부와 무관)
+        $revenueMonth = Settlement::query()
+            ->where('created_at', '>=', $month)
+            ->selectRaw('COUNT(*) as cnt, COALESCE(SUM(gross_amount),0) as gross, COALESCE(SUM(fee_amount),0) as fee, COALESCE(SUM(net_amount),0) as net')
+            ->first();
+
+        $monthGross = (int) ($revenueMonth->gross ?? 0);
+        $monthFee = (int) ($revenueMonth->fee ?? 0);
+
+        $revenue = [
+            'month_count' => (int) ($revenueMonth->cnt ?? 0),
+            'month_gross' => $monthGross,
+            'month_fee' => $monthFee,
+            'month_net' => (int) ($revenueMonth->net ?? 0),
+            'total_fee' => (int) Settlement::query()->sum('fee_amount'),
+            'fee_rate' => (float) config('settlement.fee_rate', 0.05),
+            'effective_rate' => $monthGross > 0 ? round($monthFee / $monthGross, 4) : 0.0,
+        ];
+
         // 신고 — 미처리(접수+조사) > 처리 완료
         $reportPendingStatuses = [Report::STATUS_PENDING, Report::STATUS_REVIEWING, Report::STATUS_INVESTIGATING];
         $reports = [
@@ -478,6 +497,7 @@ class AdminOperationService
                 'rejected' => (int) ($claims['rejected'] ?? 0),
             ],
             'settlement' => $settlement,
+            'revenue' => $revenue,
             'reports' => $reports,
             'users' => $users,
         ];

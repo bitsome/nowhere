@@ -5,6 +5,7 @@ import { useMessage } from 'naive-ui';
 import { apiOrders, apiWithdrawClaim } from '../../api/orders';
 import { getApiErrorMessage } from '../../api/client';
 import { useBatchSettle } from '../../composables/useBatchSettle';
+import { useOrderShare } from '../../composables/useOrderShare';
 import OrderCard from '../../components/orders/OrderCard.vue';
 import OrderCardSkeleton from '../../components/orders/OrderCardSkeleton.vue';
 import SetGroupCard from '../../components/orders/SetGroupCard.vue';
@@ -14,6 +15,9 @@ import BaseIcon from '../../components/common/BaseIcon.vue';
 const router = useRouter();
 const route = useRoute();
 const message = useMessage();
+
+// 공유 — 등록자가 공개한 내 운행을 목록에서 바로 외부(카카오 오픈채팅·카페)에 뿌린다
+const { share } = useOrderShare();
 
 // 내가 등록하거나 가져온 운행 관리 — 탭은 상태 단계
 // 대시보드 등에서 ?tab=진행중 형태로 진입하면 해당 탭을 먼저 연다
@@ -596,6 +600,8 @@ onActivated(() => {
                 v-for="order in singleRows"
                 :key="order.key"
                 :order="order"
+                shareable
+                @share="share"
             />
         </div>
 
@@ -895,6 +901,8 @@ onActivated(() => {
     color: var(--danger);
     font-size: 10px;
     font-weight: 700;
+    /* 남은 초가 매초 바뀌어도 숫자 폭이 고정되도록 — 좌우 흔들림 방지 */
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
 

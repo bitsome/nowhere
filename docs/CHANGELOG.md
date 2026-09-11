@@ -20,6 +20,23 @@
 ### Changed
 - 레거시 Blade/`resources/js` 대시보드 모듈·관련 테스트 일괄 제거 (SPA 전환)
 - 로컬 우선 개발 워크플로우 전환(vite `/api` 프록시·SQLite), 문서 6종·일일 검토 아카이브 정비
+
+## 2026-09-10 — 수수료 정책 정비 · 수금·매출 가시화 (수익구조 1축)
+
+### Added
+- 정산 원장에 정산 시점 요율 스냅샷 컬럼(`settlements.fee_rate`) — 운영 중 요율을 바꿔도 확정된 정산 금액은 바뀌지 않는다
+- 등록자 개별 수수료율(`users.fee_rate`) + 관리자 지정/해제 API·UI — 업체별 계약 요율을 반영하고 변경은 감사 로그에 기록
+- 등록자 대금 수금 원장(`settlements.collection_status`·`collected_at`·`collected_by`·`collection_note`) — 수동 입금 확인 방식. 관리자 '수금 확인' 탭으로 입금 확정
+- 등록자 정산·입금 화면(`/registrant-settlement`) + 더보기 '정산·입금' 메뉴 — 입금 대기 합계·매입 계좌·정산 내역
+- 관리자 운영 지표에 '수수료 매출' 그룹 — 이번 달 수수료 매출·실효 요율·이번 달 거래액·누적 수수료
+
+### Changed
+- 플랫폼 수수료율을 코드 상수(`FEE_RATE`)에서 config로 승격 — `settlement.fee_rate`(기본 5%)·`settlement.min_fee`(기본 0 = 미적용)·`settlement.platform_account`(매입 계좌), 계산은 `SettlementService::feeRate()/calculateFee()` 한 곳에서 수행(수수료가 운행금액을 넘지 않도록 보정)
+- 정산 시 등록자 개별 요율이 있으면 우선 적용(`feeRateFor`)
+- 기사 출금을 수금 완료분으로 제한 — 등록자 입금 확인(`collection_status: paid`) 후에만 출금 가능
+- 정산 생성 시 등록자에게 '운행 대금 입금 안내'(입금 계좌 포함), 기사에게 '정산 완료'(입금 확인 후 출금) 알림
+- 기사 정산 화면에 적용 요율·"운행금액에서 차감 후 지급" 안내 노출
+
 ## Version
 - `0.1.0`
 - 날짜: `2026-08-01`

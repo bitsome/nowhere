@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\OrderOfferController;
 use App\Http\Controllers\Api\OrderTemplateController;
 use App\Http\Controllers\Api\PasswordResetController;
+use App\Http\Controllers\Api\PublicOrderController;
 use App\Http\Controllers\Api\PushSubscriptionController;
 use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\ReviewController;
@@ -64,6 +65,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/admin/users/{user}/verification', [VerificationController::class, 'update']);
     Route::get('/admin/users', [AdminController::class, 'users']);
     Route::patch('/admin/users/{user}/role', [AdminController::class, 'setUserRole']);
+    Route::patch('/admin/users/{user}/fee-rate', [AdminController::class, 'setUserFeeRate']);
     Route::get('/admin/drivers', [AdminController::class, 'drivers']);
     Route::patch('/admin/drivers/{user}/status', [AdminController::class, 'updateDriverStatus']);
     Route::get('/admin/auto-order-settings', [AdminController::class, 'autoOrderSettings']);
@@ -73,10 +75,12 @@ Route::middleware('auth:sanctum')->group(function () {
     // 운행별 적합 기사 자동 매칭 랭킹 (상위 N명)
     Route::get('/admin/orders/{order}/matching-drivers', [AdminController::class, 'matchingDrivers']);
 
-    // 정산·출금 — 관리자 출금 처리 (기사별 처리 대기 목록 / 지급 / 거절)
+    // 정산·수금·출금 — 관리자 출금 처리 + 등록자 대금 수금(입금 확인)
     Route::get('/admin/payouts', [SettlementController::class, 'adminPayouts']);
     Route::post('/admin/payouts/{payout}/pay', [SettlementController::class, 'pay']);
     Route::post('/admin/payouts/{payout}/reject', [SettlementController::class, 'reject']);
+    Route::get('/admin/settlements/pending-collection', [SettlementController::class, 'adminCollections']);
+    Route::post('/admin/settlements/{settlement}/collect', [SettlementController::class, 'collect']);
 
     // 신고/분쟁 — 사용자 접수(옵션 포함) + 관리자 목록·처리 단계 진행
     Route::get('/reports/options', [ReportController::class, 'meta']);
@@ -122,6 +126,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // 정산·출금 — 기사 정산 화면(요약/계좌/출금 신청·내역)
     Route::get('/me/settlement', [SettlementController::class, 'summary']);
+    Route::get('/me/payables', [SettlementController::class, 'payables']);
     Route::post('/me/bank-account', [SettlementController::class, 'saveAccount']);
     Route::post('/me/payouts', [SettlementController::class, 'requestPayout']);
     Route::get('/me/payouts', [SettlementController::class, 'myPayouts']);
@@ -157,11 +162,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/orders/{order}/favorite', [OrderController::class, 'favorite']);
     Route::post('/orders', [OrderController::class, 'store'])->middleware('can:create,App\Models\Order');
     Route::post('/orders/batch', [OrderController::class, 'batchStore'])->middleware('can:create,App\Models\Order');
+    Route::post('/orders/bulk', [OrderController::class, 'bulkStore'])->middleware('can:create,App\Models\Order');
     Route::post('/orders/batch-settle', [OrderController::class, 'batchSettle']);
     Route::post('/orders/batch-claim', [OrderController::class, 'batchClaim']);
     Route::post('/orders/claims/summary', [OrderController::class, 'claimSummary']);
     Route::post('/orders/structure', [OrderController::class, 'structure'])->middleware('can:create,App\Models\Order');
     Route::get('/orders/{order}', [OrderController::class, 'show']);
+    // 운행 공유 링크 발급 — 등록자만 (외부에 뿌릴 공개 주소)
+    Route::post('/orders/{order}/share', [OrderController::class, 'share'])->middleware('can:update,order');
     Route::patch('/orders/{order}', [OrderController::class, 'update'])->middleware('can:update,order');
     Route::post('/orders/{order}/claim', [OrderController::class, 'claim']);
     Route::post('/orders/{order}/claim/withdraw', [OrderController::class, 'withdrawClaim']);
@@ -209,3 +217,6 @@ Route::middleware('auth:sanctum')->group(function () {
 Route::get('/community/images/{filename}', [CommunityController::class, 'image']);
 Route::get('/chat/images/{filename}', [ChatController::class, 'image']);
 Route::get('/verification/images/{filename}', [VerificationController::class, 'image']);
+
+// 공유된 운행 공개 조회 — 로그인 없이 접근(토큰을 아는 사람만). 추측 대입을 막기 위해 호출량을 제한한다.
+Route::get('/public/orders/{token}', [PublicOrderController::class, 'show'])->middleware('throttle:60,1');

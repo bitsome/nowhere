@@ -10,11 +10,13 @@ import {
     apiAdminPayoutReject,
     apiAdminPayouts,
     apiAdminSetDriverStatus,
+    apiAdminSetUserFeeRate,
     apiAdminSetUserRole,
     apiAdminUpdateAutoOrderSettings,
     apiAdminUpdateVerification,
     apiAdminUsers,
 } from '../api/admin';
+import { apiAdminCollections, apiAdminCollectSettlement } from '../api/settlement';
 import { getApiErrorMessage } from '../api/client';
 import { useAuthStore } from '../stores/auth';
 import {
@@ -149,6 +151,59 @@ const submitRoleChange = async () => {
         message.error(getApiErrorMessage(e, '역할 변경에 실패했습니다.'));
     } finally {
         roleBusy.value = false;
+    }
+};
+
+// ── 등록자 개별 수수료율 — 업체와 개별 계약한 요율 지정/해제 ──
+// 서버는 요율을 0~1 비율로 다루고, 화면은 %로 입력받아 변환한다. 비우면 전역 기본 요율을 따른다.
+const feeRateOpen = ref(false);
+const feeRateTarget = ref(null);
+const feeRateValue = ref(null);
+const feeRateBusy = ref(false);
+
+// 지정된 개별 요율을 화면용 % 라벨로 (미지정이면 '기본')
+const feeRateLabel = (user) => (user.fee_rate !== null && user.fee_rate !== undefined
+    ? `${Number((user.fee_rate * 100).toFixed(2))}%`
+    : '기본');
+
+const openFeeRate = (user) => {
+    feeRateTarget.value = user;
+    feeRateValue.value = user.fee_rate !== null && user.fee_rate !== undefined
+        ? Number((user.fee_rate * 100).toFixed(2))
+        : null;
+    feeRateOpen.value = true;
+};
+
+const submitFeeRate = async () => {
+    const user = feeRateTarget.value;
+
+    if (!user) return;
+
+    const raw = feeRateValue.value;
+    const hasValue = raw !== null && raw !== '';
+
+    if (hasValue && (Number(raw) < 0 || Number(raw) > 100)) {
+        message.warning('수수료율은 0~100% 사이로 입력해 주세요.');
+
+        return;
+    }
+
+    feeRateBusy.value = true;
+
+    try {
+        const rate = hasValue ? Number((Number(raw) / 100).toFixed(4)) : null;
+        const { data } = await apiAdminSetUserFeeRate(user.id, rate);
+        user.fee_rate = data.data.fee_rate;
+        message.success(
+            data.data.fee_rate === null
+                ? '개별 수수료율을 해제했습니다. 기본 요율이 적용됩니다.'
+                : `수수료율을 ${raw}%로 지정했습니다.`,
+        );
+        feeRateOpen.value = false;
+    } catch (e) {
+        message.error(getApiErrorMessage(e, '수수료율 지정에 실패했습니다.'));
+    } finally {
+        feeRateBusy.value = false;
     }
 };
 
@@ -374,6 +429,46 @@ const rejectPayout = (payout) => {
     });
 };
 
+// ── 수금 확인 — 등록자 운행 대금 입금 확인 (수금 확정 → 기사 출금 재원) ──
+const collections = ref([]);
+const collectionsLoading = ref(false);
+const collectionBusy = ref(null);
+
+const loadCollections = async () => {
+    collectionsLoading.value = true;
+
+    try {
+        const { data } = await apiAdminCollections();
+        collections.value = data.data ?? [];
+    } catch (e) {
+        message.error(getApiErrorMessage(e, '입금 확인 목록을 불러오지 못했습니다.'));
+    } finally {
+        collectionsLoading.value = false;
+    }
+};
+
+const collectSettlement = (settlement) => {
+    dialog.warning({
+        title: '입금 확인',
+        content: `${settlement.registrant?.company_name || settlement.registrant?.name || '등록자'}님의 운행 대금 ${Number(settlement.gross_amount).toLocaleString('ko-KR')}원 입금을 확인 처리할까요?\n확인하면 기사가 출금 신청할 수 있습니다.`,
+        positiveText: '입금 확인',
+        negativeText: '취소',
+        onPositiveClick: async () => {
+            collectionBusy.value = settlement.id;
+
+            try {
+                await apiAdminCollectSettlement(settlement.id);
+                message.success('입금 확인 처리가 완료되었습니다.');
+                await loadCollections();
+            } catch (e) {
+                message.error(getApiErrorMessage(e, '입금 확인 처리에 실패했습니다.'));
+            } finally {
+                collectionBusy.value = null;
+            }
+        },
+    });
+};
+
 // ── 신고/분쟁 처리 — '접수 대기(즉시 처리)'를 기본 필터로, 단계 진행은 모달에서 메모와 함께 ──
 const reports = ref([]);
 const reportsMeta = ref({ total: 0 });
@@ -500,6 +595,8 @@ const onTabChange = (name) => {
         loadAutoOrders();
     } else if (name === 'payouts') {
         loadPayouts();
+    } else if (name === 'collections') {
+        loadCollections();
     } else if (name === 'reports') {
         loadReportStatuses();
         loadReports();
@@ -653,14 +750,27 @@ const loadMetrics = async () => {
 
 // 지표 카드 단위 — { key, label, tone(민트/옐로우/레드/회색), value, sub }
 const formatWon = (v) => `${Number(v ?? 0).toLocaleString('ko-KR')}원`;
+
+// 수수료율 표시 — 5%, 7.5%처럼 정수면 소수점을 붙이지 않는다
+const ratePercent = (rate) => {
+    const pct = Number(rate ?? 0) * 100;
+
+    return `${Number.isInteger(pct) ? pct : pct.toFixed(1)}%`;
+};
+
 const metricCards = computed(() => {
     const m = metrics.value;
 
     if (!m) {
-        return { red: [], yellow: [], green: [], neutral: [] };
+        return { revenue: [], red: [], yellow: [], green: [], neutral: [] };
     }
 
     return {
+        revenue: [
+            { key: 'revenue_month_fee', label: '이번 달 수수료 매출', value: formatWon(m.revenue?.month_fee ?? 0), tone: 'brand', sub: `실효 요율 ${ratePercent(m.revenue?.effective_rate)} · 정산 ${m.revenue?.month_count ?? 0}건` },
+            { key: 'revenue_month_gross', label: '이번 달 거래액', value: formatWon(m.revenue?.month_gross ?? 0), tone: 'neutral', sub: `기사 지급 ${formatWon(m.revenue?.month_net ?? 0)}` },
+            { key: 'revenue_total_fee', label: '누적 수수료', value: formatWon(m.revenue?.total_fee ?? 0), tone: 'neutral', sub: `기본 요율 ${ratePercent(m.revenue?.fee_rate)}` },
+        ],
         red: [
             { key: 'reports_pending', label: '처리 중 신고', value: m.reports?.pending ?? 0, tone: 'red', sub: '접수·조사 단계' },
             { key: 'users_restricted', label: '제한·정지 계정', value: m.users?.restricted ?? 0, tone: 'red', sub: '기사·등록자' },
@@ -1220,6 +1330,19 @@ onBeforeUnmount(() => {
                 <div v-else-if="metrics" class="metrics-grid">
                     <section class="metrics-group">
                         <h3 class="metrics-group__title">
+                            <span class="metrics-dot metrics-dot--brand" /> 수수료 매출
+                        </h3>
+                        <div class="metrics-cards">
+                            <div v-for="card in metricCards.revenue" :key="card.key" class="metric-card">
+                                <span class="metric-card__label">{{ card.label }}</span>
+                                <strong class="metric-card__value" :class="`metric-card__value--${card.tone}`">{{ card.value }}</strong>
+                                <span class="metric-card__sub">{{ card.sub }}</span>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="metrics-group">
+                        <h3 class="metrics-group__title">
                             <span class="metrics-dot metrics-dot--red" /> 즉시 처리
                         </h3>
                         <div class="metrics-cards">
@@ -1378,6 +1501,12 @@ onBeforeUnmount(() => {
                                 <div v-if="canSanction(user)" class="admin-user__verify-row">
                                     <button type="button" class="op-btn op-btn--ghost" @click="openSanction(user)">
                                         {{ user.moderation_status && user.moderation_status !== 'active' ? '제재 변경' : '제재' }}
+                                    </button>
+                                </div>
+                                <!-- 등록자(업체) — 개별 계약 수수료율 지정 (기본 요율 대신 적용) -->
+                                <div v-if="user.role === ROLE_CUSTOMER" class="admin-user__verify-row">
+                                    <button type="button" class="op-btn op-btn--ghost" @click="openFeeRate(user)">
+                                        수수료율 {{ feeRateLabel(user) }}
                                     </button>
                                 </div>
                                 <div v-if="user.role !== ROLE_SUPER_ADMIN" class="admin-user__verify-row">
@@ -1601,6 +1730,47 @@ onBeforeUnmount(() => {
                                 @click="deleteAutoOrder(order.id)"
                             >
                                 <BaseIcon name="trash" :size="15" />
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </n-tab-pane>
+
+            <!-- 수금 확인 — 등록자 운행 대금 입금 확인 (수금 확정 → 기사 출금 재원) -->
+            <n-tab-pane name="collections" tab="수금 확인">
+                <p class="admin-page-hint">등록자가 입금한 운행 대금을 확인합니다. 확인하면 해당 정산이 기사 출금 재원이 됩니다.</p>
+
+                <div v-if="collectionsLoading" class="admin-skeleton">
+                    <div v-for="n in 3" :key="n" class="sk-card admin-skeleton__row" />
+                </div>
+
+                <EmptyState
+                    v-else-if="collections.length === 0"
+                    icon="cash"
+                    title="입금 확인 대기가 없습니다"
+                    hint="정산 후 등록자가 입금할 금액이 생기면 이 목록에 표시됩니다"
+                />
+
+                <div v-else class="payout-list">
+                    <div v-for="settlement in collections" :key="settlement.id" class="payout-card">
+                        <div class="payout-card__head">
+                            <strong class="payout-card__driver">{{ settlement.registrant?.company_name || settlement.registrant?.name || '등록자' }}</strong>
+                            <span class="payout-card__amount">{{ Number(settlement.gross_amount).toLocaleString('ko-KR') }}원</span>
+                        </div>
+                        <p class="payout-card__account">{{ settlement.route || '운행' }} · {{ settlement.service_date }} {{ settlement.service_time || '' }}</p>
+                        <p class="payout-card__meta">
+                            수수료 {{ Number(settlement.fee_amount).toLocaleString('ko-KR') }}원
+                            · 기사 지급 예정 {{ Number(settlement.net_amount).toLocaleString('ko-KR') }}원
+                            · 정산 {{ new Date(settlement.created_at_iso).toLocaleString('ko-KR') }}
+                        </p>
+                        <div class="payout-card__actions">
+                            <button
+                                type="button"
+                                class="admin-payout-btn admin-payout-btn--ok"
+                                :disabled="collectionBusy === settlement.id"
+                                @click="collectSettlement(settlement)"
+                            >
+                                입금 확인
                             </button>
                         </div>
                     </div>
@@ -2246,6 +2416,36 @@ onBeforeUnmount(() => {
                     <div class="admin-modal-actions">
                         <n-button @click="roleChangeOpen = false">취소</n-button>
                         <n-button type="primary" :loading="roleBusy" @click="submitRoleChange">변경</n-button>
+                    </div>
+                </template>
+            </n-modal>
+
+            <!-- 등록자 수수료율 모달 — 업체와 개별 계약한 요율 지정/해제 -->
+            <n-modal
+                v-model:show="feeRateOpen"
+                preset="card"
+                title="등록자 수수료율"
+                :style="{ maxWidth: '400px' }"
+            >
+                <p class="admin-page-hint">
+                    {{ feeRateTarget?.company_name || feeRateTarget?.name }}님의 정산 수수료율을 지정합니다.
+                    비워 두면 전역 기본 요율이 적용됩니다. 실제 적용된 요율은 정산 원장에 기록됩니다.
+                </p>
+                <n-input-number
+                    v-model:value="feeRateValue"
+                    :min="0"
+                    :max="100"
+                    :step="0.5"
+                    clearable
+                    placeholder="예: 3.5"
+                    style="width: 100%"
+                >
+                    <template #suffix>%</template>
+                </n-input-number>
+                <template #footer>
+                    <div class="admin-modal-actions">
+                        <n-button @click="feeRateOpen = false">취소</n-button>
+                        <n-button type="primary" :loading="feeRateBusy" @click="submitFeeRate">저장</n-button>
                     </div>
                 </template>
             </n-modal>
@@ -3701,6 +3901,9 @@ html.dark .auto-card :deep(.n-switch__unchecked) {
 .metrics-dot--neutral {
     background: color-mix(in srgb, var(--text-muted) 60%, transparent);
 }
+.metrics-dot--brand {
+    background: var(--brand);
+}
 
 .metrics-cards {
     display: grid;
@@ -3737,6 +3940,9 @@ html.dark .auto-card :deep(.n-switch__unchecked) {
 }
 .metric-card__value--green {
     color: var(--status-completed);
+}
+.metric-card__value--brand {
+    color: var(--brand);
 }
 
 /* 앰버 값 텍스트 — 다크 배경에서는 밝게 보정(라이트 대비 #b07f00 유지) */

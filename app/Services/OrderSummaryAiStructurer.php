@@ -8,12 +8,39 @@ use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 
 class OrderSummaryAiStructurer
 {
     public function structure(string $summary): array
+    {
+        return $this->assembleStructured($this->decode($summary), $summary);
+    }
+
+    /**
+     * 요약을 해석한다 — AI를 먼저 쓰고, AI에 닿지 않으면 규칙·사전 파서로 대체한다.
+     *
+     * @return array<string, mixed> AI 응답과 같은 모양의 배열 (해석 경로는 'parsed_by' 로 표시)
+     */
+    private function decode(string $summary): array
+    {
+        try {
+            return $this->decodeWithAi($summary);
+        } catch (HttpException|RuntimeException $exception) {
+            // 중국 본토 서버에서는 OpenAI가 차단되어 있다. AI가 닿지 않는다고 운행 등록 자체가
+            // 막히면 안 되므로 규칙 파서로 대체하고, 화면에서 사람이 확인하도록 경로를 함께 내려준다.
+            Log::warning('AI 구조화 실패 — 로컬 규칙 파서로 대체합니다.', ['reason' => $exception->getMessage()]);
+
+            return $this->decodeLocally($summary);
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodeWithAi(string $summary): array
     {
         $apiKey = (string) (config('services.ai_order_structurer.api_key') ?: config('services.order_ai.api_key'));
         $baseUrl = rtrim((string) (config('services.ai_order_structurer.base_url') ?: config('services.order_ai.base_url')), '/');
@@ -76,11 +103,260 @@ class OrderSummaryAiStructurer
             throw new RuntimeException('AI 구조화 응답을 해석할 수 없습니다.');
         }
 
+        $decoded['parsed_by'] = 'ai';
+
+        return $decoded;
+    }
+
+    /**
+     * AI 없이 규칙·사전만으로 요약을 해석한다 (로컬 파서).
+     *
+     * 위챗 단체방 문구처럼 형식이 정형화된 입력을 대상으로 한다. 정확도는 AI보다 낮으므로
+     * 결과는 항상 화면에서 사람이 확인·수정하는 것을 전제로 한다. 값을 정규화하지 않고 원문 그대로
+     * 넘겨, 기존 정규화 파이프라인(assembleStructured·normalizeLineItems)이 그대로 처리하게 한다.
+     *
+     * @return array<string, mixed>
+     */
+    private function decodeLocally(string $summary): array
+    {
+        $text = trim($summary);
+
+        $globalServiceType = $this->detectLocalServiceType($text);
+        $globalDate = $this->detectLocalDate($text);
+        $lineItems = [];
+
+        foreach ($this->splitLocalSegments($text) as $segment) {
+            $item = $this->parseLocalSegment($segment);
+
+            if ($item === null) {
+                continue;
+            }
+
+            // 한 줄에 여러 운행이 붙어 있으면 두 번째부터 서비스 구분이 생략된다 — 문구 전체 값으로 채운다
+            if ($item['service_type'] === '') {
+                $item['service_type'] = $globalServiceType;
+            }
+
+            // 날짜는 문구 전체에 한 번만 나오므로 일정에도 함께 채워 준다
+            $item['service_date'] = $globalDate;
+
+            $lineItems[] = $item;
+        }
+
+        $first = $lineItems[0] ?? [];
+
+        return [
+            'parsed_by' => 'local',
+            // 라벨은 목록에 한 줄로 보이는 값이라 원문 전체(최대 2000자)를 그대로 넣지 않는다
+            'request_label' => mb_substr($text, 0, 120),
+            'service_date' => $globalDate,
+            'service_time' => $first['scheduled_time'] ?? '',
+            'scheduled_time' => $first['scheduled_time'] ?? '',
+            'vehicle_type' => $this->detectLocalVehicle($text),
+            'service_type' => $first['service_type'] ?? '',
+            'passenger_count' => $first['passenger_count'] ?? null,
+            'luggage_count' => $first['luggage_count'] ?? null,
+            'pickup_location' => $first['pickup_location'] ?? '',
+            'dropoff_location' => $first['dropoff_location'] ?? '',
+            'amount_text' => $this->detectLocalAmount($text),
+            'amount_value' => $this->detectLocalAmount($text),
+            'group_type' => count($lineItems) > 1 ? '셋트' : '',
+            'order_type' => '',
+            'flight_number' => '',
+            'line_items' => $lineItems,
+        ];
+    }
+
+    /**
+     * 문구를 운행 단위 구간으로 나눈다.
+     *
+     * 줄바꿈을 먼저 기준으로 삼고, 한 줄에 시간 표기가 여러 번 나오면 그 앞에서 자른다.
+     * (예: "3号 卡起 03:00 送机 마포구 1人 07:00 送机 명동 4人" → 2건)
+     *
+     * @return array<int, string>
+     */
+    private function splitLocalSegments(string $text): array
+    {
+        if ($text === '') {
+            return [];
+        }
+
+        $segments = [];
+
+        foreach (preg_split('/[\r\n]+/u', $text) ?: [$text] as $line) {
+            // 시간 표기 앞에서 자른다. 문구 맨 앞은 자르지 않고, 숫자 중간에서도 자르지 않는다
+            // (없으면 "14:00" 이 "1" + "4:00" 으로 쪼개진다).
+            $chunks = preg_split('/(?<!^)(?<!\d)(?=\d{1,2}\s*[:.]\s*\d{2})/u', trim($line)) ?: [trim($line)];
+
+            foreach ($chunks as $chunk) {
+                $chunk = trim($chunk, " \t,，、/·|");
+
+                if ($chunk !== '') {
+                    $segments[] = $chunk;
+                }
+            }
+        }
+
+        return $segments === [] ? [$text] : $segments;
+    }
+
+    /**
+     * 한 구간에서 필드를 뽑아낸다 — 정규화는 뒤 단계가 담당하므로 원문 값을 그대로 돌려준다.
+     *
+     * @return array<string, mixed>|null 뽑아낼 값이 하나도 없으면 null (차량·날짜만 있는 머리 구간 등)
+     */
+    private function parseLocalSegment(string $segment): ?array
+    {
+        $serviceType = $this->detectLocalServiceType($segment);
+        $time = $this->detectLocalTime($segment);
+        $passenger = preg_match('/(\d+)\s*[人名位]/u', $segment, $matches) === 1 ? (int) $matches[1] : null;
+        $luggage = preg_match('/(\d+)\s*(?:行李|件|짐|厢)/u', $segment, $matches) === 1 ? (int) $matches[1] : null;
+
+        [$pickup, $dropoff] = $this->detectLocalRoute($segment);
+
+        if ($serviceType === '' && $time === '' && $passenger === null && $luggage === null && $pickup === '' && $dropoff === '') {
+            return null;
+        }
+
+        return [
+            'service_type' => $serviceType,
+            'scheduled_time' => $time,
+            'service_time' => $time,
+            'pickup_location' => $pickup,
+            'dropoff_location' => $dropoff,
+            'passenger_count' => $passenger,
+            'luggage_count' => $luggage,
+            // 금액도 구간마다 다르다 — 여러 건을 나눠 등록할 때 각 운행 금액으로 쓰인다
+            'amount_text' => $this->detectLocalAmount($segment),
+        ];
+    }
+
+    /**
+     * 서비스 구분 — 送机(샌딩)·接机(픽업)·收送机(혼합). 정규화는 normalizeServiceType 이 담당한다.
+     */
+    private function detectLocalServiceType(string $text): string
+    {
+        return match (true) {
+            str_contains($text, '收送机') => '收送机',
+            str_contains($text, '送机') => '送机',
+            str_contains($text, '接机') => '接机',
+            str_contains($text, '혼합') => '혼합',
+            str_contains($text, '샌딩') => '샌딩',
+            str_contains($text, '픽업') => '픽업',
+            default => '',
+        };
+    }
+
+    /**
+     * 시간 — 위챗 문구는 "3.30" 처럼 점을 시간 구분자로 쓴다(3시 30분).
+     */
+    private function detectLocalTime(string $text): string
+    {
+        if (preg_match('/(?<!\d)(\d{1,2})\s*[:.时]\s*(\d{2})(?!\d)/u', $text, $matches) === 1) {
+            return sprintf('%02d:%02d', (int) $matches[1], (int) $matches[2]);
+        }
+
+        if (preg_match('/(?<!\d)(\d{1,2})\s*点/u', $text, $matches) === 1) {
+            return sprintf('%02d:00', (int) $matches[1]);
+        }
+
+        return '';
+    }
+
+    /**
+     * 노선 — "명동—인천" 같은 노선 표기를 우선 보고, 없으면 서비스 키워드 뒤 지명을 쓴다.
+     * 送机 뒤 지명은 출발지(도착지는 기존 규칙이 인천으로 채운다), 接机 뒤 지명은 도착지다.
+     *
+     * @return array{0: string, 1: string} [출발지, 도착지] (원문)
+     */
+    private function detectLocalRoute(string $segment): array
+    {
+        if (preg_match('/([^\s,，、\-—–到至→>]+)\s*(?:—|–|-|到|至|→|>)\s*([^\s,，、]+)/u', $segment, $matches) === 1) {
+            return [$matches[1], $matches[2]];
+        }
+
+        if (preg_match('/(?:收送机|送机|接机)\s*([^\s,，、\d]+)/u', $segment, $matches) === 1) {
+            $place = $matches[1];
+
+            if (str_contains($place, '机')) {
+                return ['', ''];
+            }
+
+            // 接机(공항 픽업)은 공항에서 출발해 지명으로 간다 — 출발지는 공항으로 본다
+            return $this->normalizeServiceType($segment) === '픽업'
+                ? ['仁川', $place]
+                : [$place, ''];
+        }
+
+        return ['', ''];
+    }
+
+    /**
+     * 날짜 — "8月2号"·"8.2号" 처럼 일 표기가 붙으면 날짜, "2号"만 있으면 이번 달로 본다.
+     * 점만 있는 "3.30"은 시간 표기이므로 날짜로 읽지 않는다(detectLocalTime 이 담당).
+     */
+    private function detectLocalDate(string $text): string
+    {
+        if (preg_match('/(\d{1,2})\s*(?:月|[.\/])\s*(\d{1,2})\s*[号日]/u', $text, $matches) === 1) {
+            return (int) $matches[1].'월'.(int) $matches[2].'일';
+        }
+
+        if (preg_match('/(?<!\d)(\d{1,2})\s*[号日]/u', $text, $matches) === 1) {
+            return now()->month.'월'.(int) $matches[1].'일';
+        }
+
+        if (str_contains($text, '明天') || str_contains($text, '내일')) {
+            return now()->addDay()->month.'월'.now()->addDay()->day.'일';
+        }
+
+        if (str_contains($text, '今天') || str_contains($text, '오늘')) {
+            return now()->month.'월'.now()->day.'일';
+        }
+
+        return '';
+    }
+
+    /**
+     * 차량 — 문구에 나온 차량 표현을 그대로 돌려준다. 한국어 차종 변환은 normalizeVehicleType 이 담당한다.
+     */
+    private function detectLocalVehicle(string $text): string
+    {
+        foreach (['新卡起', '全部新卡', '需要333', '新卡', '卡起', '利亚7', '利亚', '小车🉑', '小车', '333', '222', '카니발', '스타리아'] as $needle) {
+            if (str_contains($text, $needle)) {
+                return $needle;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * 금액 — "9万"·"9块"·"9🥬" 등 만 단위 표기를 숫자로 환산할 수 있게 접미사를 붙여 돌려준다.
+     */
+    private function detectLocalAmount(string $text): string
+    {
+        if (preg_match('/(?<!\d)(\d+(?:\.\d+)?)\s*(?:万|萬|塊|块|w|W|🥬|🌾|만|만원)/u', $text, $matches) === 1) {
+            return rtrim(rtrim($matches[1], '0'), '.').'万';
+        }
+
+        return '';
+    }
+
+    /**
+     * 해석된 원시 배열(AI 응답 또는 로컬 파서 결과)을 화면·저장용 형태로 정규화한다.
+     *
+     * @param  array<string, mixed>  $decoded
+     * @return array<string, mixed>
+     */
+    private function assembleStructured(array $decoded, string $summary): array
+    {
         $requestLabel = $this->normalizeRequestLabel((string) data_get($decoded, 'request_label', ''));
         $serviceDate = $this->normalizeServiceDateValue((string) data_get($decoded, 'service_date', ''));
         $normalizedLineItems = $this->normalizeLineItems(data_get($decoded, 'line_items', []));
 
-        if ($serviceDate === '') {
+        // 로컬 파서는 날짜를 문구에서 직접 판정했으므로 라벨에서 다시 읽지 않는다.
+        // ("3.30送机"의 3.30은 시각(03:30)인데, 라벨 폴백이 이를 3월 30일로 잘못 채운다)
+        if ($serviceDate === '' && data_get($decoded, 'parsed_by') !== 'local') {
             $serviceDate = $this->extractServiceDate($requestLabel);
         }
 
@@ -103,6 +379,8 @@ class OrderSummaryAiStructurer
 
         $normalized = [
             'request_label' => $requestLabel,
+            // 'ai' = AI 해석, 'local' = AI에 닿지 않아 규칙 파서로 대체 — 화면에서 확인을 안내한다
+            'parsed_by' => (string) data_get($decoded, 'parsed_by', 'ai'),
             'service_date' => $serviceDate,
             'service_month' => $this->extractServiceMonth($serviceDate),
             'service_day' => $this->extractServiceDay($serviceDate),
@@ -404,6 +682,16 @@ PROMPT;
                 default => $lineDropoff,
             };
 
+            $lineAmountText = (string) data_get($lineItem, 'amount_text', '');
+            $lineAmountValue = $this->normalizeAmountValue(
+                data_get($lineItem, 'amount_value') ?? $lineAmountText,
+            );
+
+            // 금액이 숫자로 해석됐으면 표시용 텍스트도 함께 채운다 (구간에 원문 금액만 있던 경우)
+            if ($lineAmountText === '' && $lineAmountValue !== null) {
+                $lineAmountText = (string) $lineAmountValue;
+            }
+
             $normalizedItems[] = [
                 'scheduled_time' => $scheduledTime,
                 'service_date' => $currentServiceDate,
@@ -417,6 +705,11 @@ PROMPT;
                 'location' => $combinedLocation,
                 'passenger_count' => $this->normalizePassengerCount($linePassengerRaw),
                 'luggage_count' => $this->normalizeLuggageCount($lineLuggageRaw),
+                // 구간별 차량·금액·항공편 — 구간을 각각 별도 운행으로 등록할 때 그대로 쓰인다
+                'vehicle_type' => $this->normalizeVehicleType((string) data_get($lineItem, 'vehicle_type', '')),
+                'flight_number' => strtoupper(trim((string) data_get($lineItem, 'flight_number', ''))),
+                'amount_text' => $this->normalizeAmountText($lineAmountText),
+                'amount_value' => $lineAmountValue,
             ];
         }
 
@@ -572,9 +865,11 @@ PROMPT;
             $normalized === '카니발' => '카니발',
             $contains('利亚7') && $contains('333') => '스타리아 7인승 또는 9인승(3-3-3)',
             $contains('新卡') && $contains('利亚') => '더뉴카니발 4세대 또는 스타리아',
+            // 위 조합 규칙을 모두 지난 뒤의 단독 표기 — "新卡"만 있으면 더뉴카니발로 본다
+            $contains('新卡') => '더뉴카니발 4세대',
             $normalized === '利亚7' => '스타리아 7인승',
             $normalized === '利亚' => '스타리아',
-            $normalized === '小车🉑' => '소형 승용차(세단/SUV)',
+            $normalized === '小车🉑', $contains('小车') => '소형 승용차(세단/SUV)',
             default => $normalized,
         };
     }

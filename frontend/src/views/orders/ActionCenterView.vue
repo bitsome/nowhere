@@ -294,7 +294,7 @@ onActivated(() => {
                     class="actions-card"
                     :class="{ 'actions-card--open': expandedClaimId === claim.claim_id }"
                 >
-                    <button type="button" class="actions-card__head" @click="toggleClaim(claim)">
+                    <button type="button" class="actions-card__head" :aria-expanded="expandedClaimId === claim.claim_id" @click="toggleClaim(claim)">
                         <div class="actions-card__route">
                             <strong>{{ claim.route }}</strong>
                             <span class="actions-card__meta">{{ formatWhen(claim) }}</span>
@@ -384,7 +384,7 @@ onActivated(() => {
                     class="actions-card"
                     :class="{ 'actions-card--open': expandedOfferOrderId === order.id }"
                 >
-                    <button type="button" class="actions-card__head" @click="toggleOfferOrder(order)">
+                    <button type="button" class="actions-card__head" :aria-expanded="expandedOfferOrderId === order.id" @click="toggleOfferOrder(order)">
                         <div class="actions-card__route">
                             <strong>{{ order.route }}</strong>
                             <span class="actions-card__meta">
@@ -424,7 +424,7 @@ onActivated(() => {
                                     <div class="offer-item__driver">
                                         <span class="offer-item__name">{{ offer.driver?.name || '기사' }}</span>
                                         <span v-if="offer.driver?.rating" class="offer-item__rating">
-                                            ★ {{ offer.driver.rating }} ({{ offer.driver.review_count }})
+                                            ★ {{ offer.driver.rating }} ({{ offer.driver.review_count }}리뷰)
                                         </span>
                                         <button
                                             v-if="offer.driver?.id"

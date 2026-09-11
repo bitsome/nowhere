@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useUiStore } from '../stores/ui';
 import { apiDriverStats } from '../api/driver';
-import { roleLabel } from '../data/roles';
+import { roleLabel, ROLE_CUSTOMER } from '../data/roles';
 import UiCard from '../components/ui/UiCard.vue';
 import UiSection from '../components/ui/UiSection.vue';
 import UiListRow from '../components/ui/UiListRow.vue';
@@ -25,6 +25,7 @@ const level = computed(() => auth.user?.level ?? null);
 
 // 기사 전용 — 오늘 통계·차량 정보는 드라이버에게만 노출
 const isDriver = computed(() => auth.user?.role === 'Driver');
+const isCustomer = computed(() => auth.user?.role === ROLE_CUSTOMER);
 
 // 오늘 통계 — 기사 통계 API (진행중/완료/수익)
 const todayStats = ref(null);
@@ -117,6 +118,7 @@ const logout = async () => {
                 <UiListRow tag="button" icon="history" arrow @click="go('history')">운행 기록</UiListRow>
                 <UiListRow tag="button" icon="heart" arrow @click="go('order-favorites')">찜한 운행</UiListRow>
                 <UiListRow v-if="isDriver" tag="button" icon="coin" arrow @click="go('settlement')">정산</UiListRow>
+                <UiListRow v-if="isCustomer" tag="button" icon="cash" arrow @click="go('registrant-settlement')">정산·입금</UiListRow>
                 <UiListRow tag="button" icon="my-market" arrow @click="go('my-market')">내 마켓</UiListRow>
                 <UiListRow tag="button" icon="cash" arrow @click="go('actions')">처리할 일</UiListRow>
             </UiCard>

@@ -21,3 +21,7 @@ export const ROLE_LABELS = {
 
 // 역할 라벨 조회 — 알 수 없는 값은 원문 그대로 반환
 export const roleLabel = (role) => ROLE_LABELS[role] ?? role ?? '-';
+
+// 가입 화면의 초기 역할 — 가입 가능한 역할(기사/등록자)만 허용하고 그 외에는 기사로 본다.
+// 랜딩의 등록자 CTA(?role=Customer)로 들어온 사람이 기사로 잘못 가입하는 것을 막는다.
+export const signupRoleFromQuery = (value) => (value === ROLE_CUSTOMER ? ROLE_CUSTOMER : ROLE_DRIVER);

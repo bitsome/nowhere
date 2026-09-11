@@ -68,6 +68,25 @@ class OrderController extends Controller
     }
 
     /**
+     * 운행 공유 링크를 발급한다 — 등록자가 카카오 오픈채팅·카페 등 외부에 뿌릴 수 있는 공개 주소.
+     * 아직 토큰이 없으면 이 시점에 발급한다.
+     *
+     * @return JsonResponse{data: array{token: string, path: string}}
+     */
+    public function share(Order $order): JsonResponse
+    {
+        $token = $order->ensureShareToken();
+
+        return response()->json([
+            'data' => [
+                'token' => $token,
+                // 프론트가 현재 접속 도메인(origin)과 합쳐 완성된 공유 주소를 만든다
+                'path' => '/s/order/'.$token,
+            ],
+        ]);
+    }
+
+    /**
      * 왕복 노선 추천 — 내가 맡은 운행의 하차지 근처에서 시작하는 마켓 운행.
      *
      * @return JsonResponse{data: array<int, array<string, mixed>>}
@@ -469,10 +488,11 @@ class OrderController extends Controller
      *
      * @return JsonResponse{data: array<string, mixed>}
      */
-    public function batchStore(Request $request, OrderCreator $creator): JsonResponse
+    public function batchStore(Request $request, OrderCreator $creator, OrderTransitionService $transitionService): JsonResponse
     {
         $data = $request->validate([
             'group_name' => ['required', 'string', 'max:100'],
+            'publish' => ['nullable', 'boolean'],
             'orders' => ['required', 'array', 'min:2', 'max:30'],
             'orders.*.service_date' => ['nullable', 'string', 'max:20'],
             'orders.*.service_time' => ['nullable', 'string', 'max:10'],
@@ -495,17 +515,83 @@ class OrderController extends Controller
 
         $group = $creator->createBatch($data, $request->user()->id);
 
+        $published = 0;
+        $draftIds = [];
+
+        if ($request->boolean('publish')) {
+            foreach ($group->orders()->get() as $order) {
+                // 묶음 등록도 공개 요건은 같다 — 미달 건은 초안으로 남겨 빈 운행이 마켓에 뜨지 않게 한다
+                if ($order->publishRequirementError() !== null) {
+                    $draftIds[] = $order->id;
+
+                    continue;
+                }
+
+                $transitionService->transition($request->user(), $order, Order::STATUS_PUBLISHED);
+                $published++;
+            }
+        }
+
         return response()->json([
             'data' => [
                 'group_id' => $group->id,
                 'group_name' => $group->name,
                 'order_count' => $group->orders()->count(),
+                'published' => $published,
+                'draft_ids' => $draftIds,
             ],
         ], 201);
     }
 
     /**
-     * 운행 정보를 수정한다.
+     * 여러 운행을 한 번에 등록한다 — 붙여넣은 문구를 N건으로 나눠 등록하는 경로.
+     *
+     * 각 운행은 셋트로 묶이지 않는 독립 운행이 된다. 공개를 요청해도 필수 정보가 덜 찬
+     * 운행은 초안으로 남겨, 빈 운행이 마켓에 노출되지 않게 한다.
+     *
+     * @return JsonResponse{data: array<string, mixed>}
+     */
+    public function bulkStore(Request $request, OrderCreator $creator, OrderTransitionService $transitionService): JsonResponse
+    {
+        $data = $request->validate([
+            'orders' => ['required', 'array', 'min:1', 'max:30'],
+            'publish' => ['nullable', 'boolean'],
+            ...$this->orderPayloadRules('orders.*.'),
+        ]);
+
+        $orders = $creator->createMany($data['orders'], $request->user()->id);
+
+        // 레벨링: 운행 등록 +10 XP (건별)
+        $request->user()->addXp(10 * count($orders), 'order_created', '운행 등록');
+
+        $published = 0;
+        $draftIds = [];
+
+        if ($request->boolean('publish')) {
+            foreach ($orders as $order) {
+                // 필수 정보가 덜 찬 운행은 공개하지 않는다 — 마켓 공개 요건은 단일 등록과 같은 기준
+                if ($order->publishRequirementError() !== null) {
+                    $draftIds[] = $order->id;
+
+                    continue;
+                }
+
+                $transitionService->transition($request->user(), $order, Order::STATUS_PUBLISHED);
+                $published++;
+            }
+        }
+
+        return response()->json([
+            'data' => [
+                'order_ids' => array_map(static fn (Order $order): int => $order->id, $orders),
+                'published' => $published,
+                'draft_ids' => $draftIds,
+            ],
+        ], 201);
+    }
+
+    /**
+     * 운행을 수정한다.
      *
      * @return JsonResponse{data: array<string, mixed>}
      */
@@ -628,7 +714,18 @@ class OrderController extends Controller
      */
     private function validateOrderPayload(Request $request): array
     {
-        return $request->validate([
+        return $request->validate($this->orderPayloadRules());
+    }
+
+    /**
+     * 운행 페이로드 검증 규칙 — 단일 등록과 N건 일괄 등록이 같은 규칙을 공유한다.
+     *
+     * @param  string  $prefix  일괄 등록에서 배열 항목에 적용할 접두사 (예: 'orders.*.')
+     * @return array<string, array<int, string>>
+     */
+    private function orderPayloadRules(string $prefix = ''): array
+    {
+        $rules = [
             'customer_name' => ['nullable', 'string', 'max:100'],
             'customer_phone' => ['nullable', 'string', 'max:40'],
             'vehicle_type' => ['nullable', 'string', 'max:50'],
@@ -655,6 +752,18 @@ class OrderController extends Controller
             'line_items.*.flight_number' => ['nullable', 'string'],
             'line_items.*.passenger_count' => ['nullable', 'integer'],
             'line_items.*.luggage_count' => ['nullable', 'integer'],
-        ]);
+        ];
+
+        if ($prefix === '') {
+            return $rules;
+        }
+
+        $prefixed = [];
+
+        foreach ($rules as $field => $fieldRules) {
+            $prefixed[$prefix.$field] = $fieldRules;
+        }
+
+        return $prefixed;
     }
 }

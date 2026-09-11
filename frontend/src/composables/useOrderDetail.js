@@ -175,13 +175,22 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         return o.original_owner_id === auth.user.id || (o.original_owner_id == null && o.user_id === auth.user.id);
     });
 
-    // 내가 수행자(가져온 운행 진행자)인지 — 완료되면 '정산 대기중'으로 대기
+    // 내가 수행자(가져온 운행 진행자)인지 — 완료되면 '정산 대기중'으로 대기.
+    // 직접 수행(등록자가 본인이 수행)도 같은 수행자로 본다 — 하단 스테퍼로 운행을 진행해야 하기 때문이다.
+    const isSelfDriving = computed(() =>
+        Boolean(
+            order.value && auth.user
+            && order.value.user_id === auth.user.id
+            && order.value.original_owner_id === auth.user.id,
+        ),
+    );
+
     const isPerformer = computed(() =>
         Boolean(
             order.value && auth.user
             && order.value.user_id === auth.user.id
-            && order.value.original_owner_id !== null
-            && order.value.original_owner_id !== auth.user.id,
+            && (isSelfDriving.value
+                || (order.value.original_owner_id !== null && order.value.original_owner_id !== auth.user.id)),
         ),
     );
 
@@ -206,6 +215,17 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         // 완료 → 정산 전이는 등록자(원 등록자)만 가능
         return o.status === 'completed' && isRegistrant.value;
     });
+
+    // 내가 등록한 공개 운행을 기사 모집 없이 직접 수행할 수 있는지 —
+    // 다른 기사가 이미 신청한 운행은 신청자를 앞질러 가로채지 않는다.
+    const canSelfDrive = computed(() =>
+        Boolean(
+            order.value && auth.user
+            && order.value.status === 'published'
+            && order.value.user_id === auth.user.id
+            && claims.value.length === 0,
+        ),
+    );
 
     // 상태 라벨 — 완료(정산 전)는 '정산 대기중'으로 표시.
     // 승인 대기 상태는 요청을 보낸 기사(claimant)와 등록자에게만 '수락 대기'로 보여주고,
@@ -666,8 +686,12 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         }
     };
 
-    // 하단 액션 바의 주 동작 — 가져오기 요청 철회(요청자) > 다음 상태 전이 > 리뷰
+    // 하단 액션 바의 주 동작 — 직접 수행 > 가져오기 요청 철회(요청자) > 다음 상태 전이 > 리뷰
     const primaryAction = computed(() => {
+        // 내가 등록한 공개 운행 — 기사 모집 없이 바로 수행하는 것이 가장 흔한 다음 행동이다
+        if (canSelfDrive.value) {
+            return { label: '내가 직접 수행하기', indicator: false, handler: selfDrive };
+        }
         // 승인 대기 중인 가져오기 요청은 '수락 대기 중' 표시 버튼으로 안내한다
         if (isClaimantPending.value) {
             return { label: '수락 대기 중', indicator: true, handler: null };
@@ -898,6 +922,20 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         } else {
             transition(status);
         }
+    };
+
+    // 직접 수행 — 기사 모집 없이 등록자가 자기 운행을 바로 수행 확정한다
+    const selfDrive = () => {
+        askConfirm({
+            title: '내가 직접 수행',
+            message: '이 운행을 기사 모집 없이 바로 수행 확정할까요? 확정되면 마켓에서 내려가고 운행을 시작할 수 있습니다.',
+            confirmText: '직접 수행',
+            type: 'primary',
+            onConfirm: () => run(
+                () => apiTransitionOrder(order.value.id, 'accepted'),
+                '이 운행을 직접 수행합니다.',
+            ),
+        });
     };
 
     const confirmCancel = async () => {

@@ -53,7 +53,12 @@ onMounted(() => {
                     <n-input v-model:value="form.name" placeholder="이름" />
                 </n-form-item>
                 <n-form-item label="연락처">
-                    <n-input v-model:value="form.phone" placeholder="예) 010-1234-5678" />
+                    <!-- inputmode는 n-input의 prop이 아니라 input-props로 넘겨야 내부 <input>에 적용된다 -->
+                    <n-input
+                        v-model:value="form.phone"
+                        placeholder="예) 010-1234-5678"
+                        :input-props="{ inputmode: 'tel' }"
+                    />
                 </n-form-item>
                 <n-form-item label="이메일">
                     <n-input :value="auth.user?.email" disabled />

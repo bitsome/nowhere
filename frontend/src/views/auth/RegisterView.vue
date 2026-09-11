@@ -1,20 +1,26 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../../stores/auth';
-import { ROLE_CUSTOMER, ROLE_DRIVER } from '../../data/roles';
+import { ROLE_CUSTOMER, ROLE_DRIVER, signupRoleFromQuery } from '../../data/roles';
 import { getApiErrorMessage } from '../../api/client';
+import { safeRedirectPath } from '../../utils/redirect';
 import UiCard from '../../components/ui/UiCard.vue';
 
 const router = useRouter();
+const route = useRoute();
 const auth = useAuthStore();
+
+// 공유 링크에서 넘어온 경우 가입 후 그 운행으로 돌아간다 (내부 경로만 허용)
+const redirectTo = safeRedirectPath(route.query.redirect);
 
 // 가입 역할 — 기사(운행 수행) / 등록자(운행 등록·관리)
 const ROLE_OPTIONS = [
     { value: ROLE_DRIVER, label: '기사', desc: '운행을 가져와 수행하는 기사' },
     { value: ROLE_CUSTOMER, label: '등록자', desc: '운행을 등록하고 기사를 관리하는 사업자' },
 ];
-const role = ref(ROLE_DRIVER);
+// 랜딩의 등록자 CTA(?role=Customer)로 들어오면 등록자를 미리 선택해 둔다
+const role = ref(signupRoleFromQuery(route.query.role));
 
 const name = ref('');
 const email = ref('');
@@ -62,8 +68,8 @@ const submit = async () => {
 
     try {
         await auth.register(name.value.trim(), email.value.trim(), password.value, role.value);
-        // 역할별 첫 화면 — 등록자는 내 마켓(운행 관리), 기사는 홈(추천)
-        router.push({ name: role.value === ROLE_CUSTOMER ? 'my-market' : 'home' });
+        // 공유 링크로 온 기사는 그 운행으로, 아니면 역할별 첫 화면으로 (등록자는 내 마켓, 기사는 홈)
+        router.push(redirectTo ?? { name: role.value === ROLE_CUSTOMER ? 'my-market' : 'home' });
     } catch (e) {
         error.value = getApiErrorMessage(e, '가입에 실패했습니다.');
     } finally {
@@ -103,10 +109,11 @@ const submit = async () => {
                 </n-form-item>
 
                 <n-form-item label="이름">
+                    <!-- inputmode·autocomplete는 n-input의 prop이 아니라 input-props로 넘겨야 내부 <input>에 적용된다 -->
                     <n-input
                         v-model:value="name"
                         placeholder="이름"
-                        autocomplete="name"
+                        :input-props="{ autocomplete: 'name' }"
                         maxlength="50"
                     />
                 </n-form-item>
@@ -115,7 +122,7 @@ const submit = async () => {
                     <n-input
                         v-model:value="email"
                         placeholder="이메일"
-                        autocomplete="email"
+                        :input-props="{ autocomplete: 'email' }"
                     />
                 </n-form-item>
 
@@ -125,7 +132,7 @@ const submit = async () => {
                         type="password"
                         show-password-on="click"
                         placeholder="비밀번호"
-                        autocomplete="new-password"
+                        :input-props="{ autocomplete: 'new-password' }"
                     />
                 </n-form-item>
 
@@ -135,7 +142,7 @@ const submit = async () => {
                         type="password"
                         show-password-on="click"
                         placeholder="비밀번호 확인"
-                        autocomplete="new-password"
+                        :input-props="{ autocomplete: 'new-password' }"
                         @keyup.enter="submit"
                     />
                 </n-form-item>
@@ -151,7 +158,10 @@ const submit = async () => {
 
             <p class="login-footer">
                 이미 계정이 있으신가요?
-                <router-link :to="{ name: 'login' }" class="login-link">로그인</router-link>
+                <router-link
+                    :to="{ name: 'login', query: redirectTo ? { redirect: redirectTo } : {} }"
+                    class="login-link"
+                >로그인</router-link>
             </p>
         </UiCard>
     </div>
@@ -201,6 +211,11 @@ const submit = async () => {
     font-size: 20px;
     font-weight: 700;
     box-shadow: 0 6px 18px color-mix(in srgb, var(--brand) 35%, transparent);
+}
+
+/* 다크 — 그라디언트가 밝은 틸로 바뀌어 흰 글자 대비가 ≈1.6:1로 떨어짐 → 앱 표준 어두운 글자 */
+html.dark .login-mark {
+    color: #07120e;
 }
 
 .login-title {

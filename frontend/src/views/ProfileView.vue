@@ -220,7 +220,7 @@ watch(
                     </button>
                     <button type="button" class="community-entry" @click="router.push({ name: 'dashboard' })">
                         <span class="community-entry__icon">
-                            <BaseIcon name="grid" :size="22" />
+                            <BaseIcon name="dashboard" :size="22" />
                         </span>
                         <span class="community-entry__text">
                             <strong>대시보드</strong>
@@ -411,6 +411,11 @@ watch(
     box-shadow: 0 4px 12px color-mix(in srgb, var(--brand) 30%, transparent);
 }
 
+/* 다크 — 그라디언트가 밝은 틸로 바뀌어 흰 글자 대비가 ≈1.6:1로 떨어짐 → 앱 표준 어두운 글자 */
+html.dark .profile-hero__avatar {
+    color: #07120e;
+}
+
 .profile-hero__name-row {
     display: flex;
     align-items: center;
@@ -597,6 +602,56 @@ watch(
     color: var(--text-muted);
 }
 
+/* ── 받은 리뷰 목록 ──
+   활동 탭의 리뷰 목록은 ReviewsView의 리뷰 카드와 같은 정보 위계(작성자·별점·내용·시각)를
+   쓰지만 카드가 아니라 한 카드 안의 압축 목록이므로 구분선으로만 나눈다. */
+.profile-review-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.profile-review {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.profile-review + .profile-review {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+}
+
+.profile-review__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.profile-review__author {
+    min-width: 0;
+    color: var(--text);
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.profile-review__content {
+    margin: 0;
+    color: var(--text);
+    font-size: 11px;
+    line-height: 1.6;
+    word-break: break-word;
+}
+
+.profile-review__time {
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
 /* ── 레벨 ── */
 .level-head {
     display: flex;
@@ -733,6 +788,11 @@ html.dark .xp-events {
     background: var(--brand-gradient);
     color: #ffffff;
     flex-shrink: 0;
+}
+
+/* 다크 — 그라디언트가 밝은 틸로 바뀌어 흰 아이콘 대비가 ≈1.6:1로 떨어짐 → 앱 표준 어두운 글자 */
+html.dark .community-entry__icon {
+    color: #07120e;
 }
 
 .community-entry__icon svg {

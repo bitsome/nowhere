@@ -1,11 +1,16 @@
 <script setup>
 import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { getApiErrorMessage } from '../../api/client';
 import { apiForgotPassword, apiResetPassword } from '../../api/auth';
+import { safeRedirectPath } from '../../utils/redirect';
 import UiCard from '../../components/ui/UiCard.vue';
 
 const router = useRouter();
+const route = useRoute();
+
+// 공유 링크에서 온 경우 재설정 뒤 로그인을 거쳐 그 운행으로 돌아가도록 경로를 이어 준다
+const redirectTo = safeRedirectPath(route.query.redirect);
 
 const email = ref('');
 const code = ref('');
@@ -66,7 +71,7 @@ const submitReset = async () => {
         });
 
         // 완료 후 로그인 화면으로 이동해 새 비밀번호로 로그인을 유도한다
-        router.push({ name: 'login' });
+        router.push({ name: 'login', query: redirectTo ? { redirect: redirectTo } : {} });
     } catch (e) {
         error.value = getApiErrorMessage(e, '비밀번호 변경에 실패했습니다. 인증코드를 확인해 주세요.');
     } finally {
@@ -96,10 +101,11 @@ const submitReset = async () => {
             <!-- 1단계 — 이메일 입력 -->
             <n-form v-if="!sent" label-placement="top" size="large" @submit.prevent="sendCode">
                 <n-form-item label="가입 이메일">
+                    <!-- inputmode·autocomplete는 n-input의 prop이 아니라 input-props로 넘겨야 내부 <input>에 적용된다 -->
                     <n-input
                         v-model:value="email"
                         placeholder="name@example.com"
-                        autocomplete="email"
+                        :input-props="{ autocomplete: 'email' }"
                         @keyup.enter="sendCode"
                     />
                 </n-form-item>
@@ -115,7 +121,7 @@ const submitReset = async () => {
                     <n-input
                         v-model:value="code"
                         placeholder="123456"
-                        inputmode="numeric"
+                        :input-props="{ inputmode: 'numeric' }"
                         maxlength="6"
                         @keyup.enter="submitReset"
                     />
@@ -127,7 +133,7 @@ const submitReset = async () => {
                         type="password"
                         show-password-on="click"
                         placeholder="새 비밀번호"
-                        autocomplete="new-password"
+                        :input-props="{ autocomplete: 'new-password' }"
                     />
                 </n-form-item>
 
@@ -137,7 +143,7 @@ const submitReset = async () => {
                         type="password"
                         show-password-on="click"
                         placeholder="새 비밀번호 확인"
-                        autocomplete="new-password"
+                        :input-props="{ autocomplete: 'new-password' }"
                         @keyup.enter="submitReset"
                     />
                 </n-form-item>
@@ -152,7 +158,10 @@ const submitReset = async () => {
             </n-form>
 
             <p class="reset-footer">
-                <router-link :to="{ name: 'login' }" class="reset-link">로그인으로 돌아가기</router-link>
+                <router-link
+                    :to="{ name: 'login', query: redirectTo ? { redirect: redirectTo } : {} }"
+                    class="reset-link"
+                >로그인으로 돌아가기</router-link>
             </p>
         </UiCard>
     </div>
@@ -198,6 +207,11 @@ const submitReset = async () => {
     font-size: 20px;
     font-weight: 700;
     box-shadow: 0 6px 18px color-mix(in srgb, var(--brand) 35%, transparent);
+}
+
+/* 다크 — 그라디언트가 밝은 틸로 바뀌어 흰 글자 대비가 ≈1.6:1로 떨어짐 → 앱 표준 어두운 글자 */
+html.dark .reset-mark {
+    color: #07120e;
 }
 
 .reset-title {

@@ -1,8 +1,10 @@
 <script setup>
+import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useMessage } from 'naive-ui';
 import { useAuthStore } from '../../stores/auth';
 import { useProfileSettings } from '../../composables/useProfileSettings';
+import { usePwaInstall } from '../../composables/usePwaInstall';
 import BaseIcon from '../../components/common/BaseIcon.vue';
 
 // keep-alive 캐시 매칭용 이름
@@ -15,6 +17,12 @@ const message = useMessage();
 // 모듈: 프로필 설정(알림) 재사용
 const settings = useProfileSettings({ auth, router, message });
 const { error, success, notifyEnabled, toggleNotify } = settings;
+
+const pwa = usePwaInstall();
+
+// 아이폰 Safari 는 홈 화면에 추가한 앱에서만 알림이 동작한다.
+// 여기서 켜기를 누르면 권한 요청이 즉시 거부되어 "권한이 거부되었습니다"로 잘못 안내된다.
+const needsInstallFirst = computed(() => pwa.guide.value === 'ios' || pwa.guide.value === 'inapp');
 </script>
 
 <template>
@@ -35,7 +43,25 @@ const { error, success, notifyEnabled, toggleNotify } = settings;
             {{ success }}
         </n-alert>
 
-        <n-card :bordered="true" class="settings-block">
+        <!-- 아이폰 Safari·인앱 브라우저 — 홈 화면에 추가하기 전에는 알림을 켤 수 없다 -->
+        <n-card v-if="needsInstallFirst" :bordered="true" class="settings-block">
+            <div class="notify-row">
+                <div class="notify-row__text">
+                    <strong>홈 화면에 추가한 뒤 켤 수 있어요</strong>
+                    <span v-if="pwa.guide.value === 'ios'">
+                        아이폰은 홈 화면에 추가한 앱에서만 알림이 동작합니다.
+                    </span>
+                    <span v-else>
+                        지금 브라우저에서는 알림을 켤 수 없습니다. Safari로 열어 주세요.
+                    </span>
+                </div>
+                <n-button type="primary" ghost @click="router.push({ name: 'settings-appearance' })">
+                    추가 방법
+                </n-button>
+            </div>
+        </n-card>
+
+        <n-card v-else :bordered="true" class="settings-block">
             <div class="notify-row">
                 <div class="notify-row__text">
                     <strong>브라우저 알림</strong>

@@ -5,6 +5,8 @@ export const apiAdminUsers = (params = {}) => apiClient.get('/admin/users', { pa
 export const apiAdminUpdateVerification = (userId, payload) => apiClient.patch(`/admin/users/${userId}/verification`, payload);
 // 역할 변경 — 기사↔등록자 전환(테스트용)과 관리자 지정 (지정 가능 여부는 서버 검증)
 export const apiAdminSetUserRole = (userId, role) => apiClient.patch(`/admin/users/${userId}/role`, { role });
+// 등록자 개별 수수료율 지정/해제 — null이면 전역 정책 요율을 따른다
+export const apiAdminSetUserFeeRate = (userId, feeRate) => apiClient.patch(`/admin/users/${userId}/fee-rate`, { fee_rate: feeRate });
 
 // 기사 운영 — 관리자 화면
 export const apiAdminDrivers = (params = {}) => apiClient.get('/admin/drivers', { params });

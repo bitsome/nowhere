@@ -1,8 +1,15 @@
 import { computed, reactive, ref } from 'vue';
-import { apiCreateOrder, apiOrder, apiStructureOrder, apiTransitionOrder, apiUpdateOrder } from '../api/orders';
+import {
+    apiCreateBulkOrders,
+    apiCreateOrder,
+    apiOrder,
+    apiStructureOrder,
+    apiTransitionOrder,
+    apiUpdateOrder,
+} from '../api/orders';
 import { apiCreateTemplate, apiDeleteTemplate, apiTemplates } from '../api/templates';
 import { getApiErrorMessage } from '../api/client';
-import { SERVICE_OPTIONS, SERVICE_LABELS, toIsoDate, toServiceCode, VEHICLE_OPTIONS, weekdayOf } from '../utils/orderCreate';
+import { buildSplitOrders, SERVICE_OPTIONS, SERVICE_LABELS, toIsoDate, VEHICLE_OPTIONS, weekdayOf } from '../utils/orderCreate';
 import { ORDER_TAGS } from '../utils/tags';
 
 /**
@@ -86,53 +93,28 @@ export function useOrderForm({ route, screen, error, success, saving, loadMyOrde
         }
     };
 
-    const applyStructured = (s) => {
-        form.service_type = toServiceCode(s.service_type);
-        form.service_date = toIsoDate(s.service_date ?? '') || null;
-        form.service_time = s.service_time ?? s.scheduled_time ?? null;
-        form.vehicle_type = s.vehicle_type ?? '';
-        form.passenger_count = s.passenger_count ?? null;
-        form.luggage_count = s.luggage_count ?? null;
-        form.pickup_location = s.pickup_location ?? '';
-        form.dropoff_location = s.dropoff_location ?? '';
-        form.flight_number = s.flight_number ?? '';
-        form.expected_revenue = s.amount_value ?? null;
-        lineItems.value = (s.line_items ?? []).map((item) => {
-            const isoDate = toIsoDate(item.service_date ?? '');
+    // AI 구조화 결과 — 화면에서 바로 고칠 수 있는 등록 초안 목록.
+    // 일정이 여러 건이면 각각이 독립 운행 초안이 된다 (셋트로 묶지 않는다).
+    const aiOrders = ref([]);
 
-            return {
-                ...item,
-                service_date: isoDate,
-                service_weekday: item.service_weekday || weekdayOf(isoDate),
-            };
-        });
+    const removeAiOrder = (index) => {
+        aiOrders.value.splice(index, 1);
     };
 
-    // AI 구조화 결과 요약 (읽기 전용) — 입력 폼은 직접 등록(manual)에서만 제공
-    const structuredPreview = computed(() => {
-        if (mode.value !== 'ai') return null;
+    // 등록 초안 → API 페이로드 (서비스 일시 형식 정리) — 단일/일괄 등록이 함께 쓴다
+    const toOrderPayload = (draft) => {
+        const payload = { ...draft };
+        const isoDate = toIsoDate(draft.service_date);
 
-        const hasValue =
-            form.pickup_location || form.dropoff_location || form.service_date ||
-            form.service_time || form.vehicle_type || form.flight_number ||
-            form.passenger_count != null || form.expected_revenue != null;
+        if (isoDate && /^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
+            payload.service_date = isoDate;
+            payload.service_datetime = `${isoDate} ${draft.service_time || '00:00'}:00`;
+        }
 
-        if (!hasValue) return null;
+        return payload;
+    };
 
-        return {
-            route: [form.pickup_location, form.dropoff_location].filter(Boolean).join(' → '),
-            service_date: form.service_date,
-            service_time: form.service_time,
-            vehicle_type: form.vehicle_type,
-            flight_number: form.flight_number,
-            passenger_count: form.passenger_count,
-            luggage_count: form.luggage_count,
-            expected_revenue: form.expected_revenue,
-            service_type: SERVICE_LABELS[form.service_type] ?? form.service_type,
-        };
-    });
-
-    // 일정(AI 구조화) 테이블 표시용 행 — 날짜/요일/금액 포함 (금액은 없으면 빈칸)
+    // 수정 화면의 기존 일정 표시용 행 — 새 등록은 aiOrders(편집 초안)를 쓴다
     const lineItemRows = computed(() =>
         (lineItems.value ?? []).map((item) => ({
             scheduled_time: item.scheduled_time || '-',
@@ -153,8 +135,15 @@ export function useOrderForm({ route, screen, error, success, saving, loadMyOrde
 
         try {
             const { data } = await apiStructureOrder(summary.value);
-            applyStructured(data.data.structured);
-            success.value = 'AI 구조화가 완료되었습니다. 내용을 확인하고 저장해 주세요.';
+            const structured = data.data.structured;
+
+            // 결과를 그대로 등록하지 않고 편집 가능한 초안으로 세운다 —
+            // 규칙 파서로 대체된 경우(parsed_by = local)엔 오해석이 있으므로 사람이 고쳐야 한다
+            aiOrders.value = buildSplitOrders(structured);
+
+            success.value = structured.parsed_by === 'local'
+                ? 'AI 대신 규칙으로 해석했습니다. 값을 확인하고 필요하면 수정해 주세요.'
+                : 'AI 구조화가 완료되었습니다. 내용을 확인하고 등록해 주세요.';
         } catch (e) {
             error.value = getApiErrorMessage(e, '구조화에 실패했습니다.');
         } finally {
@@ -168,15 +157,7 @@ export function useOrderForm({ route, screen, error, success, saving, loadMyOrde
         error.value = '';
 
         try {
-            const payload = { ...form };
-
-            // 서비스 일시를 "YYYY-MM-DD HH:MM:SS" 형태로 저장
-            const isoDate = toIsoDate(form.service_date);
-
-            if (isoDate && /^\d{4}-\d{2}-\d{2}$/.test(isoDate)) {
-                payload.service_date = isoDate;
-                payload.service_datetime = `${isoDate} ${form.service_time || '00:00'}:00`;
-            }
+            const payload = toOrderPayload(form);
 
             if (lineItems.value.length) {
                 payload.line_items = lineItems.value;
@@ -202,6 +183,39 @@ export function useOrderForm({ route, screen, error, success, saving, loadMyOrde
             await loadMyOrders();
         } catch (e) {
             error.value = getApiErrorMessage(e, isEdit.value ? '운행 수정에 실패했습니다.' : '운행 등록에 실패했습니다.');
+        } finally {
+            saving.value = false;
+        }
+    };
+
+    // AI 구조화 결과 등록 — 여러 건이면 각각 독립 운행으로 한 번에 만든다.
+    // 필수 정보가 덜 찬 건은 서버가 공개하지 않고 초안으로 남긴다.
+    const saveAiOrders = async () => {
+        if (!aiOrders.value.length) {
+            return;
+        }
+
+        saving.value = true;
+        error.value = '';
+        success.value = '';
+
+        try {
+            const { data } = await apiCreateBulkOrders({
+                orders: aiOrders.value.map(toOrderPayload),
+                publish: publishNow.value,
+            });
+
+            const result = data.data;
+            const draftCount = result.draft_ids?.length ?? 0;
+
+            success.value = draftCount
+                ? `${result.order_ids.length}건 등록했습니다. ${draftCount}건은 필수 정보가 없어 초안으로 남겼습니다.`
+                : `${result.order_ids.length}건 등록했습니다.`;
+
+            screen.value = 'list';
+            await loadMyOrders();
+        } catch (e) {
+            error.value = getApiErrorMessage(e, '운행 등록에 실패했습니다.');
         } finally {
             saving.value = false;
         }
@@ -331,7 +345,8 @@ export function useOrderForm({ route, screen, error, success, saving, loadMyOrde
         mode,
         form,
         weekdayLabel,
-        structuredPreview,
+        aiOrders,
+        removeAiOrder,
         lineItemRows,
         ORDER_TAGS,
         customTag,
@@ -340,6 +355,7 @@ export function useOrderForm({ route, screen, error, success, saving, loadMyOrde
         removeTag,
         structure,
         save,
+        saveAiOrders,
         loadForEdit,
         templates,
         templateOpen,

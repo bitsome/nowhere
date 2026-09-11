@@ -3,7 +3,7 @@ import { apiUpdateProfile } from '../api/auth';
 import { apiCommunityUser } from '../api/community';
 import { getApiErrorMessage } from '../api/client';
 import { ROLE_CUSTOMER, roleLabel as roleLabelOf } from '../data/roles';
-import { getActivePushSubscription, subscribeToPush, unsubscribeFromPush } from '../utils/push';
+import { getActivePushSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from '../utils/push';
 import {
     isBrowserNotifyEnabled,
     requestNotifyPermission,
