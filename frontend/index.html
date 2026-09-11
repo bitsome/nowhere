@@ -23,7 +23,10 @@
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="NoWhere" />
         <meta property="og:locale" content="ko_KR" />
-        <meta property="og:image" content="/og-cover.jpg" />
+        <!-- %SITE_URL% 은 빌드 시 VITE_SITE_URL 로 치환된다 — 미리보기 카드는 절대 URL이어야 뜬다 -->
+        <link rel="canonical" href="%SITE_URL%/" />
+        <meta property="og:url" content="%SITE_URL%/" />
+        <meta property="og:image" content="%SITE_URL%/og-cover.jpg" />
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
         <meta property="og:image:alt" content="NoWhere — 오늘 받을 운행을 앱이 먼저 골라드립니다" />
@@ -33,7 +36,7 @@
             content="기사님 판단 피로도를 줄이는 운행 최적화 플랫폼. 추천 → 신청 → 승인 → 운행 → 정산까지."
         />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:image" content="/og-cover.jpg" />
+        <meta name="twitter:image" content="%SITE_URL%/og-cover.jpg" />
         <meta name="twitter:title" content="NoWhere — 오늘 받을 운행을 앱이 먼저 골라드려요" />
         <meta
             name="twitter:description"

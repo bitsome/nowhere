@@ -34,6 +34,22 @@ const syncPublic = () => ({
     },
 });
 
+/**
+ * 정적 index.html의 OG·canonical 주소 채우기.
+ *
+ * 위챗·카카오 미리보기 카드는 OG 이미지·URL을 읽는데, 이 값이 상대 경로면 카드가 뜨지 않는다.
+ * 도메인 확정 전에는 VITE_SITE_URL이 비어 있어 종전과 같은 상대 경로로 남고,
+ * 도메인이 정해지면 `VITE_SITE_URL=https://example.com npm run build` 한 줄로 절대 URL이 된다.
+ */
+const htmlSiteUrl = () => {
+    const siteUrl = (process.env.VITE_SITE_URL || '').replace(/\/+$/, '');
+
+    return {
+        name: 'html-site-url',
+        transformIndexHtml: (html) => html.replaceAll('%SITE_URL%', siteUrl),
+    };
+};
+
 export default defineConfig({
     // 서버 배포 시 하위 경로(/spa 등)에 두려면 VITE_BASE 환경변수로 지정한다.
     // 예) VITE_BASE=/spa/ npm run build
@@ -45,6 +61,7 @@ export default defineConfig({
             dts: false,
         }),
         syncPublic(),
+        htmlSiteUrl(),
     ],
     server: {
         port: 5174,
