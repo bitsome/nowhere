@@ -49,7 +49,7 @@ const resultCountText = computed(() => {
 // 빠른매칭 보기 칩 문구 — '빠른매칭'이라는 말 대신 실제로 고른 조건(시간대·지역·차량 등)을 그대로 보여준다
 const matchedPrefs = ref([]);
 const matchedVehicles = ref([]);
-const SERVICE_NAME = { pickup: '픽업', sending: '샌딩', landing: '랜딩' };
+const SERVICE_NAME = { pickup: '픽업', sending: '샌딩', point: '시내', landing: '랜딩' };
 
 const refreshMatchedLabel = async () => {
     if (!isDriver.value) {
@@ -1241,7 +1241,11 @@ watch(
                             :key="order.key"
                             :set="order"
                             :highlight="highlightKeys.has(order.key)"
+                            :favoriteable="true"
+                            :favorited="Boolean(order.is_favorited)"
                             :tracking="{ scope: 'market', section: 'set', rank: si + 1 }"
+                            @favorite-change="onFavoriteChanged"
+                            @tag-search="applyTagSearch"
                         />
                         <OrderCard
                             v-for="(order, oi) in singleRows"

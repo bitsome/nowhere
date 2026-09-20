@@ -137,6 +137,9 @@ onActivated(() => {
                         v-for="(order, si) in orders.filter((o) => o.kind === 'set')"
                         :key="order.key"
                         :set="order"
+                        :favoriteable="true"
+                        :favorited="true"
+                        @favorite-change="onFavoriteChanged"
                     />
                     <OrderCard
                         v-for="(order, oi) in orders.filter((o) => o.kind !== 'set')"

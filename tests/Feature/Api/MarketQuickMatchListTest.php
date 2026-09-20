@@ -62,7 +62,7 @@ test('빠른매칭 — 주간 선택 + 지금이 밤이면 시작된 오늘 운�
     $dayAfter = marketQuickOrder($this->owner->id, '2026-09-11', '06:10'); // 모레 (먼저 등록)
     $tomorrowEarly = marketQuickOrder($this->owner->id, '2026-09-10', '06:10'); // 내일 새벽
     $tomorrowLate = marketQuickOrder($this->owner->id, '2026-09-10', '13:00'); // 내일 오후
-    $todayStarted = marketQuickOrder($this->owner->id, '2026-09-09', '19:30'); // 오늘 주간 — 이미 시작됨(제외 대상)
+    $todayStarted = marketQuickOrder($this->owner->id, '2026-09-09', '20:30'); // 오늘 주간 — 이미 시작됨(제외 대상)
 
     $response = $this->getJson('/api/orders?scope=market&matched=1')->assertOk();
 
@@ -76,8 +76,8 @@ test('빠른매칭 — 주간 선택 + 지금이 밤이면 시작된 오늘 운�
     expect($response->json('meta.pagination.total'))->toBe(3);
 });
 
-test('빠른매칭이 아닌 일반 마켓은 시작 직후(2시간 내) 운행을 그대로 보여준다', function () {
-    $todayStarted = marketQuickOrder($this->owner->id, '2026-09-09', '19:30'); // 1시간 30분 전 시작
+test('빠른매칭이 아닌 일반 마켓은 시작 직후(1시간 내) 운행을 그대로 보여준다', function () {
+    $todayStarted = marketQuickOrder($this->owner->id, '2026-09-09', '20:30'); // 30분 전 시작
 
     $this->getJson('/api/orders?scope=market')
         ->assertOk()

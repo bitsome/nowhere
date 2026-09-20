@@ -232,12 +232,13 @@ export function useOrderForm({ route, screen, error, success, saving, loadMyOrde
 
             form.customer_name = orderData.customer_name ?? '';
             form.customer_phone = orderData.customer_phone ?? '';
-            form.vehicle_type = orderData.vehicle_type ?? '';
+            // 상세 응답의 위치·차량은 화면 표시용으로 한국어 변환돼 있다 — 수정 화면은 원문(raw_*)을 쓴다
+            form.vehicle_type = orderData.raw_vehicle_type ?? '';
             form.service_type = orderData.service_type ?? 'pickup';
             form.service_date = toIsoDate(orderData.service_date ?? '') || null;
             form.service_time = orderData.service_time ?? null;
-            form.pickup_location = orderData.pickup_location ?? '';
-            form.dropoff_location = orderData.dropoff_location ?? '';
+            form.pickup_location = orderData.raw_pickup_location ?? '';
+            form.dropoff_location = orderData.raw_dropoff_location ?? '';
             form.flight_number = orderData.flight_number ?? '';
             form.passenger_count = orderData.passenger_count ?? null;
             form.luggage_count = orderData.luggage_count ?? null;
@@ -249,8 +250,13 @@ export function useOrderForm({ route, screen, error, success, saving, loadMyOrde
             lineItems.value = (orderData.line_items ?? []).map((item) => {
                 const isoDate = toIsoDate(item.service_date ?? '');
 
+                // 표시용으로 바꾼 값·원문 백업 키는 저장 페이로드에 실리지 않도록 걷어낸다
+                const { raw_pickup_location, raw_dropoff_location, raw_vehicle_type, ...rest } = item;
+
                 return {
-                    ...item,
+                    ...rest,
+                    pickup_location: raw_pickup_location ?? item.pickup_location ?? '',
+                    dropoff_location: raw_dropoff_location ?? item.dropoff_location ?? '',
                     service_date: isoDate,
                     service_weekday: item.service_weekday || weekdayOf(isoDate),
                 };

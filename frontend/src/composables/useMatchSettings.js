@@ -308,7 +308,7 @@ export function useMatchSettings({ message, loadMatchedOrders }) {
 
         parts.push(matchDayLabel(pref.days));
 
-        const serviceLabels = { pickup: '픽업', sending: '샌딩', landing: '랜딩' };
+        const serviceLabels = { pickup: '픽업', sending: '샌딩', point: '시내', landing: '랜딩' };
         if (pref.service_type && serviceLabels[pref.service_type]) {
             parts.push(serviceLabels[pref.service_type]);
         }

@@ -311,9 +311,13 @@ const startRemainIcon = computed(() => START_REMAIN_ICONS[startRemain.value?.lev
         <div class="order-card__head">
             <div class="order-card__route">
                 <div class="order-card__route-top">
+                    <!-- 배지는 모두 출발지 앞에 모아 둔다 — 상태 → 긴급 → 임박 순 -->
+                    <span v-if="!isPublished" class="status-badge" :class="statusBadgeClass" :style="{ background: statusColor, borderColor: statusColor }">
+                        {{ statusText }}
+                    </span>
                     <span v-if="order.isPriority" class="order-card__priority" title="긴급 운행">긴급</span>
-                    <strong>{{ order.route }}</strong>
                     <span v-if="order.isUrgent" class="order-card__urgent" title="곧 운행 시작">임박</span>
+                    <strong>{{ order.route }}</strong>
                 </div>
                 <div class="order-card__route-bottom">
                     <span class="order-card__datetime">
@@ -322,6 +326,10 @@ const startRemainIcon = computed(() => START_REMAIN_ICONS[startRemain.value?.lev
                     <span v-if="order.flightNumber" class="order-card__flight" title="항공편">
                         <BaseIcon name="airplane" :size="12" />
                         {{ order.flightNumber }}
+                    </span>
+                    <!-- 출발지 → 도착지 대략 거리 — 좌표를 아는 지명끼리만 표시된다 -->
+                    <span v-if="order.distanceKm" class="order-card__distance" :title="`${order.route} 약 ${order.distanceKm}km`">
+                        약 {{ order.distanceKm }}km
                     </span>
                 </div>
                 <!-- 운행 조건 점수 별 — 항공편(시간) 줄 아래. 클릭하면 근거 모달 -->
@@ -347,13 +355,10 @@ const startRemainIcon = computed(() => START_REMAIN_ICONS[startRemain.value?.lev
                         @click.stop
                         @update:checked="emit('toggle', order.id)"
                     />
-                    <!-- 공개 상태는 배지 대신 금액 — 그 외 상태는 상태 배지 유지 -->
-                    <span v-else-if="isPublished" class="order-card__amount">
+                    <!-- 상태 배지는 출발지 앞으로 옮겼다 — 우측 상단은 금액 자리 -->
+                    <span v-else class="order-card__amount">
                         <BaseIcon class="order-card__coin-icon" name="coin" :size="16" />
                         {{ order.amount }}
-                    </span>
-                    <span v-else class="status-badge" :class="statusBadgeClass" :style="{ background: statusColor, borderColor: statusColor }">
-                        {{ statusText }}
                     </span>
                     <span v-if="statusExtra" class="order-card__status-extra">{{ statusExtra }}</span>
                 </div>
@@ -414,8 +419,8 @@ const startRemainIcon = computed(() => START_REMAIN_ICONS[startRemain.value?.lev
                 </button>
             </div>
         </div>
-        <!-- 금액 행 — 공개가 아닌 상태(배지가 금액 자리를 사용) 또는 선택 모드에서 하단 표시 -->
-        <div v-if="selectable || !isPublished" class="order-card__meta">
+        <!-- 금액 행 — 선택 모드에서만 (체크박스가 우측 상단 금액 자리를 쓴다) -->
+        <div v-if="selectable" class="order-card__meta">
             <span class="order-card__amount">
                 <BaseIcon class="order-card__coin-icon" name="coin" :size="17" />
                 {{ order.amount }}
@@ -504,7 +509,7 @@ const startRemainIcon = computed(() => START_REMAIN_ICONS[startRemain.value?.lev
     align-items: center;
     justify-content: center;
     width: 24px;
-    height: 18px;
+    height: 24px;
     padding: 0;
     border: 0;
     background: transparent;
@@ -524,11 +529,13 @@ const startRemainIcon = computed(() => START_REMAIN_ICONS[startRemain.value?.lev
     color: var(--danger);
 }
 
-/* 카드 우측 액션 묶음 — 공유·찜을 카드 클릭 영역과 분리해 한 덩어리로 둔다 */
+/* 카드 우측 액션 묶음 — 공유·찜을 카드 클릭 영역과 분리해 한 덩어리로 둔다.
+   태그가 없어도 하트는 항상 오른쪽 끝 (margin-left: auto) */
 .order-card__actions {
     display: flex;
     align-items: center;
     gap: 12px;
+    margin-left: auto;
     flex-shrink: 0;
 }
 
@@ -610,6 +617,17 @@ const startRemainIcon = computed(() => START_REMAIN_ICONS[startRemain.value?.lev
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.1px;
+    white-space: nowrap;
+}
+
+/* 거리 — 시간·편명 줄 끝에 붙는 보조 정보 */
+.order-card__distance {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 500;
     white-space: nowrap;
 }
 

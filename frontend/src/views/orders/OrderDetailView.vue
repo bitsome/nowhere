@@ -208,6 +208,47 @@ const rideAdvancing = ref(false);
 // 운행 완료 축하 모달 — 마지막 단계(목적지 도착)를 기록하면 금액 입력 없이 바로 완료되고 축하를 띄운다
 const rideCompleteOpen = ref(false);
 
+// 금액 미지정(요금 협의) 운행 — 계약 금액이 없어 완료 시 실제 수익을 받아야 정산·수수료가 성립한다.
+// 마지막 단계에서 금액 입력 모달을 거쳐 단계 기록과 함께 금액을 보낸다.
+const contractAmount = computed(() => order.value?.expected_revenue ?? order.value?.amount_value ?? null);
+const completionViaStep = ref(false);
+
+// 모달을 금액 입력 없이 닫으면 단계 경로 플래그를 지운다 (다른 경로에서 열었을 때와 섞이지 않게)
+watch(completionOpen, (open) => {
+    if (!open) {
+        completionViaStep.value = false;
+    }
+});
+
+const onConfirmComplete = async () => {
+    if (!completionViaStep.value) {
+        await confirmComplete();
+
+        return;
+    }
+
+    const revenue = completionRevenue.value == null ? null : Number(completionRevenue.value);
+    completionViaStep.value = false;
+    completionOpen.value = false;
+    rideAdvancing.value = true;
+
+    try {
+        const payload = Number.isFinite(revenue) ? { actual_revenue: revenue } : {};
+        const { data } = await apiAdvanceRideStep(order.value.id, payload);
+
+        order.value.status = data.data.status ?? order.value.status;
+        order.value.ride_step = data.data.ride_step ?? order.value.ride_step;
+        order.value.ride_step_times = data.data.ride_step_times || order.value.ride_step_times;
+
+        // 목적지 도착 = 완료 — 완료 직후 축하 모달
+        rideCompleteOpen.value = true;
+    } catch (e) {
+        naiveMessage.error(getApiErrorMessage(e, '운행 완료에 실패했습니다.'));
+    } finally {
+        rideAdvancing.value = false;
+    }
+};
+
 // 폭죽 조각 — 완료 모달 중앙에서 바깥으로 흩어지는 CSS 애니메이션 좌표·색상·지연
 const CONFETTI_COLORS = ['#ffd666', '#ffa940', '#73d13d', '#40a9ff', '#ff4d4f', '#b37feb'];
 const confettiStyle = (n) => {
@@ -253,6 +294,15 @@ const advanceRideFromBar = () => {
 
 const runAdvanceStep = async (step) => {
     if (rideAdvancing.value) return;
+
+    // 요금 협의(금액 미지정) 운행은 마지막 단계에서 실제 수익을 함께 보내야 정산·수수료가 성립한다
+    if (step.value === 'arrived' && !contractAmount.value) {
+        completionViaStep.value = true;
+        completionRevenue.value = order.value?.actual_revenue ?? null;
+        completionOpen.value = true;
+
+        return;
+    }
 
     rideAdvancing.value = true;
 
@@ -1200,7 +1250,7 @@ const formatClaimTime = (iso) => {
                     title="운행 완료"
                     :style="{ maxWidth: '400px' }"
                 >
-                    <p class="cancel-modal__desc">운행이 완료되었습니다. 실제 수익을 입력해 주세요. (입력하지 않으면 기대 금액으로 기록됩니다)</p>
+                    <p class="cancel-modal__desc">{{ contractAmount ? '운행이 완료되었습니다. 실제 수익을 입력해 주세요. (입력하지 않으면 기대 금액으로 기록됩니다)' : '요금 협의 운행입니다. 실제 수익을 입력해야 완료·정산할 수 있습니다.' }}</p>
                     <n-input-number
                         v-model:value="completionRevenue"
                         :min="0"
@@ -1210,7 +1260,12 @@ const formatClaimTime = (iso) => {
                     <template #footer>
                         <div class="filter-footer">
                             <n-button @click="completionOpen = false">닫기</n-button>
-                            <n-button type="primary" :loading="acting" @click="confirmComplete">
+                            <n-button
+                                type="primary"
+                                :loading="acting"
+                                :disabled="completionViaStep && !completionRevenue"
+                                @click="onConfirmComplete"
+                            >
                                 운행 완료
                             </n-button>
                         </div>

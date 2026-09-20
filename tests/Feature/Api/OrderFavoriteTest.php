@@ -3,6 +3,7 @@
 use App\Models\Order;
 use App\Models\OrderClaim;
 use App\Models\OrderFavorite;
+use App\Models\OrderGroup;
 use App\Models\User;
 use App\Notifications\OrderNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -33,14 +34,15 @@ function favoriteNotificationCount(User $user, Order $order, string $title): int
         ->count();
 }
 
-function favoriteMarketOrder(int $ownerId, string $date = '2026-09-20', string $time = '10:00'): Order
+function favoriteMarketOrder(int $ownerId, ?string $date = null, string $time = '10:00'): Order
 {
+    // 날짜를 고정하면 그 시각이 지나는 순간 마켓에서 만료되어 테스트가 깨진다 → 항상 미래 날짜를 쓴다
     return Order::factory()->create([
         'user_id' => $ownerId,
         'status' => Order::STATUS_PUBLISHED,
         'pickup_location' => '인천공항 T1',
         'dropoff_location' => '강남',
-        'service_date' => $date,
+        'service_date' => $date ?? now('Asia/Seoul')->addDays(2)->format('Y-m-d'),
         'service_time' => $time,
     ]);
 }
@@ -102,6 +104,28 @@ test('찜 토글 — 하트를 누르면 찜되고 다시 누르면 해제된다
         ->assertJsonPath('meta.pagination.total', 0);
 });
 
+test('셋트 행의 찜 여부는 대표 다리(첫 다리) 기준으로 내려온다', function () {
+    $group = OrderGroup::query()->create(['name' => '찜 셋트', 'type' => '셋트']);
+
+    // 같은 묶음의 두 다리 — 이른 시각(10:00)이 대표 다리가 된다
+    $date = now('Asia/Seoul')->addDays(2)->format('Y-m-d');
+    $first = favoriteMarketOrder($this->owner->id, $date, '10:00');
+    $second = favoriteMarketOrder($this->owner->id, $date, '14:00');
+    $first->forceFill(['group_id' => $group->id])->save();
+    $second->forceFill(['group_id' => $group->id])->save();
+
+    OrderFavorite::query()->create(['user_id' => $this->driver->id, 'order_id' => $first->id]);
+
+    Sanctum::actingAs($this->driver);
+
+    $row = collect($this->getJson('/api/orders?scope=market&per_page=100')->json('data'))
+        ->firstWhere('kind', 'set');
+
+    expect($row)->not->toBeNull()
+        ->and($row['firstOrderId'])->toBe($first->id)
+        ->and($row['is_favorited'])->toBeTrue();
+});
+
 test('상세 응답 — 찜 여부(favorited)를 함께 내려준다', function () {
     $order = favoriteMarketOrder($this->owner->id);
 
@@ -119,8 +143,8 @@ test('상세 응답 — 찜 여부(favorited)를 함께 내려준다', function 
 });
 
 test('찜 목록 — 마켓에 없는 운행(가져감·취소·숨김)은 조회 시 자동 정리된다', function () {
-    $market = favoriteMarketOrder($this->owner->id, '2026-09-20', '10:00');
-    $cancelled = favoriteMarketOrder($this->owner->id, '2026-09-21', '10:00');
+    $market = favoriteMarketOrder($this->owner->id, now('Asia/Seoul')->addDays(2)->format('Y-m-d'), '10:00');
+    $cancelled = favoriteMarketOrder($this->owner->id, now('Asia/Seoul')->addDays(3)->format('Y-m-d'), '10:00');
     $cancelled->transitionTo(Order::STATUS_CANCELLED);
 
     Sanctum::actingAs($this->driver);

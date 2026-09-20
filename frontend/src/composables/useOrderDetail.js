@@ -6,8 +6,9 @@ import {
 } from '../api/orders';
 import { getApiErrorMessage } from '../api/client';
 import { statusColorVar } from '../utils/colors';
+import { isPriorityOrder, isUrgentOrder } from '../utils/orderUrgency';
 
-const SERVICE_LABELS = { pickup: '픽업', sending: '공항샌딩', landing: '공항랜딩' };
+const SERVICE_LABELS = { pickup: '픽업', sending: '공항샌딩', point: '시내', landing: '공항랜딩' };
 // 가져오기(claim) 대상 상태 — 승인 대기 중이어도 다른 드라이버는 추가 신청할 수 있다 (멀티 신청)
 const CLAIMABLE_STATUSES = ['published', 'trading', 'acceptance_pending'];
 
@@ -46,7 +47,8 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
     });
 
     const isCancelled = computed(() => order.value?.status === 'cancelled');
-    const isPriority = computed(() => Boolean(order.value?.is_priority));
+    // 임박/긴급은 서버(OrderListRowBuilder)와 같은 규칙을 쓴다 — 목록 카드와 상세 배지가 갈라지지 않게
+    const isPriority = computed(() => isPriorityOrder(order.value ?? {}));
 
     // 서비스 시각 (KST) — 임박/오늘/내일/카운트다운 판정
     const serviceTime = computed(() => {
@@ -75,11 +77,7 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         return st ? Math.round((st.getTime() - Date.now()) / 60000) : null;
     });
 
-    const isUrgent = computed(() => {
-        const mins = minutesToService.value;
-
-        return mins !== null && mins > 0 && mins <= 120;
-    });
+    const isUrgent = computed(() => isUrgentOrder(order.value ?? {}));
 
     const isToday = computed(() => {
         const st = serviceTime.value;
@@ -121,7 +119,14 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
     const amountLabel = computed(() => {
         const v = order.value?.expected_revenue ?? order.value?.amount_value;
 
-        return v ? `${Number(v).toLocaleString()}원` : '-';
+        if (v) {
+            return `${Number(v).toLocaleString()}원`;
+        }
+
+        // 금액 미지정 운행은 '요금 협의' — 끝난 운행에서 비어 있으면 데이터 문제이므로 '-'
+        const closed = ['completed', 'settled', 'cancelled'];
+
+        return closed.includes(order.value?.status) ? '-' : '요금 협의';
     });
 
     // 서비스 일시 표시: "YYYY-MM-DD (요일) HH:MM" 형태
@@ -924,13 +929,16 @@ export function useOrderDetail({ route, router, auth, chats, naiveMessage }) {
         }
     };
 
-    // 직접 수행 — 기사 모집 없이 등록자가 자기 운행을 바로 수행 확정한다
+    // 직접 수행 — 기사 모집 없이 등록자가 자기 운행을 바로 수행 확정한다.
+    // 공개가 즉시 중단되고(마켓에서 내려감) 정산이 0으로 마감되므로, 실행 전에 경고로 확인받는다.
     const selfDrive = () => {
         askConfirm({
-            title: '내가 직접 수행',
-            message: '이 운행을 기사 모집 없이 바로 수행 확정할까요? 확정되면 마켓에서 내려가고 운행을 시작할 수 있습니다.',
-            confirmText: '직접 수행',
-            type: 'primary',
+            title: '직접 운행하시겠습니까?',
+            message: '이 운행은 지금 바로 마켓에서 내려가고 기사 모집이 중단됩니다.\n'
+                + '본인이 수행하므로 등록자 입금·플랫폼 수수료·기사 지급이 모두 발생하지 않습니다(수금 0).\n'
+                + '확정하면 되돌릴 수 없습니다.',
+            confirmText: '직접 운행',
+            type: 'warning',
             onConfirm: () => run(
                 () => apiTransitionOrder(order.value.id, 'accepted'),
                 '이 운행을 직접 수행합니다.',

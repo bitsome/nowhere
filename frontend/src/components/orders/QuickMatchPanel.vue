@@ -142,7 +142,7 @@ const {
 } = matchSettings;
 
 // 저장된 매칭 설정 칩 표시용 유형 이름
-const SERVICE_LABELS = { pickup: '픽업', sending: '샌딩', landing: '랜딩' };
+const SERVICE_LABELS = { pickup: '픽업', sending: '샌딩', point: '시내', landing: '랜딩' };
 
 // ── 빠른 매칭 모달 — 유형·태그·시간·금액·차량을 골라 간단히 매칭한다 ──
 const quickMatchOpen = ref(false);

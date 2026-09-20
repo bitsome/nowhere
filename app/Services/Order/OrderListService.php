@@ -258,8 +258,8 @@ class OrderListService
                 ->orWhere('service_date', '');
         });
 
-        // 서비스 시작 시각이 현재보다 2시간 넘게 지난 운행은 제외 (일시 불완전 운행은 유지)
-        $cutoff = now('Asia/Seoul')->subHours(2);
+        // 서비스 시작 시각이 현재보다 1시간 넘게 지난 운행은 제외 (일시 불완전 운행은 유지)
+        $cutoff = now('Asia/Seoul')->subHour();
         [$cutoffDate, $cutoffTime] = explode(' ', $cutoff->format('Y-m-d H:i'));
 
         $query->where(function ($sub) use ($cutoffDate, $cutoffTime) {
@@ -398,13 +398,19 @@ class OrderListService
 
         match ($quick) {
             'new' => $query->where('created_at', '>=', now()->subHours(2)),
+            // 임박 = 오늘인데 서비스 시각이 아직 안 지난 건 (상한 없음 — 지나면 긴급으로 넘어간다)
             'urgent' => $query
                 ->where('service_date', $nowKst->format('Y-m-d'))
-                ->where('service_time', '>=', $nowKst->format('H:i'))
-                ->where('service_time', '<=', $nowKst->copy()->addMinutes(120)->format('H:i')),
+                ->where('service_time', '>=', $nowKst->format('H:i')),
             'today' => $query->where('service_date', $nowKst->format('Y-m-d')),
             'tomorrow' => $query->where('service_date', $nowKst->copy()->addDay()->format('Y-m-d')),
-            'priority' => $query->where('is_priority', true),
+            // 긴급 = 등록자가 올린 긴급 + 아직 매칭 안 된 공개 운행의 시작(착륙) 시각이 지난 건.
+            // 서비스 시각 전(임박)과 대비된다 — 하한 없이 오늘인지만 본다.
+            'priority' => $query->where(fn (Builder $urgent) => $urgent
+                ->where('is_priority', true)
+                ->orWhere(fn (Builder $late) => $late
+                    ->where('service_date', $nowKst->format('Y-m-d'))
+                    ->where('service_time', '<=', $nowKst->format('H:i')))),
             default => null,
         };
     }
@@ -1103,7 +1109,16 @@ class OrderListService
         }
 
         // 추천 근거 + 조건 일치율 점수 부여 — 홈 카드의 '조건 N%'와 ✓ 체크리스트용
-        $orderMap = Order::query()->whereIn('id', collect($merged)->pluck('id'))->get()->keyBy('id');
+        // 셋트 행은 id가 그룹 id라서 점수를 매길 수 없으므로 대표 다리(firstOrderId)까지 함께 조회한다.
+        $orderIds = collect($merged)
+            ->flatMap(fn (array $row): array => array_filter([
+                $row['id'] ?? null,
+                $row['firstOrderId'] ?? null,
+            ]))
+            ->unique()
+            ->values();
+
+        $orderMap = Order::query()->whereIn('id', $orderIds)->get()->keyBy('id');
 
         $merged = $this->attachMatchScores($merged, $orderMap, $user);
 
@@ -1158,11 +1173,11 @@ class OrderListService
     /**
      * 마켓 추천 후보 쿼리 — 공개/거래중, 가져오기 요청 없음, 남의 운행, 서비스 시각이 지나지 않은 운행.
      * maxStart를 주면 그 시각 이내에 시작하는 운행만, minStart를 주면 그 시각 이후 시작하는 운행만 남긴다.
-     * (minStart 기본값: 2시간 전 — 마켓 왕복 목록은 최근 시작 운행도 허용하되, 추천은 '지금'부터만)
+     * (minStart 기본값: 1시간 전 — 마켓 왕복 목록은 최근 시작 운행도 허용하되, 추천은 '지금'부터만)
      */
     private function marketCandidatesQuery(User $user, ?Carbon $maxStart = null, ?Carbon $minStart = null): Builder
     {
-        $cutoff = $minStart ?? now('Asia/Seoul')->subHours(2);
+        $cutoff = $minStart ?? now('Asia/Seoul')->subHour();
         [$cutoffDate, $cutoffTime] = explode(' ', $cutoff->format('Y-m-d H:i'));
 
         $query = Order::query()
@@ -1578,11 +1593,12 @@ class OrderListService
         $conflictWindows = $this->activeTripWindows($user, collect($orderMap)->keys()->all());
 
         foreach ($rows as &$row) {
-            if (($row['kind'] ?? '') === 'set') {
-                continue; // 셋트 그룹은 개별 운행 점수 생략
-            }
+            $isSet = ($row['kind'] ?? '') === 'set';
 
-            $order = $orderMap[$row['id']] ?? null;
+            // 셋트 행은 id가 그룹 id라서 대표 다리(firstOrderId)를 기준으로 점수를 산정한다.
+            // 카드에 '조건 N%'와 근거 체크리스트를 노출하기 위함이며, 필터 통과 여부는 기존과 동일하다.
+            $orderId = $isSet ? ($row['firstOrderId'] ?? null) : ($row['id'] ?? null);
+            $order = $orderId === null ? null : ($orderMap[$orderId] ?? null);
 
             if ($order === null) {
                 continue;
@@ -1874,21 +1890,31 @@ class OrderListService
     /**
      * 찜 여부 플래그 — 목록 카드 하트를 채울지 판단한다.
      *
+     * 셋트 행은 `id`가 묶음 id라 운행 단위인 찜과 맞지 않으므로 **대표 다리(첫 다리)**를
+     * 기준으로 본다 — 카드 하트도 첫 다리를 찜한다(`firstOrderId`).
+     *
      * @param  array<int, array<string, mixed>>  $rows
      * @return array<int, array<string, mixed>>
      */
     private function withFavoriteFlag(array $rows, User $user): array
     {
+        $orderIds = collect($rows)
+            ->map(fn (array $row) => $row['firstOrderId'] ?? $row['id'] ?? null)
+            ->filter()
+            ->all();
+
         $favoritedIds = OrderFavorite::query()
             ->where('user_id', $user->id)
-            ->whereIn('order_id', collect($rows)->pluck('id')->all())
+            ->whereIn('order_id', $orderIds)
             ->pluck('order_id')
             ->all();
 
         $favorited = array_fill_keys($favoritedIds, true);
 
         foreach ($rows as &$row) {
-            $row['is_favorited'] = isset($favorited[$row['id']]);
+            $orderId = $row['firstOrderId'] ?? $row['id'] ?? null;
+
+            $row['is_favorited'] = $orderId !== null && isset($favorited[$orderId]);
         }
 
         return $rows;

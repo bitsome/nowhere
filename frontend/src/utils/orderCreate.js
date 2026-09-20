@@ -3,13 +3,14 @@
 export const SERVICE_OPTIONS = [
     { value: 'pickup', label: '픽업' },
     { value: 'sending', label: '공항샌딩' },
+    { value: 'point', label: '시내' },
     { value: 'landing', label: '공항랜딩' },
 ];
 
 // AI 구조화는 한글 라벨(픽업/샌딩/랜딩)로 반환한다 → 코드로 매핑
-const SERVICE_CODE_BY_LABEL = { 픽업: 'pickup', 샌딩: 'sending', 랜딩: 'landing', 혼합: 'pickup' };
+const SERVICE_CODE_BY_LABEL = { 픽업: 'pickup', 샌딩: 'sending', 시내: 'point', 랜딩: 'landing', 혼합: 'pickup' };
 
-export const SERVICE_LABELS = { pickup: '픽업', sending: '공항샌딩', landing: '공항랜딩' };
+export const SERVICE_LABELS = { pickup: '픽업', sending: '공항샌딩', point: '시내', landing: '공항랜딩' };
 
 export const toServiceCode = (raw) => {
     if (SERVICE_OPTIONS.some((o) => o.value === raw)) {

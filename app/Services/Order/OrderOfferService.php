@@ -9,6 +9,7 @@ use App\Models\Review;
 use App\Models\User;
 use App\Models\Vehicle;
 use App\Notifications\OrderNotification;
+use App\Support\Orders\ChineseTextNormalizer;
 
 /**
  * 요금 제안(오퍼) 라이프사이클 — 기사가 운임을 제안하면 등록자가 비교 후 수락/거절한다.
@@ -18,10 +19,10 @@ class OrderOfferService
 {
     /**
      * 대기 요금 제안의 유예 시간 — 운행 시작 시각이 이 시간만큼 지나면 제안은 더 이상
-     * 유효하지 않아 자동 철회한다. 마켓 커트오프(시작 후 2시간)와 같은 기준이라
+     * 유효하지 않아 자동 철회한다. 마켓 커트오프(시작 후 1시간)와 같은 기준이라
      * 등록자가 늦게 봐도 이미 화면에서 사라진 운행 제안만 정리된다.
      */
-    public const OFFER_EXPIRE_AFTER_HOURS = 2;
+    public const OFFER_EXPIRE_AFTER_HOURS = 1;
 
     /**
      * 기사가 공개 운행에 운임을 제안한다.
@@ -152,7 +153,7 @@ class OrderOfferService
                 return [
                     'id' => $order->id,
                     'order_number' => $order->order_number ?: '#'.$order->id,
-                    'route' => trim(($order->pickup_location ?: '').' → '.($order->dropoff_location ?: '')),
+                    'route' => ChineseTextNormalizer::routeLabel($order->pickup_location, $order->dropoff_location),
                     'service_date' => $order->service_date,
                     'service_time' => $order->service_time,
                     'expected_revenue' => (int) ($order->expected_revenue ?? $order->amount_value ?? 0),

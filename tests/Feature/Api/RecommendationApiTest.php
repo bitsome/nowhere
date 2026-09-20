@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Order;
+use App\Models\OrderGroup;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -483,6 +484,129 @@ test('선호도 60% 이상 운행만 추천에 남는다', function () {
         ->assertOk()
         ->assertJsonCount(1, 'data')
         ->assertJsonPath('data.0.match_score', 70);
+});
+
+test('셋트 추천 행에도 조건 점수와 근거가 붙는다', function () {
+    $this->travelTo(Carbon::parse('today 08:00 Asia/Seoul'));
+
+    $this->driver->matchPreferences()->create([
+        'name' => '강남 선호',
+        'area' => '서울 강남',
+        'is_active' => true,
+    ]);
+
+    $group = OrderGroup::factory()->create();
+
+    Order::factory()->create([
+        'user_id' => $this->owner->id,
+        'status' => Order::STATUS_PUBLISHED,
+        'group_id' => $group->id,
+        'pickup_location' => '서울 강남',
+        'dropoff_location' => '인천공항',
+        'service_date' => now('Asia/Seoul')->format('Y-m-d'),
+        'service_time' => '11:00',
+    ]);
+
+    Order::factory()->create([
+        'user_id' => $this->owner->id,
+        'status' => Order::STATUS_PUBLISHED,
+        'group_id' => $group->id,
+        'pickup_location' => '서울 강남',
+        'dropoff_location' => '김포공항',
+        'service_date' => now('Asia/Seoul')->format('Y-m-d'),
+        'service_time' => '14:00',
+    ]);
+
+    $response = $this->getJson('/api/orders/recommendations')->assertOk();
+
+    // 셋트 행은 id가 그룹 id라서 대표 다리(firstOrderId) 기준으로 점수·근거가 붙어야 한다
+    expect($response->json('data.0.kind'))->toBe('set')
+        ->and($response->json('data.0.match_score'))->toBeGreaterThanOrEqual(25)
+        ->and($response->json('data.0.match_reasons'))->toContain('선호 지역 운행');
+});
+
+test('유입 원문(중국어) 셋트명은 한글 노선 요약으로 대체하고, 한글 이름은 그대로 둔다', function () {
+    $this->travelTo(Carbon::parse('today 08:00 Asia/Seoul'));
+
+    $this->driver->matchPreferences()->create([
+        'name' => '강남 선호',
+        'area' => '서울 강남',
+        'is_active' => true,
+    ]);
+
+    // 위챗 유입 원문이 그대로 그룹 이름으로 저장된 상태 — 모니터가 '[N개]' 접두사를 붙인다
+    $group = OrderGroup::factory()->create(['name' => '[2개] 明天 送机 明洞 3+1 小车']);
+
+    Order::factory()->create([
+        'user_id' => $this->owner->id,
+        'status' => Order::STATUS_PUBLISHED,
+        'group_id' => $group->id,
+        'pickup_location' => '서울 강남',
+        'dropoff_location' => '인천공항',
+        'service_date' => now('Asia/Seoul')->format('Y-m-d'),
+        'service_time' => '11:00',
+    ]);
+
+    Order::factory()->create([
+        'user_id' => $this->owner->id,
+        'status' => Order::STATUS_PUBLISHED,
+        'group_id' => $group->id,
+        'pickup_location' => '서울 강남',
+        'dropoff_location' => '김포공항',
+        'service_date' => now('Asia/Seoul')->format('Y-m-d'),
+        'service_time' => '14:00',
+    ]);
+
+    $this->getJson('/api/orders/recommendations')
+        ->assertOk()
+        ->assertJsonPath('data.0.name', '서울 강남 → 인천공항 외 1건');
+
+    // 원문은 그룹에 그대로 남는다 — 등록자 식별·분쟁 대응 근거
+    expect($group->fresh()->name)->toBe('[2개] 明天 送机 明洞 3+1 小车');
+
+    // 앱에서 직접 지은 한글 이름은 덮어쓰지 않는다
+    $group->update(['name' => '주말 공항 셋트']);
+
+    $this->getJson('/api/orders/recommendations')
+        ->assertOk()
+        ->assertJsonPath('data.0.name', '주말 공항 셋트');
+});
+
+test('대표 다리 위치에 한자가 남아 있으면 한자가 없는 다리로 셋트명을 만든다', function () {
+    $this->travelTo(Carbon::parse('today 08:00 Asia/Seoul'));
+
+    $this->driver->matchPreferences()->create([
+        'name' => '강남 선호',
+        'area' => '서울 강남',
+        'is_active' => true,
+    ]);
+
+    $group = OrderGroup::factory()->create(['name' => '[2개] 明天 送机 明洞']);
+
+    // 첫 다리 도착지가 유입 잡음으로 오염 — 제목에 한자가 새면 안 된다
+    Order::factory()->create([
+        'user_id' => $this->owner->id,
+        'status' => Order::STATUS_PUBLISHED,
+        'group_id' => $group->id,
+        'pickup_location' => '서울 강남',
+        'dropoff_location' => '卡全部跑完结算',
+        'service_date' => now('Asia/Seoul')->format('Y-m-d'),
+        'service_time' => '11:00',
+    ]);
+
+    Order::factory()->create([
+        'user_id' => $this->owner->id,
+        'status' => Order::STATUS_PUBLISHED,
+        'group_id' => $group->id,
+        'pickup_location' => '서울 강남',
+        'dropoff_location' => '인천공항',
+        'service_date' => now('Asia/Seoul')->format('Y-m-d'),
+        'service_time' => '14:00',
+    ]);
+
+    $this->getJson('/api/orders/recommendations')
+        ->assertOk()
+        ->assertJsonPath('data.0.name', '서울 강남 → 인천공항 외 1건');
 });
 
 test('진행 중 일정과 겹치면 시간 여유 근거가 빠지고, 같은 점수면 여유 있는 운행이 먼저 온다', function () {
