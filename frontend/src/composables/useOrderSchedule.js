@@ -16,7 +16,7 @@ export function useOrderSchedule({ error }) {
     const page = ref(1);
     const pagination = ref(null);
 
-    // 내 운행은 내가 운행할(받은) 운행만 보여준다 — 등록 운행은 '내 마켓', 끝난 운행은 '히스토리'에서 관리
+    // 받은 운행은 내가 운행할(받은) 운행만 보여준다 — 등록 운행은 '등록한 운행', 끝난 운행은 '지난 운행'에서 관리
     const listTab = ref('진행중');
     const listSearch = ref('');
     const STATUS_TABS = [

@@ -55,6 +55,12 @@ const go = (target) => {
         return;
     }
 
+    // 기사용 — '내 마켓' 화면에서 기사가 실제로 쓰는 탭(보낸 요청)을 바로 연다
+    if (target === 'my-market:sent') {
+        router.push({ name: 'my-market', query: { tab: '요청', cat: 'sent' } });
+        return;
+    }
+
     router.push({ name: target });
 };
 
@@ -111,15 +117,16 @@ const logout = async () => {
             </div>
         </div>
 
-        <!-- 내 운행 — 활성 운행·히스토리·내 마켓 메뉴 -->
-        <UiSection title="내 운행">
+        <!-- 운행 관리 — 역할에 따라 나눈다. 기사는 '받은 운행'(수행), 그 외는 '등록한 운행'(등록) -->
+        <UiSection title="운행 관리">
             <UiCard :padded="false" class="more-list">
-                <UiListRow tag="button" icon="order-create" arrow @click="go('order-create')">내 운행</UiListRow>
-                <UiListRow tag="button" icon="history" arrow @click="go('history')">운행 기록</UiListRow>
+                <UiListRow v-if="isDriver" tag="button" icon="order-create" arrow @click="go('order-create')">받은 운행</UiListRow>
+                <UiListRow v-if="isDriver" tag="button" icon="my-market" arrow @click="go('my-market:sent')">보낸 요청</UiListRow>
+                <UiListRow v-if="!isDriver" tag="button" icon="my-market" arrow @click="go('my-market')">등록한 운행</UiListRow>
+                <UiListRow tag="button" icon="history" arrow @click="go('history')">지난 운행</UiListRow>
                 <UiListRow tag="button" icon="heart" arrow @click="go('order-favorites')">찜한 운행</UiListRow>
                 <UiListRow v-if="isDriver" tag="button" icon="coin" arrow @click="go('settlement')">정산</UiListRow>
                 <UiListRow v-if="isCustomer" tag="button" icon="cash" arrow @click="go('registrant-settlement')">정산·입금</UiListRow>
-                <UiListRow tag="button" icon="my-market" arrow @click="go('my-market')">내 마켓</UiListRow>
                 <UiListRow tag="button" icon="cash" arrow @click="go('actions')">처리할 일</UiListRow>
             </UiCard>
         </UiSection>

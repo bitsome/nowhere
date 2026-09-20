@@ -367,7 +367,7 @@ const load = async () => {
             }
         }
     } catch (e) {
-        message.error(getApiErrorMessage(e, '내 마켓 목록을 불러오지 못했습니다.'));
+        message.error(getApiErrorMessage(e, '운행 목록을 불러오지 못했습니다.'));
     } finally {
         loading.value = false;
     }

@@ -425,7 +425,7 @@ const load = async (silent = false) => {
 
 const quickMenus = [
     { name: 'market', icon: 'market', label: '마켓' },
-    { name: 'my-market', icon: 'my-market', label: '내 마켓' },
+    { name: 'order-create', icon: 'order-create', label: '받은 운행' },
     { name: 'reviews', icon: 'reviews', label: '받은 리뷰' },
     { name: 'community', icon: 'community', label: '커뮤니티' },
     { name: 'notifications', icon: 'notifications', label: '알림' },

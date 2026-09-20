@@ -213,7 +213,7 @@ watch(
                             <BaseIcon name="cart" :size="22" />
                         </span>
                         <span class="community-entry__text">
-                            <strong>내 마켓</strong>
+                            <strong>등록한 운행</strong>
                             <small>내가 등록한 운행 관리 · 가져오기 요청 확인</small>
                         </span>
                         <span class="community-entry__arrow"><BaseIcon name="arrow-forward" :size="16" /></span>

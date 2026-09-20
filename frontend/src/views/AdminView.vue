@@ -1001,7 +1001,7 @@ const openOpAction = (kind, order) => {
     if (kind === 'hide') {
         opActionNote.value = order.is_hidden
             ? '숨김을 해제하면 운행이 다시 마켓·추천에 노출됩니다.'
-            : '숨긴 운행은 마켓·추천에서 빠지지만, 등록자(내 마켓)와 관리자는 그대로 확인할 수 있습니다.';
+            : '숨긴 운행은 마켓·추천에서 빠지지만, 등록자(등록한 운행)와 관리자는 그대로 확인할 수 있습니다.';
     } else if (kind === 'hold') {
         opActionNote.value = order.admin_hold
             ? '보류를 해제하면 상태 진행이 다시 허용됩니다.'

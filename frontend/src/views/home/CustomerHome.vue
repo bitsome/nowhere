@@ -12,7 +12,7 @@ const router = useRouter();
 const auth = useAuthStore();
 
 const MENU = [
-    { label: '내 마켓', desc: '등록한 운행 · 승인 · 정산', icon: 'my-market', name: 'my-market' },
+    { label: '등록한 운행', desc: '등록한 운행 · 승인 · 정산', icon: 'my-market', name: 'my-market' },
     { label: '처리할 일', desc: '가져오기 승인 · 요금 제안 · 요청', icon: 'inbox', name: 'actions' },
     { label: '마켓 둘러보기', desc: '등록된 운행과 시세 확인', icon: 'market', name: 'market' },
     { label: '커뮤니티', desc: '기사 정보 · 거래', icon: 'community', name: 'community' },

@@ -293,7 +293,7 @@ const load = async () => {
         orders.value = data.data ?? [];
         pagination.value = data.meta ?? null;
     } catch (e) {
-        message.error(getApiErrorMessage(e, '운행 기록을 불러오지 못했습니다.'));
+        message.error(getApiErrorMessage(e, '지난 운행을 불러오지 못했습니다.'));
     } finally {
         loading.value = false;
     }
@@ -321,7 +321,7 @@ onMounted(load);
     <div class="history-page page-shell">
         <div class="page-head">
             <div>
-                <p class="page-head__desc">완전히 끝난 운행만 기록합니다. 완료·정산·취소 상태로 구분해 보세요. 진행 중인 운행은 내 운행에서 관리합니다.</p>
+                <p class="page-head__desc">완전히 끝난 운행만 기록합니다. 완료·정산·취소 상태로 구분해 보세요. 진행 중인 운행은 받은 운행에서 관리합니다.</p>
             </div>
         </div>
 
@@ -397,7 +397,7 @@ onMounted(load);
         <EmptyState
             v-else-if="!orders.length"
             icon="truck"
-            title="운행 기록이 없습니다"
+            title="지난 운행이 없습니다"
             hint="완료·정산·취소된 운행이 여기에 표시됩니다"
         />
         <div v-else-if="viewMode === 'calendar'" class="cal">

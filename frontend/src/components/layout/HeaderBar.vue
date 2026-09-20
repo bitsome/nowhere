@@ -41,10 +41,10 @@ onBeforeUnmount(() => {
 const PAGE_LABEL = {
     home: '홈', market: '운행 마켓', chat: '채팅', match: '매칭',
     community: '커뮤니티', profile: '회원정보', notifications: '알림',
-    'user-page': '사용자 정보', 'order-create': '내 운행',
+    'user-page': '사용자 정보', 'order-create': '받은 운행',
     'order-edit': '운행 수정', 'order-detail': '운행 상세',
-    dashboard: '대시보드', admin: '운영 관리', 'my-market': '내 마켓',
-    more: '더보기', history: '운행 기록', reviews: '받은 리뷰',
+    dashboard: '대시보드', admin: '운영 관리', 'my-market': '등록한 운행',
+    more: '더보기', history: '지난 운행', reviews: '받은 리뷰',
     'order-favorites': '찜한 운행',
 };
 

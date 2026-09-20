@@ -19,7 +19,7 @@ const ui = useUiStore();
 const message = useMessage();
 
 // 화면 모드: 'list'(내 운행 스케줄) / 'form'(등록·수정 폼)
-// 내 마켓의 "운행 등록"은 ?form=1 로 진입해 폼부터 시작한다
+// '등록한 운행'의 "운행 등록"은 ?form=1 로 진입해 폼부터 시작한다
 const screen = ref(route.params.id ? 'form' : (route.query.form === '1' ? 'form' : 'list'));
 
 // 폼이면 하단 탭을 숨기고 헤더를 뒤로가기 형태로 바꾼다
@@ -124,7 +124,7 @@ onMounted(() => {
         <template v-if="screen === 'list'">
             <div class="page-head">
                 <div>
-                    <p class="page-head__desc">지금 진행 중이거나 예약된 운행을 날짜별로 모아 보여줍니다. 끝난 운행은 운행 기록에서 확인하세요.</p>
+                    <p class="page-head__desc">지금 진행 중이거나 예약된 운행을 날짜별로 모아 보여줍니다. 끝난 운행은 지난 운행에서 확인하세요.</p>
                 </div>
             </div>
 
