@@ -1,6 +1,6 @@
 # Tasks
 
-> 코드 구현(수수료 정책·수금 원장·출금 게이트·등록자/관리자 화면·매출 지표)은 이미 완료되어 로컬 테스트 352건으로 검증됨.
+> 코드 구현(수수료 정책·수금 원장·출금 게이트·등록자/관리자 화면·매출 지표)은 이미 완료되어 로컬 테스트 385건으로 검증됨.
 > 남은 작업은 **실제 첫 수익을 발생시키는 운영·배포 단계**다.
 
 - [x] Task 1: 매입 계좌 설정
@@ -116,7 +116,7 @@
   - [x] SubTask 15.3: 프론트 — `useOrderDetail` 에 `canSelfDrive` + 주동작 「내가 직접 수행하기」, `isPerformer` 에 자기 수행 포함(하단 운행 스테퍼 노출), 완료 후에는 정산 버튼이 보이도록 조정
   - [x] SubTask 15.4: 회귀 테스트 6건 신규(`OrderSelfDriveApiTest`) — 직접 수행 성공 / 남의 운행 403 / 기사 신청분 409 / 초안 422 / 정산 원장(90,000·4,500·85,500) / 마켓 제외·내 운행 노출. 백엔드 370건 통과
   - [x] SubTask 15.5: `.deploy/rehearse_self_drive.ps1` — 정적 IP 외부에서 **한 계정으로 15단계 전부 통과** (가입 → 등록 → 공개 → 직접 수행 → 운행 시작 → 5단계 스테퍼 → 완료 → 정산 → 원장 fee 4,500 수금 대기 → 마켓 제외)
-  - 남은 것: 자기 수행 운행은 등록자=수행자가 같은 사람이라 수금(에스크로 입금) 단계가 순환한다 — 아래 참고
+  - 남은 것: ~~자기 수행 운행은 등록자=수행자가 같은 사람이라 수금(에스크로 입금) 단계가 순환한다~~ → **Task 23에서 해소**(전액 0 마감으로 확정)
 
 - [x] Task 16: 위챗 그룹 운행을 앱으로 옮기는 길목 복구 (AI 구조화 폴백)
   - 배경: 실제 운행은 위챗 단체방에서 돈다. 앱에는 이미 위챗 문구용 AI 구조화가 있었지만(`OrderSummaryAiStructurer` 시스템 프롬프트가 `3.30送机 蚕室`, `2号 一起出 카니발` 같은 실물 문구를 예시로 쓴다) **운영에서 100% 실패**하고 있었다.
@@ -197,6 +197,19 @@
   - 교체 대상(이름 확정 시): 화면 10여 곳(`index.html`·`manifest.webmanifest`·`LandingView`·`LoginView`·`RegisterView`·`SharedOrderView`·`useOrderShare`), 공유·알림 문구(`ShareController` 3곳·`sw.js` 푸시 제목), 발신 주소(`config/webpush.php` VAPID subject), 저장 키(`nowhere_login_saved`·`nowhere:market:*` 4곳·`nowhere:home:*`), 알림 태그(`nowhere-push`·`nowhere`), 다운로드 파일명(`nowhere-image-N.jpg`), 배포 설정(`fly.toml`·`render.yaml`·`docker`·`hooks`), 문서 일괄
   - 참고: 실사용자 0명이라 **저장 키를 지금 바꾸는 것이 가장 저렴**하다. 기사가 유입된 뒤에는 `nowhere_login_saved` 이전 비용이 붙는다
   - 아이폰 실기 확인 항목(미완 — 환경 재기동 후): ① 설정→화면에 공유→홈 화면에 추가 순서 표시 ② 홈 화면 아이콘 이름이 `NoWhere`로 짧게 ③ 홈 화면 앱으로 열면 주소창 없음 ④ 설정→알림에 토글 표시(설치 안내 아님) ⑤ 토글 켜기→권한 허용 ⑥ `php artisan push:test --user=<이메일>`로 실제 푸시 수신·알림 탭 이동(404 아님)
+
+  - [x] SubTask 22.6: 아이폰 실기 검증 환경 재기동 — `php artisan serve`(:8000) + `npm run preview`(:4173) + cloudflared quick tunnel. `/`·`/manifest.webmanifest`·`/sw.js` 200, `/api/orders` 401, API 로그인(Driver) 성공까지 확인. 실기 확인은 대표님 대기
+
+- [x] Task 23: 자기 수행 정산 전액 0 (수금 순환 해소 · 확정)
+  - 배경: Task 15로 등록자=수행자가 같아지면서 '등록자 입금 → 관리자 수금 확인 → 기사 지급'이 자기 자신에게 왕복하는 순환이 생겼다(정책 결정 대기로 남아 있던 미해결 지점). 대표님이 **"전액 0 (수수료도 면제)"** 로 확정 — 플랫폼을 통과하는 돈이 없으므로 수금·수수료·지급을 모두 0으로 마감한다.
+  - [x] SubTask 23.1: `Settlement::COLLECTION_NOT_REQUIRED`(`not_required`) 상수 추가 — `collection_status`는 string(20)이라 마이그레이션 불필요
+  - [x] SubTask 23.2: `SettlementService::isSelfDrive()` — 원 등록자(`original_owner_id`)와 수행자(`user_id`)가 같으면 자기 수행. `createFor()`가 이 경우 `gross/fee/net = 0`, `fee_rate = 0`, `status = paid`, `collection_status = not_required`로 원장을 즉시 마감(수금 확인 목록·출금 재원에서 자동 제외)
+  - [x] SubTask 23.3: `notifySettled()`에 자기 수행 분기 — 입금 안내 대신 "자기 수행 운행으로 정산되었습니다. 수금·수수료·지급 없이 마감됩니다."만 발송(입금 계좌 안내 제거)
+  - [x] SubTask 23.4: 직접 수행 버튼에 **경고 확인 다이얼로그** — "직접 운행하시겠습니까?" + "마켓에서 내려가고 기사 모집이 중단됩니다 / 수금 0 / 되돌릴 수 없습니다"(`type: 'warning'`). 실행 시 공개 즉시 중단(마켓 제외) 안내
+  - [x] SubTask 23.5: 등록자 정산 화면(`RegistrantSettlementView`) 수금 상태 라벨 3분기 — `paid`(입금 확인) / `pending`(입금 대기) / `not_required`(자기 수행, 중립 그레이). 자기 수행이 '입금 대기'로 잘못 보이지 않게
+  - [x] SubTask 23.6: 회귀 테스트 — `OrderSelfDriveApiTest`의 정산 기대값을 90,000/4,500/85,500 → **0/0/0**으로 교체 + `collection_status = not_required`·`status = paid` 검증. `SettlementApiTest` 포함 23건 통과
+  - [x] SubTask 23.7: 문서 정합 — `docs/ORDER_FLOW.md` §3-6(전액 0·수금 면제 확정 반영)·§7·§8, `docs/OPERATIONS.md` 정산 운영(수금 면제)
+  - 검증: 백엔드 385건(1,868 assertions)·프론트 100건·`pint --dirty`·`check:refs`·`vite build` 전부 통과
 
 # Task Dependencies
 - [Task 2] depends on [Task 1] (배포 시 매입 계좌가 함께 반영돼야 입금 안내가 정상 동작)
