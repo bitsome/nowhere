@@ -32,6 +32,11 @@ const load = async () => {
 
 const account = computed(() => payables.value?.platform_account ?? {});
 
+// 수금 상태 라벨 — 자기 수행(not_required)은 수금 자체가 없으므로 입금 대기로 보이면 안 된다
+const COLLECTION_LABELS = { paid: '입금 확인', pending: '입금 대기', not_required: '자기 수행' };
+const collectionLabel = (status) => COLLECTION_LABELS[status] ?? '입금 대기';
+const collectionModifier = (status) => (status === 'pending' ? 'pending' : status === 'paid' ? 'paid' : 'self');
+
 onMounted(load);
 </script>
 
@@ -82,9 +87,9 @@ onMounted(load);
                             <strong class="settle-recent__route">{{ item.route || '운행' }}</strong>
                             <span
                                 class="settle-recent__status"
-                                :class="item.collection_status === 'paid' ? 'settle-recent__status--paid' : 'settle-recent__status--pending'"
+                                :class="`settle-recent__status--${collectionModifier(item.collection_status)}`"
                             >
-                                {{ item.collection_status === 'paid' ? '입금 확인' : '입금 대기' }}
+                                {{ collectionLabel(item.collection_status) }}
                             </span>
                         </div>
                         <p class="settle-recent__meta">
@@ -267,6 +272,11 @@ onMounted(load);
 .settle-recent__status--paid {
     background: color-mix(in srgb, var(--status-settled) 14%, transparent);
     color: var(--status-settled);
+}
+/* 자기 수행 — 수금할 것이 없는 상태라 중립(그레이)으로 둔다 */
+.settle-recent__status--self {
+    background: color-mix(in srgb, var(--text-muted) 14%, transparent);
+    color: var(--text-muted);
 }
 .settle-recent__meta {
     margin: 0;
