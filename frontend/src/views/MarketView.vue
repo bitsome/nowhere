@@ -961,7 +961,7 @@ watch(
                 title="내가 등록한 운행"
                 @click="router.push({ name: 'my-market' })"
             >
-                <BaseIcon name="cart" :size="18" />
+                <BaseIcon name="my-market" :size="18" />
             </button>
             <button
                 type="button"

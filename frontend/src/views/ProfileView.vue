@@ -210,7 +210,7 @@ watch(
                     </div>
                     <button type="button" class="community-entry" @click="router.push({ name: 'my-market' })">
                         <span class="community-entry__icon">
-                            <BaseIcon name="cart" :size="22" />
+                            <BaseIcon name="my-market" :size="22" />
                         </span>
                         <span class="community-entry__text">
                             <strong>등록한 운행</strong>
