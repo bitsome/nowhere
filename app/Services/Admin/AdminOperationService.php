@@ -15,7 +15,9 @@ use App\Notifications\OrderNotification;
 use App\Services\Chat\ChatService;
 use App\Services\Order\OrderOfferService;
 use App\Services\OrderFavoriteService;
+use App\Support\Orders\ChineseTextNormalizer;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 /**
  * 관리자 개입(B-2) — 문제 운행·사용자만 관리자가 손대는 운영 업무.
@@ -285,7 +287,7 @@ class AdminOperationService
                 ])->values()->all(),
                 'order' => $order ? [
                     'id' => $order->id,
-                    'route' => trim(($order->pickup_location ?: '').' → '.($order->dropoff_location ?: '')),
+                    'route' => ChineseTextNormalizer::routeLabel($order->pickup_location, $order->dropoff_location),
                     'service_date' => $order->service_date,
                     'service_time' => $order->service_time,
                     'status' => $order->status,
@@ -360,7 +362,7 @@ class AdminOperationService
                 return [
                     'id' => $settlement->id,
                     'driver' => $settlement->driver ? ['id' => $settlement->driver->id, 'name' => $settlement->driver->name] : null,
-                    'route' => $order ? trim(($order->pickup_location ?: '').' → '.($order->dropoff_location ?: '')) : '',
+                    'route' => $order ? ChineseTextNormalizer::routeLabel($order->pickup_location, $order->dropoff_location) : '',
                     'service_date' => $order?->service_date,
                     'net_amount' => (int) $settlement->net_amount,
                     'hold_reason' => $settlement->hold_reason,
@@ -485,12 +487,16 @@ class AdminOperationService
                 ->count(),
         ];
 
+        // 오늘 유입 — 파이프라인으로 등록된 운행의 건수·시간대·구분·지역 (KST 기준 오늘 등록분)
+        $ingestionToday = $this->ingestionTodaySummary();
+
         return [
             'pipeline' => [
                 'acceptance_pending' => (int) ($pipeline[Order::STATUS_ACCEPTANCE_PENDING] ?? 0),
                 'accepted' => (int) ($pipeline[Order::STATUS_ACCEPTED] ?? 0),
                 'driving' => (int) ($pipeline[Order::STATUS_DRIVING] ?? 0),
             ],
+            'ingestion_today' => $ingestionToday,
             'matching_30d' => [
                 'pending' => (int) ($claims['pending'] ?? 0),
                 'approved' => (int) ($claims['approved'] ?? 0),
@@ -501,6 +507,77 @@ class AdminOperationService
             'reports' => $reports,
             'users' => $users,
         ];
+    }
+
+    /**
+     * 오늘(KST) 파이프라인으로 등록된 운행 요약 — 건수·시간대·구분·지역.
+     *
+     * @return array<string, mixed>
+     */
+    private function ingestionTodaySummary(): array
+    {
+        // 관리자 화면은 이 시장의 말(샌딩·랜딩)로 읽는다
+        $labels = [
+            'pickup' => '랜딩(공항 픽업)',
+            'sending' => '샌딩(공항 배웅)',
+            'point' => '시내',
+            'landing' => '랜딩',
+        ];
+
+        $dayStart = now('Asia/Seoul')->startOfDay();
+
+        $orders = Order::query()
+            ->where('source', Order::SOURCE_PIPELINE)
+            // created_at 은 UTC 로 저장된다 — KST 하루 경계를 UTC 로 옮겨 비교한다
+            ->where('created_at', '>=', $dayStart->copy()->utc())
+            ->where('created_at', '<', $dayStart->copy()->addDay()->utc())
+            ->get(['service_time', 'service_type', 'pickup_location', 'dropoff_location']);
+
+        $unknown = $orders->whereNotIn('service_type', array_keys($labels))->count();
+
+        $byServiceType = collect($labels)
+            ->map(fn (string $label, string $key): array => [
+                'key' => $key,
+                'label' => $label,
+                'count' => $orders->where('service_type', $key)->count(),
+            ]);
+
+        if ($unknown > 0) {
+            $byServiceType->push(['key' => 'unknown', 'label' => '미지정', 'count' => $unknown]);
+        }
+
+        return [
+            'date' => $dayStart->format('Y-m-d'),
+            'total' => $orders->count(),
+            'by_hour' => $orders
+                ->filter(fn (Order $order): bool => filled($order->service_time))
+                ->groupBy(fn (Order $order): string => substr((string) $order->service_time, 0, 2).'시')
+                ->sortKeys()
+                ->map(fn ($group, string $hour): array => ['label' => $hour, 'count' => $group->count()])
+                ->values()
+                ->all(),
+            'by_service_type' => $byServiceType->values()->all(),
+            'pickup_regions' => $this->topRegions($orders->pluck('pickup_location')),
+            'dropoff_regions' => $this->topRegions($orders->pluck('dropoff_location')),
+        ];
+    }
+
+    /**
+     * 지역 상위 5곳 — 빈 지명은 세지 않는다.
+     *
+     * @param  Collection<int, string|null>  $regions
+     * @return array<int, array<string, mixed>>
+     */
+    private function topRegions(Collection $regions): array
+    {
+        return $regions
+            ->filter(fn (?string $region): bool => filled($region))
+            ->countBy()
+            ->sortDesc()
+            ->take(5)
+            ->map(fn (int $count, string $name): array => ['name' => $name, 'count' => $count])
+            ->values()
+            ->all();
     }
 
     /**
@@ -564,7 +641,7 @@ class AdminOperationService
         return [
             'id' => $order->id,
             'order_number' => $order->order_number,
-            'route' => trim(($order->pickup_location ?: '').' → '.($order->dropoff_location ?: '')),
+            'route' => ChineseTextNormalizer::routeLabel($order->pickup_location, $order->dropoff_location),
             'service_date' => $order->service_date,
             'service_time' => $order->service_time,
             'amount' => (int) ($order->actual_revenue ?? $order->amount_value ?? $order->expected_revenue ?? 0),

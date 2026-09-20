@@ -4,11 +4,14 @@ import { useDialog, useMessage } from 'naive-ui';
 import {
     apiAdminAutoOrderSettings,
     apiAdminAutoOrders,
+    apiAdminCreateOrderTerm,
     apiAdminDeleteAutoOrders,
     apiAdminDrivers,
+    apiAdminOrderTerms,
     apiAdminPayoutPay,
     apiAdminPayoutReject,
     apiAdminPayouts,
+    apiAdminSaveOrderTerm,
     apiAdminSetDriverStatus,
     apiAdminSetUserFeeRate,
     apiAdminSetUserRole,
@@ -568,6 +571,129 @@ const submitAdvance = async () => {
     }
 };
 
+// ── 미매핑 용어 — 사전에 없던 중국어 표기를 한국어로 매핑 (매핑하면 기존 운행도 함께 바뀐다) ──
+const orderTerms = ref([]);
+const orderTermsMeta = ref({ total: 0, current_page: 1, last_page: 1, statuses: {}, fields: {} });
+const orderTermsLoading = ref(false);
+const orderTermStatusFilter = ref('pending');
+const orderTermFieldFilter = ref('');
+const orderTermQuery = ref('');
+// 1회성 표기는 기본으로 숨긴다 — 반복되는 표기만 관리자 눈에 띄게
+const orderTermMinOccurrences = ref(2);
+const orderTermTarget = ref(null);
+const orderTermModalOpen = ref(false);
+const orderTermValue = ref('');
+const orderTermBusy = ref(false);
+
+// 용어 직접 등록 — 아직 유입되지 않은 표기도 미리 사전에 넣는다
+const termAddOpen = ref(false);
+const termAddField = ref('');
+const termAddSource = ref('');
+const termAddValue = ref('');
+const termAddBusy = ref(false);
+
+const orderTermStatusOptions = computed(() =>
+    Object.entries(orderTermsMeta.value.statuses ?? {}).map(([value, label]) => ({ value, label })));
+const orderTermFieldOptions = computed(() =>
+    Object.entries(orderTermsMeta.value.fields ?? {}).map(([value, label]) => ({ value, label })));
+
+const loadOrderTerms = async (page = 1) => {
+    orderTermsLoading.value = true;
+
+    try {
+        const { data } = await apiAdminOrderTerms({
+            status: orderTermStatusFilter.value || undefined,
+            field: orderTermFieldFilter.value || undefined,
+            q: orderTermQuery.value.trim() || undefined,
+            min_occurrences: orderTermMinOccurrences.value,
+            page,
+        });
+        orderTerms.value = data.data;
+        orderTermsMeta.value = data.meta;
+    } catch (e) {
+        message.error(getApiErrorMessage(e, '미매핑 용어 목록을 불러오지 못했습니다.'));
+    } finally {
+        orderTermsLoading.value = false;
+    }
+};
+
+const formatTermTime = (iso) => (iso ? new Date(iso).toLocaleString('ko-KR') : '');
+
+const openOrderTerm = (term) => {
+    orderTermTarget.value = term;
+    orderTermValue.value = term.mapped_to ?? '';
+    orderTermModalOpen.value = true;
+};
+
+// 매핑 저장 / 무시 / 되돌리기 — 무시는 매핑값 없이 상태만 바꾼다
+const submitOrderTerm = async (status) => {
+    if (!orderTermTarget.value) {
+        return;
+    }
+
+    if (status === 'mapped' && !orderTermValue.value.trim()) {
+        message.warning('한국어 표기를 입력해 주세요.');
+
+        return;
+    }
+
+    orderTermBusy.value = true;
+
+    try {
+        const { data } = await apiAdminSaveOrderTerm(orderTermTarget.value.id, {
+            status,
+            mapped_to: status === 'mapped' ? orderTermValue.value.trim() : undefined,
+        });
+        message.success(`'${data.data.term}' → ${data.data.mapped_to ?? data.data.status_label} 처리했습니다.`);
+        orderTermModalOpen.value = false;
+        orderTermTarget.value = null;
+        await loadOrderTerms(orderTermsMeta.value.current_page);
+    } catch (e) {
+        message.error(getApiErrorMessage(e, '용어 매핑 저장에 실패했습니다.'));
+    } finally {
+        orderTermBusy.value = false;
+    }
+};
+
+// ── 용어 직접 등록 — 아직 유입되지 않은 표기도 미리 사전에 넣는다 ──
+const openTermAdd = () => {
+    termAddField.value = '';
+    termAddSource.value = '';
+    termAddValue.value = '';
+    termAddOpen.value = true;
+};
+
+const submitTermAdd = async () => {
+    if (!termAddField.value) {
+        message.warning('분야를 선택해 주세요.');
+
+        return;
+    }
+
+    if (!termAddSource.value.trim() || !termAddValue.value.trim()) {
+        message.warning('원문과 한국어 표기를 모두 입력해 주세요.');
+
+        return;
+    }
+
+    termAddBusy.value = true;
+
+    try {
+        const { data } = await apiAdminCreateOrderTerm({
+            field: termAddField.value,
+            term: termAddSource.value.trim(),
+            mapped_to: termAddValue.value.trim(),
+        });
+        message.success(`'${data.data.term}' → ${data.data.mapped_to} ${data.meta.created ? '등록' : '수정'}했습니다.`);
+        termAddOpen.value = false;
+        await loadOrderTerms(1);
+    } catch (e) {
+        message.error(getApiErrorMessage(e, '용어 등록에 실패했습니다.'));
+    } finally {
+        termAddBusy.value = false;
+    }
+};
+
 // ── 감사 로그 — 관리자 개입·변경 행위 기록 (정산·신고·제재·역할·증빙 등) ──
 const auditRows = ref([]);
 const auditLoading = ref(false);
@@ -600,6 +726,8 @@ const onTabChange = (name) => {
     } else if (name === 'reports') {
         loadReportStatuses();
         loadReports();
+    } else if (name === 'terms') {
+        loadOrderTerms();
     } else if (name === 'verifications') {
         loadVerifications();
     } else if (name === 'support') {
@@ -757,6 +885,16 @@ const ratePercent = (rate) => {
 
     return `${Number.isInteger(pct) ? pct : pct.toFixed(1)}%`;
 };
+
+// 오늘 유입 — 파이프라인으로 등록된 운행의 건수·시간대·샌딩/랜딩·지역
+const ingestionToday = computed(() => metrics.value?.ingestion_today ?? {
+    date: '',
+    total: 0,
+    by_hour: [],
+    by_service_type: [],
+    pickup_regions: [],
+    dropoff_regions: [],
+});
 
 const metricCards = computed(() => {
     const m = metrics.value;
@@ -1330,6 +1468,60 @@ onBeforeUnmount(() => {
                 <div v-else-if="metrics" class="metrics-grid">
                     <section class="metrics-group">
                         <h3 class="metrics-group__title">
+                            <span class="metrics-dot metrics-dot--brand" /> 오늘 유입 (파이프라인 등록)
+                        </h3>
+                        <div class="ingest-summary">
+                            <div class="metrics-cards">
+                                <div class="metric-card">
+                                    <span class="metric-card__label">오늘 등록</span>
+                                    <strong class="metric-card__value metric-card__value--brand">{{ ingestionToday.total }}건</strong>
+                                    <span class="metric-card__sub">{{ ingestionToday.date }} 기준 · 앱 직접 등록 제외</span>
+                                </div>
+                            </div>
+
+                            <div class="ingest-block">
+                                <span class="ingest-block__label">시간대 (운행 시각)</span>
+                                <div class="ingest-chips">
+                                    <span v-for="slot in ingestionToday.by_hour" :key="slot.label" class="ingest-chip">
+                                        {{ slot.label }} <strong>{{ slot.count }}</strong>
+                                    </span>
+                                    <span v-if="!ingestionToday.by_hour.length" class="ingest-empty">시각이 지정된 유입이 없습니다</span>
+                                </div>
+                            </div>
+
+                            <div class="ingest-block">
+                                <span class="ingest-block__label">구분</span>
+                                <div class="ingest-chips">
+                                    <span v-for="type in ingestionToday.by_service_type" :key="type.key" class="ingest-chip">
+                                        {{ type.label }} <strong>{{ type.count }}</strong>
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div class="ingest-block">
+                                <span class="ingest-block__label">출발지</span>
+                                <div class="ingest-chips">
+                                    <span v-for="region in ingestionToday.pickup_regions" :key="region.name" class="ingest-chip">
+                                        {{ region.name }} <strong>{{ region.count }}</strong>
+                                    </span>
+                                    <span v-if="!ingestionToday.pickup_regions.length" class="ingest-empty">기록 없음</span>
+                                </div>
+                            </div>
+
+                            <div class="ingest-block">
+                                <span class="ingest-block__label">도착지</span>
+                                <div class="ingest-chips">
+                                    <span v-for="region in ingestionToday.dropoff_regions" :key="region.name" class="ingest-chip">
+                                        {{ region.name }} <strong>{{ region.count }}</strong>
+                                    </span>
+                                    <span v-if="!ingestionToday.dropoff_regions.length" class="ingest-empty">기록 없음</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="metrics-group">
+                        <h3 class="metrics-group__title">
                             <span class="metrics-dot metrics-dot--brand" /> 수수료 매출
                         </h3>
                         <div class="metrics-cards">
@@ -1882,6 +2074,92 @@ onBeforeUnmount(() => {
                             </button>
                         </div>
                     </article>
+                </div>
+            </n-tab-pane>
+
+            <n-tab-pane name="terms" tab="미매핑 용어">
+                <div class="admin-filter-row">
+                    <n-select
+                        :value="orderTermStatusFilter"
+                        size="small"
+                        style="width: 140px"
+                        :options="[{ value: '', label: '전체 상태' }, ...orderTermStatusOptions]"
+                        @update:value="(value) => { orderTermStatusFilter = value ?? ''; loadOrderTerms(); }"
+                    />
+                    <n-select
+                        :value="orderTermFieldFilter"
+                        size="small"
+                        style="width: 130px"
+                        :options="[{ value: '', label: '전체 분야' }, ...orderTermFieldOptions]"
+                        @update:value="(value) => { orderTermFieldFilter = value ?? ''; loadOrderTerms(); }"
+                    />
+                    <n-select
+                        :value="orderTermMinOccurrences"
+                        size="small"
+                        style="width: 120px"
+                        :options="[{ value: 2, label: '2회 이상' }, { value: 1, label: '1회 포함' }]"
+                        @update:value="(value) => { orderTermMinOccurrences = value ?? 2; loadOrderTerms(); }"
+                    />
+                    <n-input
+                        v-model:value="orderTermQuery"
+                        size="small"
+                        style="width: 180px"
+                        placeholder="용어 검색"
+                        @keyup.enter="loadOrderTerms()"
+                    />
+                    <n-button size="small" @click="loadOrderTerms()">조회</n-button>
+                    <n-button size="small" type="primary" ghost @click="openTermAdd()">용어 추가</n-button>
+                    <span class="admin-filter-info">총 {{ orderTermsMeta.total }}건</span>
+                </div>
+
+                <p class="admin-page-hint">
+                    위챗에서 들어온 중국어 표기 중 사전에 없는 값을 모아 둡니다. 한국어를 지정하면 다음 유입부터
+                    바로 적용되고, 이미 저장된 운행에도 함께 반영됩니다. 분야를 '태그'로 지정하면 지명 대신
+                    운행 태그로 붙습니다(값은 그대로 둡니다). 한 번만 나온 표기는 기본으로 숨기니, 반복되는
+                    표기만 확인하면 됩니다.
+                </p>
+
+                <div v-if="orderTermsLoading" class="admin-skeleton">
+                    <div v-for="n in 3" :key="n" class="sk-card admin-skeleton__row" />
+                </div>
+
+                <EmptyState
+                    v-else-if="orderTerms.length === 0"
+                    icon="inbox"
+                    title="해당 조건의 용어가 없습니다"
+                    hint="사전에 없는 중국어 표기가 들어오면 이 목록에 쌓입니다"
+                />
+
+                <div v-else class="report-list">
+                    <article v-for="term in orderTerms" :key="term.id" class="report-card">
+                        <div class="report-card__head">
+                            <span class="report-card__cat">{{ term.field_label }}</span>
+                            <span class="report-card__status">{{ term.status_label }}</span>
+                        </div>
+                        <p class="report-card__subject">{{ term.term }}</p>
+                        <p v-if="term.mapped_to" class="report-card__note">
+                            <strong>매핑</strong> {{ term.mapped_to }}
+                        </p>
+                        <p class="report-card__meta">
+                            {{ term.occurrences }}회 · 최근 {{ formatTermTime(term.last_seen_at) }}
+                            <template v-if="term.mapped_by_name"> · {{ term.mapped_by_name }}</template>
+                        </p>
+                        <div class="report-card__actions">
+                            <button
+                                type="button"
+                                class="admin-payout-btn admin-payout-btn--ok"
+                                @click="openOrderTerm(term)"
+                            >
+                                한국어 매핑
+                            </button>
+                        </div>
+                    </article>
+                </div>
+
+                <div v-if="orderTermsMeta.last_page > 1" class="admin-pager">
+                    <n-button size="small" :disabled="orderTermsMeta.current_page <= 1" @click="loadOrderTerms(orderTermsMeta.current_page - 1)">이전</n-button>
+                    <span class="admin-pager__info">{{ orderTermsMeta.current_page }} / {{ orderTermsMeta.last_page }} (총 {{ orderTermsMeta.total }}건)</span>
+                    <n-button size="small" :disabled="orderTermsMeta.current_page >= orderTermsMeta.last_page" @click="loadOrderTerms(orderTermsMeta.current_page + 1)">다음</n-button>
                 </div>
             </n-tab-pane>
 
@@ -2477,6 +2755,68 @@ onBeforeUnmount(() => {
                     <n-button type="primary" :loading="advanceBusy" :disabled="!advanceStatus" @click="submitAdvance">
                         단계 진행
                     </n-button>
+                </div>
+            </template>
+        </n-modal>
+
+        <!-- 미매핑 용어 매핑 모달 — 한국어 표기 지정 / 무시 -->
+        <n-modal
+            v-model:show="orderTermModalOpen"
+            preset="card"
+            :style="{ width: 'min(92vw, 420px)' }"
+            title="용어 매핑"
+        >
+            <div class="admin-modal-body">
+                <p class="admin-modal-target">{{ orderTermTarget?.field_label }} · {{ orderTermTarget?.term }}</p>
+                <p class="admin-page-hint">
+                    한국어를 지정하면 다음 유입부터 사전에 적용되고, 이미 저장된 운행에도 함께 반영됩니다.
+                </p>
+                <label class="admin-modal-label">한국어 표기</label>
+                <n-input
+                    v-model:value="orderTermValue"
+                    :maxlength="200"
+                    placeholder="예: 회기"
+                    @keyup.enter="submitOrderTerm('mapped')"
+                />
+            </div>
+            <template #footer>
+                <div class="admin-modal-footer">
+                    <n-button :disabled="orderTermBusy" @click="orderTermModalOpen = false">취소</n-button>
+                    <n-button :disabled="orderTermBusy" @click="submitOrderTerm('ignored')">무시</n-button>
+                    <n-button type="primary" :loading="orderTermBusy" @click="submitOrderTerm('mapped')">
+                        매핑 저장
+                    </n-button>
+                </div>
+            </template>
+        </n-modal>
+
+        <!-- 용어 직접 등록 모달 — 아직 유입되지 않은 표기도 미리 사전에 넣는다 -->
+        <n-modal
+            v-model:show="termAddOpen"
+            preset="card"
+            :style="{ width: 'min(92vw, 420px)' }"
+            title="용어 추가"
+        >
+            <div class="admin-modal-body">
+                <p class="admin-page-hint">
+                    아직 들어오지 않은 표기도 미리 등록할 수 있습니다. 같은 분야·원문이 이미 있으면 매핑값만 바뀝니다.
+                </p>
+                <label class="admin-modal-label">분야</label>
+                <n-select v-model:value="termAddField" :options="orderTermFieldOptions" placeholder="분야 선택" />
+                <label class="admin-modal-label">원문 (중국어 등)</label>
+                <n-input v-model:value="termAddSource" :maxlength="200" placeholder="예: 新村" />
+                <label class="admin-modal-label">한국어 표기</label>
+                <n-input
+                    v-model:value="termAddValue"
+                    :maxlength="200"
+                    placeholder="예: 신촌"
+                    @keyup.enter="submitTermAdd()"
+                />
+            </div>
+            <template #footer>
+                <div class="admin-modal-footer">
+                    <n-button :disabled="termAddBusy" @click="termAddOpen = false">취소</n-button>
+                    <n-button type="primary" :loading="termAddBusy" @click="submitTermAdd()">등록</n-button>
                 </div>
             </template>
         </n-modal>
@@ -3909,6 +4249,53 @@ html.dark .auto-card :deep(.n-switch__unchecked) {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 10px;
+}
+
+/* 오늘 유입 — 파이프라인으로 등록된 운행 요약 (건수·시간대·구분·지역) */
+.ingest-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.ingest-block {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ingest-block__label {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+}
+
+.ingest-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.ingest-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface);
+    font-size: 11px;
+    color: var(--text);
+}
+
+.ingest-chip strong {
+    font-weight: 800;
+    color: var(--brand);
+}
+
+.ingest-empty {
+    font-size: 11px;
+    color: var(--text-muted);
 }
 
 .metric-card {

@@ -25,3 +25,9 @@ export const apiAdminPayouts = () => apiClient.get('/admin/payouts');
 export const apiAdminPayoutPay = (payoutId) => apiClient.post(`/admin/payouts/${payoutId}/pay`);
 export const apiAdminPayoutReject = (payoutId, reason = '') =>
     apiClient.post(`/admin/payouts/${payoutId}/reject`, { reason });
+
+// 미매핑 용어 관리 — 사전에 없던 중국어 표기를 한국어로 매핑
+export const apiAdminOrderTerms = (params = {}) => apiClient.get('/admin/order-terms', { params });
+export const apiAdminSaveOrderTerm = (termId, payload) => apiClient.patch(`/admin/order-terms/${termId}`, payload);
+// 용어 직접 등록 — 아직 유입되지 않은 표기도 미리 사전에 넣어 둔다
+export const apiAdminCreateOrderTerm = (payload) => apiClient.post('/admin/order-terms', payload);
