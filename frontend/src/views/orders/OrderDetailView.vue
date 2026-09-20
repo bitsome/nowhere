@@ -1437,23 +1437,30 @@ const formatClaimTime = (iso) => {
                     {{ chatUnread > 9 ? '9+' : chatUnread > 1 ? chatUnread : '' }}
                 </span>
             </div>
+            <!-- 진행 중 — 다음 단계를 원터치로 진행한다 -->
             <n-button
+                v-if="rideNextStep"
                 size="large"
                 class="detail-actionbar__primary"
-                :color="resolveCssVarColor((rideNextStep ?? { color: 'var(--status-completed)' }).color)"
+                :color="resolveCssVarColor(rideNextStep.color)"
                 :text-color="rideBarTextColor"
                 :loading="rideAdvancing"
                 @click="advanceRideFromBar"
             >
-                <template v-if="rideNextStep">
-                    <span
-                        class="detail-actionbar__step"
-                        :class="{ 'detail-actionbar__step--dark': rideBarDarkText }"
-                    >{{ rideStepCount }}/{{ RIDE_PROCEDURE_STEPS.length }}</span>
-                    다음: {{ rideNextStep.label }}
-                </template>
-                <template v-else>운행 완료</template>
+                <BaseIcon name="truck" :size="16" class="detail-actionbar__icon" />
+                <span
+                    class="detail-actionbar__step"
+                    :class="{ 'detail-actionbar__step--dark': rideBarDarkText }"
+                >{{ rideStepCount }}/{{ RIDE_PROCEDURE_STEPS.length }}</span>
+                다음: {{ rideNextStep.label }}
             </n-button>
+
+            <!-- 완료 — 더 진행할 단계가 없어 누를 것이 없다. 초록 버튼으로 두면
+                 계속 눌러야 할 것처럼 보이므로, 눌리지 않는 완료 안내로 바꾼다. -->
+            <div v-else class="detail-actionbar__done">
+                <BaseIcon name="check-done" :size="18" />
+                <span>운행 완료</span>
+            </div>
         </div>
 
         <!-- 등록자와 대화 바텀 시트 — 하단 채팅 버튼으로 아래에서 위로 열린다 -->
@@ -2489,6 +2496,30 @@ html.dark .detail-map__placeholder {
 /* 진행도 배지가 어두운 글자(#101418) 위일 때 — 흰 틴트 대신 어두운 틴트로 대비 유지 */
 .detail-actionbar__step--dark {
     background: rgba(16, 20, 24, 0.16);
+}
+
+/* 진행 버튼 아이콘 — 진행 상태 배지 앞에 붙여 '무엇을 하는 버튼인지' 바로 읽히게 한다 */
+.detail-actionbar__icon {
+    margin-right: 6px;
+    vertical-align: -2px;
+}
+
+/* 운행 완료 안내 — 남은 단계가 없어 누를 것이 없다.
+   버튼과 달리 채우지 않고 테두리만 둬서 '누르는 것'으로 보이지 않게 한다. */
+.detail-actionbar__done {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 9px 16px;
+    border: 1px solid color-mix(in srgb, var(--status-completed) 38%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--status-completed) 10%, transparent);
+    color: var(--status-completed);
+    font-size: 15px;
+    font-weight: 600;
 }
 
 /* 채팅 버튼 — 상대가 보낸 안 읽은 채팅이 오면 빨간점/숫자로 표시 */
