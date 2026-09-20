@@ -25,3 +25,9 @@ Schedule::command('orders:auto-settle')->everyFiveMinutes()->withoutOverlapping(
 
 // 매일 운행 자동 등록 — 설정(admin/auto-order-settings)에서 중지/시작·건수 조정 가능
 Schedule::command('orders:auto-register')->dailyAt('09:00')->timezone('Asia/Seoul')->withoutOverlapping();
+
+// 내장 사전 소급 적용 — 사전에 추가된 표기를 이미 저장된 운행·미매핑 용어에 자동 반영
+Schedule::command('orders:apply-terms')->hourly()->withoutOverlapping();
+
+// 유입 중단 감시 — 발신 측(위챗 파서·브리지)이 멈추면 관리자에게 알린다
+Schedule::command('orders:watch-ingestion')->hourly()->withoutOverlapping();

@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Notifications\OrderNotification;
 use App\Services\Admin\AuditService;
 use App\Services\DriverMatchRanker;
+use App\Support\Orders\ChineseTextNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -300,7 +301,7 @@ class AdminController extends Controller
                 'id' => $order->id,
                 'order_number' => $order->order_number,
                 'customer_name' => $order->customer_name,
-                'route' => trim(($order->pickup_location ?: '').' → '.($order->dropoff_location ?: '')),
+                'route' => ChineseTextNormalizer::routeLabel($order->pickup_location, $order->dropoff_location),
                 'service_date' => $order->service_date,
                 'service_time' => $order->service_time,
                 'expected_revenue' => $order->expected_revenue,

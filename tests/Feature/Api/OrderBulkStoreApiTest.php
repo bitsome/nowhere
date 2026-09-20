@@ -2,6 +2,7 @@
 
 use App\Models\Order;
 use App\Models\User;
+use App\Support\Orders\ServiceTypeInferrer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 
@@ -33,7 +34,8 @@ function bulkTestOrder(string $pickup, string $dropoff, ?int $amount = 90000): a
         'pickup_location' => $pickup,
         'dropoff_location' => $dropoff,
         'vehicle_type' => '카니발',
-        'service_type' => 'pickup',
+        // 구분은 노선이 정한다(공항 출발=픽업, 공항 도착=샌딩) — 어긋나면 유입 검증에서 거절된다
+        'service_type' => ServiceTypeInferrer::infer($pickup, $dropoff) ?? 'pickup',
         'service_date' => '2026-10-01',
         'service_time' => '09:00',
         'passenger_count' => 3,
@@ -71,8 +73,8 @@ test('공개를 요청하면 필수 정보가 찬 운행만 공개한다', funct
         'publish' => true,
         'orders' => [
             bulkTestOrder('인천공항 T1', '서울 강남'),
-            // 금액 누락 — 마켓 공개 요건을 못 채우므로 초안으로 남아야 한다
-            bulkTestOrder('명동', '인천공항 T1', null),
+            // 출발지 누락 — 노선이 없으면 공개할 수 없으므로 초안으로 남아야 한다
+            [...bulkTestOrder('명동', '인천공항 T1', null), 'pickup_location' => null],
         ],
     ])->assertCreated();
 

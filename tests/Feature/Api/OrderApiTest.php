@@ -1412,6 +1412,119 @@ test('api order store accepts minimal fields without passenger count', function 
     expect($order->service_datetime)->toBe('2026-08-20 09:30:00');
 });
 
+test('api order store keeps draft when publish is not requested', function () {
+    $response = $this->postJson('/api/orders', [
+        'pickup_location' => '인천공항 T1',
+        'dropoff_location' => '서울 강남',
+        'vehicle_type' => '카니발',
+        'service_type' => 'pickup',
+        'service_date' => '2026-10-01',
+        'service_time' => '09:00',
+        'expected_revenue' => 90000,
+    ])->assertCreated();
+
+    expect($response->json('data.published'))->toBe(0)
+        ->and($response->json('data.draft_ids'))->toBe([])
+        ->and(Order::query()->findOrFail($response->json('data.id'))->status)->toBe(Order::STATUS_DRAFT);
+});
+
+test('api order store publishes an order that meets the market requirements', function () {
+    $response = $this->postJson('/api/orders', [
+        'pickup_location' => '인천공항 T1',
+        'dropoff_location' => '서울 강남',
+        'vehicle_type' => '카니발',
+        'service_type' => 'pickup',
+        'service_date' => '2026-10-01',
+        'service_time' => '09:00',
+        'expected_revenue' => 90000,
+        'publish' => true,
+    ])->assertCreated();
+
+    expect($response->json('data.published'))->toBe(1)
+        ->and($response->json('data.draft_ids'))->toBe([])
+        ->and(Order::query()->findOrFail($response->json('data.id'))->status)->toBe(Order::STATUS_PUBLISHED);
+});
+
+test('api order store keeps draft when publish is requested but requirements are missing', function () {
+    // 출발지 누락 — 노선이 없으면 마켓에 노출할 수 없으므로 공개를 요청해도 초안으로 남아야 한다
+    $response = $this->postJson('/api/orders', [
+        'dropoff_location' => '서울 강남',
+        'vehicle_type' => '카니발',
+        'service_type' => 'pickup',
+        'service_date' => '2026-10-01',
+        'service_time' => '09:00',
+        'publish' => true,
+    ])->assertCreated();
+
+    $orderId = $response->json('data.id');
+
+    expect($response->json('data.published'))->toBe(0)
+        ->and($response->json('data.draft_ids'))->toBe([$orderId])
+        ->and(Order::query()->findOrFail($orderId)->status)->toBe(Order::STATUS_DRAFT);
+});
+
+test('api order store publishes even when vehicle and revenue are not stated', function () {
+    // 차종·요금을 쓰지 않는 유입 원문이 많으므로, 미지정이어도 공개를 허용한다 (요금은 기사 제안으로 이어진다)
+    $response = $this->postJson('/api/orders', [
+        'pickup_location' => '인천공항 T1',
+        'dropoff_location' => '서울 강남',
+        'service_date' => '2026-10-01',
+        'service_time' => '09:00',
+        'publish' => true,
+    ])->assertCreated();
+
+    expect($response->json('data.published'))->toBe(1)
+        ->and(Order::query()->findOrFail($response->json('data.id'))->status)->toBe(Order::STATUS_PUBLISHED);
+});
+
+test('api order store infers service type from the route when it is not stated', function () {
+    // 구분 표기가 없으면 공항이 어느 쪽인지로 픽업/샌딩/시내를 정한다
+    $pickup = $this->postJson('/api/orders', [
+        'pickup_location' => '인천공항 T1',
+        'dropoff_location' => '서울 강남',
+        'service_time' => '09:00',
+    ])->assertCreated();
+    $sending = $this->postJson('/api/orders', [
+        'pickup_location' => '서울 강남',
+        'dropoff_location' => '인천공항 T1',
+        'service_time' => '09:00',
+    ])->assertCreated();
+    $point = $this->postJson('/api/orders', [
+        'pickup_location' => '서울 강남',
+        'dropoff_location' => '서울 잠실',
+        'service_time' => '09:00',
+    ])->assertCreated();
+
+    expect(Order::query()->findOrFail($pickup->json('data.id'))->service_type)->toBe('pickup')
+        ->and(Order::query()->findOrFail($sending->json('data.id'))->service_type)->toBe('sending')
+        ->and(Order::query()->findOrFail($point->json('data.id'))->service_type)->toBe('point');
+});
+
+test('요금 협의 운행은 완료 시 실제 수익을 입력해야 정산할 수 있다', function () {
+    $order = Order::factory()->create([
+        'status' => Order::STATUS_DRIVING,
+        'user_id' => $this->driver->id,
+        'expected_revenue' => null,
+        'amount_value' => null,
+        'actual_revenue' => null,
+    ]);
+
+    // 계약 금액도 실제 수익도 없으면 완료할 수 없다 — 정산 원장이 0원으로 마감되는 것을 막는다
+    $this->postJson("/api/orders/{$order->id}/status", ['status' => Order::STATUS_COMPLETED])
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['actual_revenue']);
+
+    expect($order->fresh()->status)->toBe(Order::STATUS_DRIVING);
+
+    $this->postJson("/api/orders/{$order->id}/status", [
+        'status' => Order::STATUS_COMPLETED,
+        'actual_revenue' => 90000,
+    ])->assertOk();
+
+    expect($order->fresh()->status)->toBe(Order::STATUS_COMPLETED)
+        ->and($order->fresh()->actual_revenue)->toBe(90000);
+});
+
 test('api order update modifies the order', function () {
     $order = Order::factory()->create([
         'customer_name' => '원래이름',

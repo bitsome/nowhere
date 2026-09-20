@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderClaim;
 use App\Models\OrderEvent;
+use App\Models\OrderIngestion;
 use App\Models\Review;
 use App\Models\User;
 use App\Models\Vehicle;
@@ -16,9 +17,14 @@ use App\Services\Order\OrderListService;
 use App\Services\Order\OrderTransitionService;
 use App\Services\OrderFavoriteService;
 use App\Services\OrderSummaryAiStructurer;
+use App\Support\Orders\ChineseTextNormalizer;
+use App\Support\Orders\IngestedOrderGuard;
+use App\Support\Orders\PipelineOwner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Throwable;
 
 /**
  * 운행 API — HTTP 요청/응답만 담당하고 비즈니스 로직은 Order 서비스에 위임한다.
@@ -127,7 +133,7 @@ class OrderController extends Controller
 
         return response()->json([
             'data' => [
-                'order' => $order->toArray(),
+                'order' => $this->withDisplayLocations($order->toArray()),
                 // 내가 찜한 운행인지 — 상세 화면 하트 초기 상태
                 'favorited' => $request->user() !== null
                     ? app(OrderFavoriteService::class)->isFavorited($request->user(), $order)
@@ -164,11 +170,43 @@ class OrderController extends Controller
                     'id' => $myReview->id,
                     'rating' => $myReview->rating,
                 ],
-                'group' => $order->group?->toArray(),
+                'group' => $order->group === null ? null : $this->withDisplayLocations($order->group->toArray()),
                 'statusOptions' => Order::statusOptions(),
                 'nextTransitions' => array_values(Order::STATUS_FLOW[$order->status] ?? []),
             ],
         ]);
+    }
+
+    /**
+     * 상세 응답의 위치·차량 표기를 화면용으로 바꾼다.
+     *
+     * 유입 원문에 사전으로 풀리지 않는 한자가 남아 있어도 화면에 그대로 노출하지 않도록,
+     * 위치·차량 값을 한국어 표기로 바꾼다. 등록자가 수정 화면에서 원문을 되살릴 수 있도록
+     * 원본은 raw_* 키로 함께 내려준다. (중첩된 셋트 다리·라인아이템까지 모두 적용)
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function withDisplayLocations(array $payload): array
+    {
+        foreach ($payload as $key => $value) {
+            if (is_array($value)) {
+                $payload[$key] = $this->withDisplayLocations($value);
+            }
+        }
+
+        foreach (['pickup_location', 'dropoff_location', 'vehicle_type'] as $key) {
+            if (! array_key_exists($key, $payload)) {
+                continue;
+            }
+
+            $payload['raw_'.$key] = $payload[$key];
+            $payload[$key] = $key === 'vehicle_type'
+                ? ChineseTextNormalizer::displayVehicle($payload[$key])
+                : ChineseTextNormalizer::displayLocation($payload[$key]);
+        }
+
+        return $payload;
     }
 
     /**
@@ -451,20 +489,55 @@ class OrderController extends Controller
      *
      * @return JsonResponse{data: array<string, mixed>}
      */
-    public function store(Request $request, OrderCreator $creator): JsonResponse
+    public function store(Request $request, OrderCreator $creator, OrderTransitionService $transitionService): JsonResponse
     {
-        $data = $this->validateOrderPayload($request);
+        $ingestion = $this->recordIngestion($request, 'orders');
 
-        $order = $creator->create($data, $request->user()->id);
+        try {
+            $data = $request->validate([
+                ...$this->orderPayloadRules(),
+                'publish' => ['nullable', 'boolean'],
+            ]);
 
-        // 레벨링: 운행 등록 +10 XP
-        $request->user()->addXp(10, 'order_created', '운행 등록');
+            $this->assertIngestionRules([$data]);
+
+            $this->assertReceivable([$data]);
+
+            $owner = $this->orderOwner($request, $data);
+
+            $order = $creator->create($data, $owner->id);
+
+            // 레벨링: 운행 등록 +10 XP
+            $owner->addXp(10, 'order_created', '운행 등록');
+        } catch (Throwable $e) {
+            $this->recordIngestionFailure($ingestion, $e);
+
+            throw $e;
+        }
+
+        $published = 0;
+        $draftIds = [];
+
+        if ($request->boolean('publish')) {
+            // 묶음 등록과 같은 기준 — 필수 정보가 덜 찬 운행은 초안으로 남겨
+            // 빈 운행이 마켓에 노출되지 않게 한다 (위챗 모니터 자동 공개 정책)
+            if ($order->publishRequirementError() !== null) {
+                $draftIds[] = $order->id;
+            } else {
+                $transitionService->transition($owner, $order, Order::STATUS_PUBLISHED);
+                $published = 1;
+            }
+        }
+
+        $this->recordIngestionResult($ingestion, [$order->id]);
 
         return response()->json([
             'data' => [
                 'id' => $order->id,
                 'orderNumber' => $order->order_number,
                 'status' => $order->status,
+                'published' => $published,
+                'draft_ids' => $draftIds,
             ],
         ], 201);
     }
@@ -490,30 +563,47 @@ class OrderController extends Controller
      */
     public function batchStore(Request $request, OrderCreator $creator, OrderTransitionService $transitionService): JsonResponse
     {
-        $data = $request->validate([
-            'group_name' => ['required', 'string', 'max:100'],
-            'publish' => ['nullable', 'boolean'],
-            'orders' => ['required', 'array', 'min:2', 'max:30'],
-            'orders.*.service_date' => ['nullable', 'string', 'max:20'],
-            'orders.*.service_time' => ['nullable', 'string', 'max:10'],
-            'orders.*.service_datetime' => ['nullable', 'string', 'max:20'],
-            'orders.*.service_type' => ['nullable', 'string', 'max:50'],
-            'orders.*.pickup_location' => ['nullable', 'string', 'max:200'],
-            'orders.*.dropoff_location' => ['nullable', 'string', 'max:200'],
-            'orders.*.flight_number' => ['nullable', 'string', 'max:20'],
-            'orders.*.passenger_count' => ['nullable', 'integer', 'min:0'],
-            'orders.*.luggage_count' => ['nullable', 'integer', 'min:0'],
-            'orders.*.expected_revenue' => ['nullable', 'integer', 'min:0'],
-            'orders.*.vehicle_type' => ['nullable', 'string', 'max:50'],
-            'orders.*.customer_name' => ['nullable', 'string', 'max:100'],
-            'orders.*.customer_phone' => ['nullable', 'string', 'max:40'],
-            'orders.*.reservation_company' => ['nullable', 'string', 'max:100'],
-            'orders.*.tags' => ['nullable', 'array', 'max:20'],
-            'orders.*.tags.*' => ['string', 'max:30'],
-            'orders.*.line_items' => ['array'],
-        ]);
+        $ingestion = $this->recordIngestion($request, 'orders/batch');
 
-        $group = $creator->createBatch($data, $request->user()->id);
+        try {
+            $data = $request->validate([
+                'group_name' => ['required', 'string', 'max:100'],
+                'publish' => ['nullable', 'boolean'],
+                'orders' => ['required', 'array', 'min:2', 'max:30'],
+                'orders.*.service_date' => ['nullable', 'string', 'max:20'],
+                'orders.*.service_time' => ['nullable', 'string', 'max:10'],
+                'orders.*.service_datetime' => ['nullable', 'string', 'max:20'],
+                'orders.*.service_type' => ['nullable', 'string', 'max:50'],
+                'orders.*.pickup_location' => ['nullable', 'string', 'max:200'],
+                'orders.*.dropoff_location' => ['nullable', 'string', 'max:200'],
+                'orders.*.flight_number' => ['nullable', 'string', 'max:20'],
+                'orders.*.passenger_count' => ['nullable', 'integer', 'min:0'],
+                'orders.*.luggage_count' => ['nullable', 'integer', 'min:0'],
+                'orders.*.expected_revenue' => ['nullable', 'integer', 'min:0'],
+                'orders.*.vehicle_type' => ['nullable', 'string', 'max:50'],
+                'orders.*.customer_name' => ['nullable', 'string', 'max:100'],
+                'orders.*.customer_phone' => ['nullable', 'string', 'max:40'],
+                'orders.*.reservation_company' => ['nullable', 'string', 'max:100'],
+                // 저장하지는 않고 태그 판단에만 쓴다 — 문구에만 있는 운영 지시(예: 秒结)를 태그로 남기기 위함
+                'orders.*.original_summary' => ['nullable', 'string', 'max:4000'],
+                'orders.*.tags' => ['nullable', 'array', 'max:20'],
+                'orders.*.tags.*' => ['string', 'max:30'],
+                'orders.*.line_items' => ['array'],
+            ]);
+
+            // 편명 숫자를 시각으로 읽거나 방향이 서비스 구분과 어긋난 행은 받지 않는다
+            $this->assertIngestionRules($data['orders'], 'orders.');
+
+            $this->assertReceivable($data['orders'], 'orders.');
+
+            $owner = $this->orderOwner($request, $data);
+
+            $group = $creator->createBatch($data, $owner->id);
+        } catch (Throwable $e) {
+            $this->recordIngestionFailure($ingestion, $e);
+
+            throw $e;
+        }
 
         $published = 0;
         $draftIds = [];
@@ -527,10 +617,12 @@ class OrderController extends Controller
                     continue;
                 }
 
-                $transitionService->transition($request->user(), $order, Order::STATUS_PUBLISHED);
+                $transitionService->transition($owner, $order, Order::STATUS_PUBLISHED);
                 $published++;
             }
         }
+
+        $this->recordIngestionResult($ingestion, $group->orders()->pluck('id')->all());
 
         return response()->json([
             'data' => [
@@ -553,16 +645,31 @@ class OrderController extends Controller
      */
     public function bulkStore(Request $request, OrderCreator $creator, OrderTransitionService $transitionService): JsonResponse
     {
-        $data = $request->validate([
-            'orders' => ['required', 'array', 'min:1', 'max:30'],
-            'publish' => ['nullable', 'boolean'],
-            ...$this->orderPayloadRules('orders.*.'),
-        ]);
+        $ingestion = $this->recordIngestion($request, 'orders/bulk');
 
-        $orders = $creator->createMany($data['orders'], $request->user()->id);
+        try {
+            $data = $request->validate([
+                'orders' => ['required', 'array', 'min:1', 'max:30'],
+                'publish' => ['nullable', 'boolean'],
+                ...$this->orderPayloadRules('orders.*.'),
+            ]);
 
-        // 레벨링: 운행 등록 +10 XP (건별)
-        $request->user()->addXp(10 * count($orders), 'order_created', '운행 등록');
+            // 편명 숫자를 시각으로 읽거나 방향이 서비스 구분과 어긋난 행은 받지 않는다
+            $this->assertIngestionRules($data['orders'], 'orders.');
+
+            $this->assertReceivable($data['orders'], 'orders.');
+
+            $owner = $this->orderOwner($request, $data);
+
+            $orders = $creator->createMany($data['orders'], $owner->id);
+
+            // 레벨링: 운행 등록 +10 XP (건별)
+            $owner->addXp(10 * count($orders), 'order_created', '운행 등록');
+        } catch (Throwable $e) {
+            $this->recordIngestionFailure($ingestion, $e);
+
+            throw $e;
+        }
 
         $published = 0;
         $draftIds = [];
@@ -576,10 +683,12 @@ class OrderController extends Controller
                     continue;
                 }
 
-                $transitionService->transition($request->user(), $order, Order::STATUS_PUBLISHED);
+                $transitionService->transition($owner, $order, Order::STATUS_PUBLISHED);
                 $published++;
             }
         }
+
+        $this->recordIngestionResult($ingestion, array_map(static fn (Order $order): int => $order->id, $orders));
 
         return response()->json([
             'data' => [
@@ -710,11 +819,164 @@ class OrderController extends Controller
     }
 
     /**
+     * 외부에서 들어온 운행 payload 를 변환 전 그대로 남긴다.
+     *
+     * 검증에 실패해도 원본은 보관되므로, 위챗 모니터가 보낸 문구를 나중에 다시 볼 수 있다.
+     */
+    private function recordIngestion(Request $request, string $endpoint): OrderIngestion
+    {
+        return OrderIngestion::query()->create([
+            'user_id' => $request->user()?->id,
+            'endpoint' => $endpoint,
+            'payload' => $request->all(),
+            'status' => OrderIngestion::STATUS_RECEIVED,
+        ]);
+    }
+
+    /**
+     * @param  array<int, int>  $orderIds
+     */
+    private function recordIngestionResult(OrderIngestion $ingestion, array $orderIds): void
+    {
+        $ingestion->update([
+            'status' => OrderIngestion::STATUS_PROCESSED,
+            'order_ids' => array_values($orderIds),
+        ]);
+    }
+
+    private function recordIngestionFailure(OrderIngestion $ingestion, Throwable $e): void
+    {
+        $ingestion->update([
+            'status' => OrderIngestion::STATUS_FAILED,
+            'error' => $e->getMessage(),
+        ]);
+    }
+
+    /**
+     * 이 등록 요청의 소유자 — 유입(위챗 파이프라인)은 운영 계정, 앱 직접 등록은 요청자 계정.
+     *
+     * @param  array<string, mixed>  $data  검증된 페이로드
+     */
+    private function orderOwner(Request $request, array $data): User
+    {
+        if ($this->isPipelineRequest($data)) {
+            $owner = PipelineOwner::resolve();
+
+            if ($owner !== null) {
+                return $owner;
+            }
+        }
+
+        return $request->user();
+    }
+
+    /**
+     * 유입 경로인지 — 원문(original_summary)은 위챗 모니터만 싣는다.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function isPipelineRequest(array $data): bool
+    {
+        if (filled($data['original_summary'] ?? null)) {
+            return true;
+        }
+
+        foreach ((array) ($data['orders'] ?? []) as $row) {
+            if (is_array($row) && filled($row['original_summary'] ?? null)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function validateOrderPayload(Request $request): array
     {
         return $request->validate($this->orderPayloadRules());
+    }
+
+    /**
+     * 유입 값이 규칙에 맞는지 검사한다 — 어긋난 행은 사유와 함께 거절한다.
+     *
+     * 값을 고쳐서 받지 않는다. 편명(KE925·MU2043) 안의 숫자를 시각으로 읽거나, 방향이 서비스
+     * 구분(接机/送机)과 어긋난 행은 받지 않고 그대로 돌려보낸다. 원본은 유입 기록에 사유와 함께
+     * 남으므로, 그 기록으로 파서를 고친다.
+     *
+     * @param  array<int, array<string, mixed>>  $rows
+     * @param  string  $prefix  오류 키 접두사 (일괄 등록의 'orders.' 등)
+     *
+     * @throws ValidationException
+     */
+    private function assertIngestionRules(array $rows, string $prefix = ''): void
+    {
+        $violations = app(IngestedOrderGuard::class)->violations($rows);
+
+        if ($violations === []) {
+            return;
+        }
+
+        $errors = [];
+
+        foreach ($violations as $index => $reason) {
+            $position = count($rows) > 1 ? ($index + 1).'번째 운행 — ' : '';
+            $errors[($prefix === '' ? '' : $prefix.$index.'.').'service_time'] = $position.$reason.' 원문을 확인해 다시 보내 주세요.';
+        }
+
+        throw ValidationException::withMessages($errors);
+    }
+
+    /**
+     * 모니터 유입 필수값 검사 — 도착지와 시간이 원문에서 주워지지 않은 운행은 받지 않는다.
+     *
+     * 출발지는 방향(공항·시내)으로 추론되지만, 도착지와 시간이 비면 배차 판단 자체가
+     * 불가능해 초안으로도 남기지 않고 등록을 거부한다. 대신 유입 원본은 유입 기록에
+     * 남으므로 원문을 확인해 다시 보낼 수 있다.
+     *
+     * @param  array<int, array<string, mixed>>  $rows  운행 단위 후보 목록
+     * @param  string  $prefix  오류 키 접두사 (일괄 등록의 'orders.' 등)
+     *
+     * @throws ValidationException
+     */
+    private function assertReceivable(array $rows, string $prefix = ''): void
+    {
+        $rows = array_values($rows);
+        $errors = [];
+
+        foreach ($rows as $index => $row) {
+            $missing = [];
+
+            if (blank($row['dropoff_location'] ?? null)) {
+                $missing[] = '도착지';
+            }
+
+            // 시각(service_time)이 원문에서 주워졌는지 본다. 통합 일시로 대체할 수 있지만,
+            // 등록 화면이 시각 없이 날짜만 넣으면 '00:00:00'을 채워 보내므로 자정 고정값은
+            // 시각이 있는 것으로 보지 않는다.
+            $datetime = trim((string) ($row['service_datetime'] ?? ''));
+            $hasTime = filled($row['service_time'] ?? null)
+                || ($datetime !== '' && ! str_ends_with($datetime, '00:00:00'));
+
+            if (! $hasTime) {
+                $missing[] = '시간';
+            }
+
+            if ($missing === []) {
+                continue;
+            }
+
+            $position = count($rows) > 1 ? ($index + 1).'번째 운행 — ' : '';
+            $key = $prefix === '' ? 'dropoff_location' : $prefix.$index.'.dropoff_location';
+
+            $errors[$key] = $position.'원문에서 찾지 못한 항목('.implode(', ', $missing)
+                .')이 있어 등록하지 않았습니다. 원문을 확인해 다시 보내 주세요.';
+        }
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
     }
 
     /**
@@ -729,7 +991,7 @@ class OrderController extends Controller
             'customer_name' => ['nullable', 'string', 'max:100'],
             'customer_phone' => ['nullable', 'string', 'max:40'],
             'vehicle_type' => ['nullable', 'string', 'max:50'],
-            'service_type' => ['nullable', 'string', 'in:pickup,sending,landing'],
+            'service_type' => ['nullable', 'string', 'in:pickup,sending,point,landing'],
             'service_date' => ['nullable', 'string', 'max:20'],
             'service_time' => ['nullable', 'string', 'max:10'],
             'service_datetime' => ['nullable', 'string', 'max:20'],
@@ -741,6 +1003,7 @@ class OrderController extends Controller
             'expected_revenue' => ['nullable', 'integer', 'min:0'],
             'reservation_company' => ['nullable', 'string', 'max:100'],
             'reservation_channel' => ['nullable', 'string', 'max:50'],
+            'original_summary' => ['nullable', 'string', 'max:4000'],
             'is_priority' => ['nullable', 'boolean'],
             'tags' => ['nullable', 'array', 'max:20'],
             'tags.*' => ['string', 'max:30'],

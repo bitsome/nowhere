@@ -93,6 +93,21 @@ test('차량·묶음 키워드만 있는 문구도 날짜와 셋트로 해석한
         ->and($result['vehicle_type'])->toBe('카니발');
 });
 
+test('套·套出 표기도 셋트로 해석하고 금액과 섞이지 않는다', function () {
+    $result = structureOffline('2号 套 카니발 9万');
+
+    expect($result['group_type'])->toBe('셋트')
+        ->and($result['vehicle_type'])->toBe('카니발')
+        ->and($result['amount_text'])->toBe('9만')
+        ->and($result['amount_value'])->toBe(90000);
+
+    // 긴 표기를 먼저 바꾼다 — '셋트出' 같은 잔여가 남으면 안 된다
+    $legacy = structureOffline('2号 套出 카니발 9万');
+
+    expect($legacy['group_type'])->toBe('셋트')
+        ->and($legacy['amount_text'])->toBe('9만');
+});
+
 test('AI가 정상 응답하면 그대로 쓰고 폴백하지 않는다', function () {
     Http::fake([
         '*' => Http::response([

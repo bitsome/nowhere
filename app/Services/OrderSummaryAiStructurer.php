@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Support\Orders\ChineseTextNormalizer;
+use App\Support\Orders\ServiceTimeNormalizer;
 use Carbon\Carbon;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
@@ -540,25 +542,7 @@ PROMPT;
 
     private function normalizeTime(string $time): string
     {
-        $normalized = trim($time);
-
-        if ($normalized === '') {
-            return '';
-        }
-
-        if (preg_match('/^(?<hour>\d{1,2})[:.时](?<minute>\d{2})$/u', $normalized, $matches) === 1) {
-            return sprintf('%02d:%02d', (int) $matches['hour'], (int) $matches['minute']);
-        }
-
-        if (preg_match('/^(?<hour>\d{1,2})(?<minute>\d{2})$/', $normalized, $matches) === 1) {
-            return sprintf('%02d:%02d', (int) $matches['hour'], (int) $matches['minute']);
-        }
-
-        if (preg_match('/^(?<hour>\d{1,2})\s*点$/u', $normalized, $matches) === 1) {
-            return sprintf('%02d:00', (int) $matches['hour']);
-        }
-
-        return $normalized;
+        return ServiceTimeNormalizer::normalize($time) ?? '';
     }
 
     private function normalizeOrderType(string $orderType): string
@@ -724,7 +708,8 @@ PROMPT;
             return '';
         }
 
-        $normalized = str_replace(['套出', '套接', '套装', '一起出', '묶음', '세트'], '셋트', $normalized);
+        // 긴 표기를 먼저 바꾼다 — '套'를 먼저 바꾸면 '套出'이 '셋트出'로 남는다
+        $normalized = str_replace(['套出', '套接', '套装', '套', '一起出', '묶음', '세트'], '셋트', $normalized);
 
         // "8.2号", "8/02", "8月2号" 형태의 날짜 표기 정리
         $datePatterns = [
@@ -853,25 +838,7 @@ PROMPT;
 
     private function normalizeVehicleType(string $vehicleType): string
     {
-        $normalized = trim($vehicleType);
-        $contains = fn (string $needle): bool => str_contains($normalized, $needle);
-
-        return match (true) {
-            $normalized === '333', $contains('需要333') => '스타리아 9인승(3-3-3)',
-            $normalized === '222' => '카니발 7인승(2-2-2)',
-            $normalized === '新卡起', $normalized === '全部新卡' => '더뉴카니발 4세대',
-            $contains('新卡') && $contains('卡起') => '더뉴카니발 4세대',
-            $contains('卡起') => '카니발부터 가능',
-            $normalized === '카니발' => '카니발',
-            $contains('利亚7') && $contains('333') => '스타리아 7인승 또는 9인승(3-3-3)',
-            $contains('新卡') && $contains('利亚') => '더뉴카니발 4세대 또는 스타리아',
-            // 위 조합 규칙을 모두 지난 뒤의 단독 표기 — "新卡"만 있으면 더뉴카니발로 본다
-            $contains('新卡') => '더뉴카니발 4세대',
-            $normalized === '利亚7' => '스타리아 7인승',
-            $normalized === '利亚' => '스타리아',
-            $normalized === '小车🉑', $contains('小车') => '소형 승용차(세단/SUV)',
-            default => $normalized,
-        };
+        return ChineseTextNormalizer::vehicleType($vehicleType) ?? '';
     }
 
     private function isAirportLocation(string $location): bool
@@ -884,59 +851,13 @@ PROMPT;
 
     private function normalizeLocation(string $location): string
     {
-        $normalized = trim($location);
-
-        if ($normalized === '') {
-            return '';
-        }
-
-        if (str_contains($normalized, '—')) {
-            $parts = preg_split('/\s*—\s*/u', $normalized) ?: [];
-
-            $normalizedParts = array_filter(
-                array_map(fn (string $part): string => $this->normalizeSingleLocation($part), $parts),
-                static fn (string $part): bool => $part !== '',
-            );
-
-            return implode('—', $normalizedParts);
-        }
-
-        return $this->normalizeSingleLocation($normalized);
-    }
-
-    private function normalizeSingleLocation(string $location): string
-    {
-        $normalized = trim($location);
-
-        return match ($normalized) {
-            '仁川', '仁川机场', '仁川機場' => '인천',
-            'T1' => '인천공항 제1터미널',
-            '明洞' => '명동',
-            '龙山', '龙山区' => '용산구',
-            '弘大' => '홍대',
-            '麻浦' => '마포',
-            '麻浦区' => '마포구',
-            '江南', '江南区' => '강남구',
-            '蚕室' => '잠실',
-            '东大门', '东大门区' => '동대문구',
-            '永登浦' => '영등포',
-            '秃山' => '독산',
-            '中区' => '중구',
-            '钟路', '钟路区' => '종로구',
-            '恩平' => '은평구',
-            '江东' => '강동구',
-            '金浦' => '김포',
-            '首尔站' => '서울역',
-            '江西区' => '강서구',
-            '客路端' => '클록',
-            default => $normalized,
-        };
+        return ChineseTextNormalizer::location($location) ?? '';
     }
 
     private function normalizeAmountText(string $amountText): string
     {
         $normalized = trim($amountText);
-        $normalized = preg_replace('/^(?:套出|套接|세트|셋트|묶음|한세트)\s*/u', '', $normalized) ?? $normalized;
+        $normalized = preg_replace('/^(?:套出|套接|套装|套|세트|셋트|묶음|한세트)\s*/u', '', $normalized) ?? $normalized;
 
         if ($normalized === '') {
             return '';
@@ -967,7 +888,7 @@ PROMPT;
         }
 
         $normalized = trim((string) $amountValue);
-        $normalized = preg_replace('/^(?:套出|套接|세트|셋트|묶음|한세트)\s*/u', '', $normalized) ?? $normalized;
+        $normalized = preg_replace('/^(?:套出|套接|套装|套|세트|셋트|묶음|한세트)\s*/u', '', $normalized) ?? $normalized;
 
         if (preg_match('/^(\d+(?:\.\d+)?)\s*(?:万|塊|块|w|W|🥬|🌾|만)?$/u', $normalized, $matches) === 1) {
             return (int) round(((float) $matches[1]) * 10000);

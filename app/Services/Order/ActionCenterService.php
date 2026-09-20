@@ -8,6 +8,7 @@ use App\Models\OrderClaim;
 use App\Models\Review;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Support\Orders\ChineseTextNormalizer;
 
 /**
  * 처리할 일(액션 센터) — 운행 관련 대기 액션을 한곳에 모아 반환한다.
@@ -55,7 +56,7 @@ class ActionCenterService
                 'claim_id' => $claim->id,
                 'id' => $claim->order->id,
                 'order_number' => $claim->order->order_number ?: '#'.$claim->order->id,
-                'route' => trim(($claim->order->pickup_location ?: '').' → '.($claim->order->dropoff_location ?: '')),
+                'route' => ChineseTextNormalizer::routeLabel($claim->order->pickup_location, $claim->order->dropoff_location),
                 'service_date' => $claim->order->service_date,
                 'service_time' => $claim->order->service_time,
                 'requested_at' => $claim->created_at?->toIso8601String(),
@@ -152,7 +153,7 @@ class ActionCenterService
             'sender_name' => $message->user?->name ?? '',
             'order_id' => $order?->id,
             'order_route' => $order !== null
-                ? trim(($order->pickup_location ?: '').' → '.($order->dropoff_location ?: ''))
+                ? ChineseTextNormalizer::routeLabel($order->pickup_location, $order->dropoff_location)
                 : '',
             'created_at_iso' => $message->created_at?->toIso8601String(),
         ];

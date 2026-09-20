@@ -39,6 +39,7 @@ class AdminOperationController extends Controller
         'payout.reject' => '출금 거절',
         'report.advance' => '신고 처리',
         'verification.review' => '증빙 심사',
+        'order-term.update' => '용어 매핑',
     ];
 
     /**

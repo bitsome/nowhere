@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\Review;
+use App\Support\Orders\ChineseTextNormalizer;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -188,7 +189,8 @@ class StatsController extends Controller
             ->map(fn (Order $order) => [
                 'id' => $order->id,
                 'time' => $order->service_time ?: '-',
-                'route' => ($order->pickup_location ?: '-').' → '.($order->dropoff_location ?: '-'),
+                'route' => ChineseTextNormalizer::displayLocation($order->pickup_location)
+                    .' → '.ChineseTextNormalizer::displayLocation($order->dropoff_location),
                 'serviceLabel' => $labels[$order->service_type] ?? $order->service_type ?? '-',
                 'passengerCount' => $order->passenger_count ?: 0,
                 'statusLabel' => Order::statusOptions()[$order->status] ?? $order->status,

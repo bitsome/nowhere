@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Services\OrderFavoriteService;
+use App\Support\Orders\ChineseTextNormalizer;
+use App\Support\Orders\ServiceTimeNormalizer;
 use Carbon\Carbon;
 use Database\Factories\OrderFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -14,6 +16,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use InvalidArgumentException;
+use Throwable;
 
 #[Fillable([
     'order_number',
@@ -47,6 +50,7 @@ use InvalidArgumentException;
     'distance_km',
     'expected_revenue',
     'status',
+    'source',
     'cancel_reason',
     'is_priority',
     'auto_registered',
@@ -86,6 +90,11 @@ class Order extends Model
     public const STATUS_CANCELLED = 'cancelled';
 
     public const STATUS_ACCEPTANCE_PENDING = 'acceptance_pending';
+
+    // 등록 경로 — 위챗 파이프라인으로 들어온 운행과 앱에서 직접 등록한 운행을 구분한다
+    public const SOURCE_MANUAL = 'manual';
+
+    public const SOURCE_PIPELINE = 'pipeline';
 
     // 운행중 세부 단계 — 카드 단계 스테퍼(운행시작→픽업 도착→승객 도착→출발→이동중→도착지 도착)에 사용.
     // 최종 '완료'는 운행 완료(status=completed) 처리로 이어진다.
@@ -390,7 +399,9 @@ class Order extends Model
      */
     public function rideSummary(): string
     {
-        $route = trim(($this->pickup_location ?: '').' → '.($this->dropoff_location ?: ''));
+        // 표시용 노선 — 유입 원문의 중국어가 알림 문구에 그대로 노출되지 않도록 변환한다
+        $route = ChineseTextNormalizer::displayLocation($this->pickup_location)
+            .' → '.ChineseTextNormalizer::displayLocation($this->dropoff_location);
 
         $when = '';
 
@@ -541,13 +552,41 @@ class Order extends Model
     }
 
     /**
-     * 마켓 공개(publish) 전 필수 입력 요건을 검사한다.
-     * 공개된 운행은 드라이버가 바로 가져갈 수 있어야 하므로 핵심 정보는 반드시 채워야 한다.
+     * 운행 시각 저장 — 한 자리 시각(`7:30`)도 두 자리(`07:30`)로 맞춰 저장한다.
      *
-     * @return string|null 누락 항목 안내 메시지 (요건 충족 시 null)
+     * 문자열 컬럼이라 마켓 노출 컷·자동 취소가 문자열로 비교하므로, 저장 시점에 자리 수를
+     * 맞춰 두지 않으면 지난 운행이 목록에 남고 자동 취소에서도 빠져나간다.
+     */
+    protected function serviceTime(): Attribute
+    {
+        return Attribute::make(
+            set: fn ($value) => ServiceTimeNormalizer::normalize($value),
+        );
+    }
+
+    /**
+     * 공개할 수 있는 일시의 상한 (일).
+     *
+     * 유입 원문의 소수 금액(`12.5🌾` 등)을 날짜로 잘못 읽어 몇 달 뒤 일시로 저장된 건이 있었다.
+     * 정상 유입은 오늘부터 며칠 안에 몰려 있으므로, 이 상한을 넘는 일시는 원문을 다시 봐야 한다.
+     */
+    public const PUBLISH_MAX_DAYS_AHEAD = 30;
+
+    /**
+     * 마켓 공개(publish) 전 필수 입력 요건을 검사한다.
+     *
+     * 필수는 노선(출발지·도착지)과 일시다. 유입 원문에 차종·요금·구분이 없는 경우가 많고
+     * 억지로 기본값을 채우면 오정보가 되므로, 미지정은 각각 '차량 무관'·'요금 협의'·'구분 미지정'으로
+     * 표기하고 공개를 허용한다. 요금 미지정 운행은 기사가 요금을 제안(offer)하는 정상 흐름으로 이어진다.
+     *
+     * 다만 기사가 판단할 수 없는 값은 공개하지 않는다 — 지명 사전에서 읽지 못한 표기와
+     * 이미 지났거나 너무 먼 일시가 그렇다.
+     *
+     * @return string|null 누락·확인 항목 안내 메시지 (요건 충족 시 null)
      */
     public function publishRequirementError(): ?string
     {
+        $messages = [];
         $missing = [];
 
         if (blank($this->pickup_location)) {
@@ -558,14 +597,6 @@ class Order extends Model
             $missing[] = '도착지';
         }
 
-        if (blank($this->vehicle_type)) {
-            $missing[] = '차량';
-        }
-
-        if (blank($this->service_type)) {
-            $missing[] = '구분';
-        }
-
         // 서비스 일시 — 통합 일시 또는 (날짜+시간) 중 하나는 있어야 한다
         $hasDatetime = filled($this->service_datetime)
             || (filled($this->service_date) && filled($this->service_time));
@@ -574,10 +605,78 @@ class Order extends Model
             $missing[] = '서비스 일시';
         }
 
-        if (! filled($this->expected_revenue) || (int) $this->expected_revenue <= 0) {
-            $missing[] = '금액';
+        if ($missing !== []) {
+            $messages[] = '마켓 공개 전에 다음 항목을 입력해 주세요: '.implode(', ', $missing).'.';
         }
 
-        return $missing === [] ? null : '마켓 공개 전에 다음 항목을 입력해 주세요: '.implode(', ', $missing).'.';
+        // 지명 사전에서 한국어로 바뀌지 않은 값은 어느 지역인지 알 수 없어 기사가 판단할 수 없다
+        $unreadable = [];
+
+        if (filled($this->pickup_location) && ChineseTextNormalizer::displayLocation($this->pickup_location) === '미정') {
+            $unreadable[] = '출발지';
+        }
+
+        if (filled($this->dropoff_location) && ChineseTextNormalizer::displayLocation($this->dropoff_location) === '미정') {
+            $unreadable[] = '도착지';
+        }
+
+        if ($unreadable !== []) {
+            $messages[] = '읽지 못한 지명이 있습니다. 다음 항목의 표기를 확인해 주세요: '.implode(', ', $unreadable).'.';
+        }
+
+        $datetimeError = $this->publishServiceDateError();
+
+        if ($datetimeError !== null) {
+            $messages[] = $datetimeError;
+        }
+
+        return $messages === [] ? null : implode(' ', $messages);
+    }
+
+    /**
+     * 공개할 수 있는 날짜인지 본다 (KST 기준) — 지난 날짜와 상한을 넘긴 날짜는 공개하지 않는다.
+     *
+     * 시각까지 보지 않는 이유: 저장 시각은 KST 벽시계인데 앱은 UTC로 도는데, 같은 날 이른 시각 운행을
+     * 시각으로 비교하면 하루 중 실행 시점에 따라 판정이 뒤집힌다. 지난 시각 운행은 마켓 조회에서
+     * 걸러지고 자동 취소(`orders:close-published`)가 정리하므로 공개 요건은 날짜만 본다.
+     */
+    private function publishServiceDateError(): ?string
+    {
+        $date = $this->serviceDate();
+
+        // 날짜가 없거나 형식을 읽지 못하면 위의 필수 항목 안내로 충분하다
+        if ($date === null) {
+            return null;
+        }
+
+        if ($date->lt(Carbon::now('Asia/Seoul')->startOfDay())) {
+            return '이미 지난 날짜로는 공개할 수 없습니다. 일시를 확인해 주세요.';
+        }
+
+        if ($date->gt(Carbon::now('Asia/Seoul')->startOfDay()->addDays(self::PUBLISH_MAX_DAYS_AHEAD))) {
+            return '날짜가 '.self::PUBLISH_MAX_DAYS_AHEAD.'일보다 뒤입니다. 일시를 확인해 주세요.';
+        }
+
+        return null;
+    }
+
+    /**
+     * 운행 날짜 (KST, 시각 00:00) — 없거나 형식을 읽지 못하면 null.
+     */
+    private function serviceDate(): ?Carbon
+    {
+        try {
+            if (filled($this->service_datetime)) {
+                return Carbon::parse($this->service_datetime, 'Asia/Seoul')->startOfDay();
+            }
+
+            if (filled($this->service_date)) {
+                return Carbon::parse($this->service_date, 'Asia/Seoul')->startOfDay();
+            }
+        } catch (Throwable) {
+            return null;
+        }
+
+        return null;
     }
 }

@@ -9,6 +9,7 @@ use App\Models\Order;
 use App\Models\User;
 use App\Notifications\OrderNotification;
 use App\Services\Order\OrderTransitionService;
+use App\Support\Orders\ChineseTextNormalizer;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -64,7 +65,7 @@ class ChatService
                 'order' => $conversation->order ? [
                     'id' => $conversation->order->id,
                     'order_number' => $conversation->order->order_number,
-                    'route' => trim(($conversation->order->pickup_location ?? '').' → '.($conversation->order->dropoff_location ?? '')),
+                    'route' => ChineseTextNormalizer::routeLabel($conversation->order->pickup_location ?? '', $conversation->order->dropoff_location ?? ''),
                     'service_date' => $conversation->order->service_date,
                     'service_time' => $conversation->order->service_time,
                     'amount' => (int) ($conversation->order->expected_revenue ?? $conversation->order->amount_value ?? 0),

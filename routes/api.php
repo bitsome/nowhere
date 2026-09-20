@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\OrderOfferController;
 use App\Http\Controllers\Api\OrderTemplateController;
+use App\Http\Controllers\Api\OrderTermController;
 use App\Http\Controllers\Api\PasswordResetController;
 use App\Http\Controllers\Api\PublicOrderController;
 use App\Http\Controllers\Api\PushSubscriptionController;
@@ -103,6 +104,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/admin/conversations/{conversation}/moderate', [AdminOperationController::class, 'moderate']);
     Route::get('/admin/operations/settlements', [AdminOperationController::class, 'settlements']);
     Route::post('/admin/settlements/{settlement}/hold', [AdminOperationController::class, 'holdSettlement']);
+
+    // 미매핑 용어 관리 — 사전에 없던 중국어 표기를 관리자가 한국어로 매핑
+    Route::get('/admin/order-terms', [OrderTermController::class, 'index']);
+    // 용어 직접 등록 — 아직 유입되지 않은 표기도 미리 사전에 넣어 둔다
+    Route::post('/admin/order-terms', [OrderTermController::class, 'store']);
+    Route::patch('/admin/order-terms/{orderTerm}', [OrderTermController::class, 'update']);
 
     // 고객지원(B-4) — 사용자 공지·FAQ 조회 + 1:1 문의 작성/내 문의
     Route::get('/support/posts', [SupportController::class, 'posts']);
@@ -207,6 +214,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/community/posts/{post}', [CommunityController::class, 'show']);
     Route::get('/community/users/{user}', [CommunityController::class, 'showUser']);
     Route::post('/community/posts/{post}/like', [CommunityController::class, 'toggleLike']);
+    Route::post('/community/posts/{post}/vote', [CommunityController::class, 'vote']);
     Route::post('/community/posts/{post}/comments', [CommunityController::class, 'comment']);
     Route::delete('/community/posts/{post}', [CommunityController::class, 'destroy']);
     Route::put('/community/posts/{post}', [CommunityController::class, 'update']);

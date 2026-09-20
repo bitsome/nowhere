@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Support\Orders\ChineseTextNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -46,8 +47,10 @@ class NotificationController extends Controller
                     'order_id' => $notification->data['order_id'] ?? null,
                     'offer_id' => $notification->data['offer_id'] ?? null,
                     'offer_amount' => $notification->data['offer_amount'] ?? null,
+                    // 표시용 노선 — 유입 원문의 중국어가 알림 카드에 그대로 노출되지 않도록 변환한다
                     'order_route' => $order !== null
-                        ? trim(($order->pickup_location ?: '').' → '.($order->dropoff_location ?: ''))
+                        ? ChineseTextNormalizer::displayLocation($order->pickup_location)
+                            .' → '.ChineseTextNormalizer::displayLocation($order->dropoff_location)
                         : '',
                     'order_status' => $order->status ?? '',
                     'order_status_label' => $order !== null

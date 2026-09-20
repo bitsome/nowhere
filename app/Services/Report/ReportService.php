@@ -8,6 +8,7 @@ use App\Models\Report;
 use App\Models\User;
 use App\Notifications\ReportNotification;
 use App\Services\Admin\AuditService;
+use App\Support\Orders\ChineseTextNormalizer;
 
 /**
  * 신고/분쟁 — 접수(대상·유형 검증, 관리자 알림)와 관리자 처리(단계 진행, 신고자 알림), 직렬화.
@@ -148,7 +149,7 @@ class ReportService
             return '운행';
         }
 
-        $route = trim(($order->pickup_location ?? '').' → '.($order->dropoff_location ?? ''));
+        $route = ChineseTextNormalizer::routeLabel($order->pickup_location ?? '', $order->dropoff_location ?? '');
 
         return "운행 [{$route}]";
     }
@@ -181,7 +182,7 @@ class ReportService
         if ($report->target_type === Report::TARGET_ORDER) {
             $order = Order::query()->with('user:id,name,role')->find($report->target_id);
             $target = $order ? [
-                'route' => trim(($order->pickup_location ?? '').' → '.($order->dropoff_location ?? '')),
+                'route' => ChineseTextNormalizer::routeLabel($order->pickup_location ?? '', $order->dropoff_location ?? ''),
                 'date' => $order->service_date,
                 'time' => $order->service_time,
                 'owner_name' => $order->user?->name,

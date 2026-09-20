@@ -6,6 +6,7 @@ use App\Models\Driver;
 use App\Models\Order;
 use App\Models\User;
 use App\Services\MatchService;
+use App\Support\Orders\ChineseTextNormalizer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 
@@ -150,8 +151,8 @@ class DriverService
             'order_number' => $order->order_number,
             'service_date' => $order->service_date,
             'service_time' => $order->service_time,
-            'pickup_location' => $order->pickup_location,
-            'dropoff_location' => $order->dropoff_location,
+            'pickup_location' => ChineseTextNormalizer::displayLocation($order->pickup_location),
+            'dropoff_location' => ChineseTextNormalizer::displayLocation($order->dropoff_location),
             'amount' => (int) ($order->expected_revenue ?? $order->amount_value ?? 0),
             'status' => $order->status,
             'status_label' => match ($order->status) {

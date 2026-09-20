@@ -4,6 +4,9 @@ namespace App\Services\Order;
 
 use App\Models\Order;
 use App\Models\OrderGroup;
+use App\Models\OrderTerm;
+use App\Support\Orders\ChineseTextNormalizer;
+use App\Support\Orders\ServiceTypeInferrer;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -11,6 +14,8 @@ use Illuminate\Support\Facades\DB;
  */
 class OrderCreator
 {
+    public function __construct(private readonly OrderTermCollector $termCollector) {}
+
     /**
      * 단일 운행 등록 (초안 상태).
      *
@@ -36,6 +41,7 @@ class OrderCreator
             $created = [];
 
             foreach ($orders as $orderData) {
+                $orderData = $this->normalize($orderData);
                 $order = Order::create($this->toAttributes($orderData, $userId));
 
                 foreach ($orderData['line_items'] ?? [] as $lineItem) {
@@ -109,6 +115,7 @@ class OrderCreator
             ]);
 
             foreach ($data['orders'] as $orderData) {
+                $orderData = $this->normalize($orderData);
                 $order = Order::create($this->toAttributes($orderData, $userId, $group->id));
 
                 foreach ($orderData['line_items'] ?? [] as $lineItem) {
@@ -158,6 +165,100 @@ class OrderCreator
     }
 
     /**
+     * 중국어로 들어온 지명·차량 표기를 저장 전에 한국어로 바꾼다.
+     *
+     * 위챗 모니터는 `广津`, `机场`, `小车` 처럼 중국어 표기를 그대로 보내온다.
+     * 원본은 order_ingestions 에 남으므로 여기서는 변환만 한다.
+     *
+     * 지명이 아니라 운영 지시로 쓰이는 표기(예: `帮划客路`)는 태그로 옮긴다 — 값은 그대로 둔다.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function normalize(array $data): array
+    {
+        // 태그 표기는 변환 전 원문에서 찾는다 — 지명 변환으로 값이 바뀌면 놓칠 수 있다.
+        // 유입 원문(original_summary)도 함께 본다: `秒结`처럼 지명 칸이 아니라 문구에만 있는 표기가 있다.
+        $tagSources = [
+            $data['pickup_location'] ?? null,
+            $data['dropoff_location'] ?? null,
+            $data['original_summary'] ?? null,
+        ];
+
+        $data = $this->normalizeLocation($data, 'pickup_location', OrderTerm::FIELD_PICKUP);
+        $data = $this->normalizeLocation($data, 'dropoff_location', OrderTerm::FIELD_DROPOFF);
+
+        if (array_key_exists('vehicle_type', $data)) {
+            $data['vehicle_type'] = ChineseTextNormalizer::vehicleType($data['vehicle_type']);
+
+            $this->termCollector->collect(OrderTerm::FIELD_VEHICLE, $data['vehicle_type']);
+        }
+
+        // 구분이 비어 있으면 노선에서 추정한다 (공항 쪽이 어디인지로 픽업/샌딩/시내가 갈린다)
+        if (blank($data['service_type'] ?? null)) {
+            $data['service_type'] = ServiceTypeInferrer::infer($data['pickup_location'] ?? null, $data['dropoff_location'] ?? null);
+        }
+
+        if (isset($data['line_items']) && is_array($data['line_items'])) {
+            $data['line_items'] = array_map(function (array $lineItem) use (&$tagSources): array {
+                $tagSources[] = $lineItem['pickup_location'] ?? null;
+                $tagSources[] = $lineItem['dropoff_location'] ?? null;
+
+                foreach (['pickup_location' => OrderTerm::FIELD_PICKUP, 'dropoff_location' => OrderTerm::FIELD_DROPOFF] as $key => $termField) {
+                    if (! array_key_exists($key, $lineItem)) {
+                        continue;
+                    }
+
+                    $lineItem[$key] = ChineseTextNormalizer::location($lineItem[$key]);
+
+                    $this->termCollector->collect($termField, $lineItem[$key]);
+                }
+
+                if (blank($lineItem['service_type'] ?? null)) {
+                    $lineItem['service_type'] = ServiceTypeInferrer::infer($lineItem['pickup_location'] ?? null, $lineItem['dropoff_location'] ?? null);
+                }
+
+                return $lineItem;
+            }, $data['line_items']);
+        }
+
+        $derivedTags = ChineseTextNormalizer::tagsFor($tagSources);
+
+        // 유입 파서가 붙이는 내부 태그(wechat-monitor·conf60)는 저장하지 않는다 —
+        // 보낸 태그와 사전에서 뽑은 태그를 합친 뒤 같은 기준으로 걷어낸다.
+        $tags = ChineseTextNormalizer::withoutInternalTags(
+            array_values(array_unique([...($data['tags'] ?? []), ...$derivedTags])),
+        );
+
+        $data['tags'] = $tags === [] ? null : $tags;
+
+        // `飞机马上降落`·`客人出来了`는 지금 손이 필요하다는 신호 — 긴급 배지로 올린다
+        if (collect($derivedTags)->contains(ChineseTextNormalizer::isUrgentTag(...))) {
+            $data['is_priority'] = true;
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function normalizeLocation(array $data, string $key, string $termField): array
+    {
+        if (! array_key_exists($key, $data)) {
+            return $data;
+        }
+
+        $data[$key] = ChineseTextNormalizer::location($data[$key]);
+
+        // 사전에 없어 중국어가 남으면 용어 사전에 모아 관리자가 매핑할 수 있게 한다
+        $this->termCollector->collect($termField, $data[$key]);
+
+        return $data;
+    }
+
+    /**
      * 검증된 페이로드를 Order 생성 속성으로 변환한다.
      *
      * @param  array<string, mixed>  $data
@@ -188,6 +289,8 @@ class OrderCreator
             'tags' => $data['tags'] ?? null,
             'order_type' => Order::TYPE_GENERAL,
             'status' => Order::STATUS_DRAFT,
+            // 원문(original_summary)은 위챗 모니터만 싣는다 — 이 값이 있으면 파이프라인 유입이다
+            'source' => filled($data['original_summary'] ?? null) ? Order::SOURCE_PIPELINE : Order::SOURCE_MANUAL,
             'is_priority' => $data['is_priority'] ?? false,
             'user_id' => $userId,
         ];
