@@ -50,10 +50,13 @@ export const apiActions = () => apiClient.get('/actions');
 
 export const apiDuplicateOrder = (id) => apiClient.post(`/orders/${id}/duplicate`);
 
-export const apiTransitionOrder = (id, status, cancelReason = '', actualRevenue = null) => apiClient.post(`/orders/${id}/status`, {
+// 운행 상태 전환 — 운행 시작(driving) 시에는 기사 기기 위치(coords)를 함께 보내 1회 기록한다.
+// 위치는 없어도 되고, 없으면 좌표 없이 그대로 전이된다.
+export const apiTransitionOrder = (id, status, cancelReason = '', actualRevenue = null, coords = null) => apiClient.post(`/orders/${id}/status`, {
     status,
     cancel_reason: cancelReason,
     actual_revenue: actualRevenue,
+    ...(coords ? { latitude: coords.latitude, longitude: coords.longitude } : {}),
 });
 
 // 운행중 세부 단계 진행 — 카드 단계 스테퍼(운행시작→픽업 도착→승객 도착→출발→이동중→도착지 도착)

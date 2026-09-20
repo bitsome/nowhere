@@ -22,6 +22,20 @@ final class LocationDistance
     private const EARTH_RADIUS_KM = 6371.0;
 
     /**
+     * 광역(구·시) 단위 표기 — 좌표는 구 중심점이라 실제 지점은 그 안 어디든 될 수 있다.
+     * (예: '마포구'는 마포구청 근처 좌표일 뿐, 공덕동은 여기서 약 4.8km 떨어져 있다)
+     *
+     * @var array<int, string>
+     */
+    private const COARSE_KEYS = [
+        '인천', '김포', '서울',
+        '종로', '중구', '용산', '성동', '광진', '동대문', '성북', '강북', '도봉', '은평', '서대문',
+        '마포', '강서', '구로', '영등포', '동작', '관악', '서초', '강남', '송파', '강동', '양천',
+        '금천', '중랑', '노원',
+        '광명시', '성남시', '안양시', '고양시', '화성시', '수원시', '부산시', '인천광역시',
+    ];
+
+    /**
      * 지명 → [위도, 경도]. 저장되는 한국어 표기 기준이며, 아래 긴 표기가 먼저 맞는다.
      *
      * @var array<string, array{float, float}>
@@ -138,6 +152,34 @@ final class LocationDistance
     }
 
     /**
+     * 지명과 현재 좌표(GPS)의 직선거리(km) — 지명 좌표를 모르면 null.
+     *
+     * 내장 좌표는 구·지역 단위 중심점이라 정밀 측량이 아니다("마포구"는 마포구 중심).
+     * 운행 단계 진행 위치가 지명에서 너무 벗어났는지 판정하는 용도로만 쓴다.
+     */
+    public static function kmFromPoint(?string $place, float $latitude, float $longitude): ?float
+    {
+        $point = self::pointOf($place);
+
+        if ($point === null) {
+            return null;
+        }
+
+        return self::straightKm($point, [$latitude, $longitude]);
+    }
+
+    /**
+     * 지명이 광역(구·시) 단위인지 — 좌표를 알더라도 실제 지점은 그 구·시 안 어디든 될 수 있다.
+     * 운행 단계 진행 위치 검증에서 허용 반경을 정할 때 쓴다.
+     */
+    public static function isCoarsePlace(?string $place): bool
+    {
+        $key = self::matchKey($place);
+
+        return $key !== null && in_array($key, self::COARSE_KEYS, true);
+    }
+
+    /**
      * 지명의 좌표 — 정확히 일치하는 표기가 없으면 가장 긴 표기로 포함 여부를 본다.
      *
      * `[인천공항 제1터미널]`(정확) → `[종로 호텔]`(종로 포함) → `[인천 인스파이어]`(인스파이어 포함).
@@ -147,6 +189,16 @@ final class LocationDistance
      */
     private static function pointOf(?string $value): ?array
     {
+        $key = self::matchKey($value);
+
+        return $key === null ? null : self::POINTS[$key];
+    }
+
+    /**
+     * 지명에 맞는 사전 키 — 정확 일치가 우선, 없으면 가장 긴 표기의 포함 여부로 찾는다.
+     */
+    private static function matchKey(?string $value): ?string
+    {
         $value = mb_strtolower(trim((string) $value));
 
         if ($value === '' || preg_match('/[—~→]/u', $value) === 1) {
@@ -154,12 +206,12 @@ final class LocationDistance
         }
 
         if (array_key_exists($value, self::POINTS)) {
-            return self::POINTS[$value];
+            return $value;
         }
 
         $longest = null;
 
-        foreach (self::POINTS as $name => $point) {
+        foreach (array_keys(self::POINTS) as $name) {
             if (mb_strlen($name) <= mb_strlen((string) $longest) || mb_strpos($value, $name) === false) {
                 continue;
             }
@@ -167,7 +219,7 @@ final class LocationDistance
             $longest = $name;
         }
 
-        return $longest === null ? null : self::POINTS[$longest];
+        return $longest;
     }
 
     /**

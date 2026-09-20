@@ -12,6 +12,7 @@ use App\Notifications\OrderNotification;
 use App\Services\BehaviorEventService;
 use App\Services\MatchService;
 use App\Services\Settlement\SettlementService;
+use App\Support\Orders\RideStepGeofence;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -38,7 +39,7 @@ class OrderTransitionService
     /**
      * 라이프사이클 규칙에 따라 운행 상태를 전환한다.
      */
-    public function transition(User $actor, Order $order, string $status, ?string $cancelReason = null, ?int $actualRevenue = null): void
+    public function transition(User $actor, Order $order, string $status, ?string $cancelReason = null, ?int $actualRevenue = null, ?float $latitude = null, ?float $longitude = null): void
     {
         // 관리자 보류(B-2) — 진행을 동결한다. 해제 전까지 일반 사용자는 어떤 상태 변경도 할 수 없다.
         abort_if((bool) $order->admin_hold, 409, '관리자가 보류한 운행입니다. 해결 전까지 진행할 수 없습니다.');
@@ -131,6 +132,10 @@ class OrderTransitionService
                 // 운행 시작 단계 기록 — 카드 단계 스테퍼의 첫 단계(운행시작). 재시작 시 이미 기록된 단계는 유지
                 'ride_step' => $order->ride_step ?? Order::RIDE_STEP_START,
                 'ride_step_times' => $times,
+                // 운행 시작 위치 — 기사 기기가 보낸 좌표 1회. 권한 거부·실패로 못 받으면 null로 두되
+                // 재시작 시에는 먼저 기록된 좌표를 덮어쓰지 않는다.
+                'start_latitude' => $latitude ?? $order->start_latitude,
+                'start_longitude' => $longitude ?? $order->start_longitude,
             ])->save();
         } elseif ($status === Order::STATUS_COMPLETED) {
             $order->forceFill([
@@ -275,8 +280,10 @@ class OrderTransitionService
      * 운행중 세부 단계를 다음 단계로 진행한다 — 운행 수행자(기사) 본인만 가능.
      * 운행시작 → 픽업장소 도착 → 승객 도착 → 출발 → 도착지로 이동중 순으로 진행하고,
      * 마지막 '도착지 도착'을 기록하는 순간 운행이 완료 처리된다 (목적지 도착 = 완료).
+     *
+     * 픽업·도착 단계는 기사 기기 위치(GPS)가 기준 지점 근처일 때만 진행된다.
      */
-    public function advanceRideStep(User $actor, Order $order, ?int $actualRevenue = null): string
+    public function advanceRideStep(User $actor, Order $order, ?int $actualRevenue = null, ?float $latitude = null, ?float $longitude = null): string
     {
         abort_unless($order->user_id === $actor->id, 403, '운행 수행자만 단계를 진행할 수 있습니다.');
 
@@ -285,6 +292,16 @@ class OrderTransitionService
         $next = $order->nextRideStep();
 
         abort_if($next === null, 409, '이미 마지막 단계입니다.');
+
+        // 실제로 그 장소에 있을 때만 진행 — 멀리서 '도착'을 찍으면 운행 기록이 사실과 달라진다.
+        // 위치를 못 받았거나 지명 좌표를 모르면 검증 없이 진행한다(RideStepGeofence 참고).
+        $violation = RideStepGeofence::violation($order, $next, $latitude, $longitude);
+
+        if ($violation !== null) {
+            throw ValidationException::withMessages([
+                'ride_step' => [RideStepGeofence::message($violation)],
+            ]);
+        }
 
         // 각 단계가 기록된 시각을 함께 남긴다 — 스테퍼 아래 추적 시간 표시용
         $times = $order->ride_step_times ?? [];

@@ -9,6 +9,7 @@ import { useOrderMap } from '../../composables/useOrderMap';
 import { useOrderShare } from '../../composables/useOrderShare';
 import { apiAdvanceRideStep, apiTransitionOrder } from '../../api/orders';
 import { getApiErrorMessage } from '../../api/client';
+import { readCurrentPosition } from '../../utils/geolocation';
 import BaseIcon from '../../components/common/BaseIcon.vue';
 import ConfirmDialog from '../../components/common/ConfirmDialog.vue';
 import VerifiedBadge from '../../components/common/VerifiedBadge.vue';
@@ -205,8 +206,34 @@ const rideStepTimeLabel = (stepValue) => {
 
 const rideAdvancing = ref(false);
 
+// 위치 확인이 필요한 단계 — 픽업지·도착지 판정 단계. 서버가 이 좌표로 '실제로 그 장소인지'를 본다.
+// '이동중'은 어디든 통과라 확인하지 않는다(불필요한 위치 조회·대기 제거).
+const GEOFENCED_STEPS = new Set(['pickup_arrived', 'passenger_arrived', 'departed', 'arrived']);
+
+// 단계 진행에 함께 보낼 기사 기기 위치 — 위치 확인이 필요 없는 단계면 조회하지 않는다.
+const positionForStep = async (stepValue) => (GEOFENCED_STEPS.has(stepValue) ? readCurrentPosition() : null);
+
 // 운행 완료 축하 모달 — 마지막 단계(목적지 도착)를 기록하면 금액 입력 없이 바로 완료되고 축하를 띄운다
 const rideCompleteOpen = ref(false);
+
+// 위치 검증 차단 경고 — 서버가 '아직 픽업지가 아니다'라고 막은 경우, 토스트로는 놓치기 쉬워
+// 강한 경고 팝업으로 띄운다 (막힌 이유와 실제 거리를 그대로 보여준다).
+const guardAlertOpen = ref(false);
+const guardAlertMessage = ref('');
+
+// 단계 진행 실패 처리 — 위치 차단(422 ride_step)이면 경고 팝업, 그 외에는 토스트
+const reportAdvanceFailure = (e, fallback) => {
+    const blockedMessage = e?.response?.data?.errors?.ride_step?.[0];
+
+    if (e?.response?.status === 422 && blockedMessage) {
+        guardAlertMessage.value = blockedMessage;
+        guardAlertOpen.value = true;
+
+        return;
+    }
+
+    naiveMessage.error(getApiErrorMessage(e, fallback));
+};
 
 // 금액 미지정(요금 협의) 운행 — 계약 금액이 없어 완료 시 실제 수익을 받아야 정산·수수료가 성립한다.
 // 마지막 단계에서 금액 입력 모달을 거쳐 단계 기록과 함께 금액을 보낸다.
@@ -234,7 +261,9 @@ const onConfirmComplete = async () => {
 
     try {
         const payload = Number.isFinite(revenue) ? { actual_revenue: revenue } : {};
-        const { data } = await apiAdvanceRideStep(order.value.id, payload);
+        // 도착지 도착 = 완료 — 이 단계도 위치 확인 대상이라 좌표를 함께 보낸다
+        const position = await positionForStep('arrived');
+        const { data } = await apiAdvanceRideStep(order.value.id, position ? { ...payload, ...position } : payload);
 
         order.value.status = data.data.status ?? order.value.status;
         order.value.ride_step = data.data.ride_step ?? order.value.ride_step;
@@ -243,7 +272,7 @@ const onConfirmComplete = async () => {
         // 목적지 도착 = 완료 — 완료 직후 축하 모달
         rideCompleteOpen.value = true;
     } catch (e) {
-        naiveMessage.error(getApiErrorMessage(e, '운행 완료에 실패했습니다.'));
+        reportAdvanceFailure(e, '운행 완료에 실패했습니다.');
     } finally {
         rideAdvancing.value = false;
     }
@@ -307,10 +336,14 @@ const runAdvanceStep = async (step) => {
     rideAdvancing.value = true;
 
     try {
-        // 첫 단계 '운행시작' — 예약 상태에서 탭하면 운행중 전환과 함께 시작 단계를 기록한다
-        const { data } = step.value === 'ride_start' && order.value?.status === 'accepted'
-            ? await apiTransitionOrder(order.value.id, 'driving')
-            : await apiAdvanceRideStep(order.value.id);
+        // 첫 단계 '운행시작' — 예약 상태에서 탭하면 운행중 전환과 함께 시작 단계를 기록한다.
+        // 이때 기사 기기 위치를 1회 함께 보낸다 (권한 거부·실패·지연이면 좌표 없이 진행).
+        const isRideStart = step.value === 'ride_start' && order.value?.status === 'accepted';
+        // 운행 시작과 픽업·도착 단계는 기사 기기 위치를 함께 보낸다 (없으면 좌표 없이 진행)
+        const position = isRideStart ? await readCurrentPosition() : await positionForStep(step.value);
+        const { data } = isRideStart
+            ? await apiTransitionOrder(order.value.id, 'driving', '', null, position)
+            : await apiAdvanceRideStep(order.value.id, position ?? {});
 
         order.value.status = data.data.status ?? order.value.status;
         order.value.ride_step = data.data.ride_step ?? order.value.ride_step;
@@ -321,7 +354,7 @@ const runAdvanceStep = async (step) => {
             rideCompleteOpen.value = true;
         }
     } catch (e) {
-        naiveMessage.error(getApiErrorMessage(e, '단계 진행에 실패했습니다.'));
+        reportAdvanceFailure(e, '단계 진행에 실패했습니다.');
     } finally {
         rideAdvancing.value = false;
     }
@@ -1302,6 +1335,38 @@ const formatClaimTime = (iso) => {
                     </div>
                 </n-modal>
 
+                <!-- 위치 검증 차단 경고 — 픽업지·도착지가 아닌 곳에서 단계를 진행하려 하면 강하게 막는다.
+                     실수로 넘어가는 것을 막는 장치이므로 닫기 버튼 없이 '확인' 하나만 둔다. -->
+                <n-modal
+                    v-model:show="guardAlertOpen"
+                    preset="card"
+                    :bordered="false"
+                    :closable="false"
+                    :mask-closable="false"
+                    :style="{
+                        maxWidth: '380px',
+                        border: '2px solid var(--status-cancelled)',
+                        boxShadow:
+                            '0 0 0 6px color-mix(in srgb, var(--status-cancelled) 16%, transparent), 0 20px 44px rgba(0, 0, 0, 0.38)',
+                    }"
+                >
+                    <div class="guard-alert__body">
+                        <div class="guard-alert__icon">
+                            <BaseIcon name="warning" :size="34" />
+                        </div>
+                        <p class="guard-alert__title">진행할 수 없습니다</p>
+                        <p class="guard-alert__sub">위치 확인 실패</p>
+                        <p class="guard-alert__message">{{ guardAlertMessage }}</p>
+                        <p class="guard-alert__note">
+                            도착하지 않고 단계를 넘기면 운행 기록이 사실과 달라져
+                            <strong>정산·분쟁에서 불리</strong>해집니다.
+                        </p>
+                        <n-button type="error" size="large" block @click="guardAlertOpen = false">
+                            확인했습니다
+                        </n-button>
+                    </div>
+                </n-modal>
+
                 <!-- 요금 제안 작성 모달 — 기사가 운임과 메모를 입력 -->
                 <n-modal
                     v-model:show="offerOpen"
@@ -1795,6 +1860,94 @@ html.dark .detail-claim-card :deep(.n-card__footer) {
 
 .completion-revenue {
     width: 100%;
+}
+
+/* ── 위치 검증 차단 경고 — 놓치면 안 되는 경고라 강한 대비와 흔들림을 준다 ──
+   (카드 테두리·그림자는 n-modal 인라인 스타일 — 텔레포트되는 카드 루트에는 scoped 가 닿지 않는다) */
+.guard-alert__body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 2px 2px;
+    text-align: center;
+    animation: guard-alert-shake 0.45s ease-out;
+}
+
+.guard-alert__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background: var(--status-cancelled);
+    color: #ffffff;
+    margin-bottom: 4px;
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--status-cancelled) 22%, transparent);
+}
+
+.guard-alert__title {
+    margin: 0;
+    color: var(--status-cancelled);
+    font-size: 21px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+}
+
+.guard-alert__sub {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.guard-alert__message {
+    width: 100%;
+    margin: 10px 0 0;
+    padding: 12px 14px;
+    border: 1px solid color-mix(in srgb, var(--status-cancelled) 40%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--status-cancelled) 10%, transparent);
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.5;
+    word-break: keep-all;
+}
+
+.guard-alert__note {
+    margin: 2px 0 12px;
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 1.6;
+    word-break: keep-all;
+}
+
+.guard-alert__note strong {
+    color: var(--danger);
+}
+
+@keyframes guard-alert-shake {
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+    15% {
+        transform: translateX(-9px);
+    }
+    30% {
+        transform: translateX(8px);
+    }
+    45% {
+        transform: translateX(-6px);
+    }
+    60% {
+        transform: translateX(4px);
+    }
+    80% {
+        transform: translateX(-2px);
+    }
 }
 
 /* ── 운행 완료 축하 모달 — 체크 애니메이션 + 폭죽 ── */

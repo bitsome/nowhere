@@ -420,9 +420,19 @@ class OrderController extends Controller
     {
         $data = $request->validate([
             'actual_revenue' => ['nullable', 'integer', 'min:0'],
+            // 기사 기기 위치 — 픽업·도착 단계는 이 좌표가 기준 지점 근처일 때만 진행된다.
+            // 없어도 요청은 통과한다(권한 거부·미지원 기기).
+            'latitude' => ['nullable', 'required_with:longitude', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'required_with:latitude', 'numeric', 'between:-180,180'],
         ]);
 
-        $rideStep = $transitionService->advanceRideStep($request->user(), $order, $data['actual_revenue'] ?? null);
+        $rideStep = $transitionService->advanceRideStep(
+            $request->user(),
+            $order,
+            $data['actual_revenue'] ?? null,
+            isset($data['latitude']) ? (float) $data['latitude'] : null,
+            isset($data['longitude']) ? (float) $data['longitude'] : null,
+        );
 
         return response()->json([
             'data' => [
@@ -445,6 +455,9 @@ class OrderController extends Controller
             'status' => ['required', 'string'],
             'cancel_reason' => ['nullable', 'string', 'max:500'],
             'actual_revenue' => ['nullable', 'integer', 'min:0'],
+            // 운행 시작 위치 — 기사 기기가 1회 보낸 좌표. 없어도 전이는 그대로 진행된다.
+            'latitude' => ['nullable', 'required_with:longitude', 'numeric', 'between:-90,90'],
+            'longitude' => ['nullable', 'required_with:latitude', 'numeric', 'between:-180,180'],
         ]);
 
         $transitionService->transition(
@@ -453,6 +466,8 @@ class OrderController extends Controller
             $data['status'],
             $data['cancel_reason'] ?? null,
             $data['actual_revenue'] ?? null,
+            isset($data['latitude']) ? (float) $data['latitude'] : null,
+            isset($data['longitude']) ? (float) $data['longitude'] : null,
         );
 
         return response()->json([

@@ -1066,6 +1066,61 @@ test('api order records ride start, completion timestamps and actual revenue', f
     expect($completed?->actual_revenue)->toBe(95000);
 });
 
+test('운행 시작 시 기사 기기 위치가 1회 기록된다', function () {
+    $order = Order::factory()->create([
+        'status' => Order::STATUS_ACCEPTED,
+        'user_id' => $this->driver->id,
+        'expected_revenue' => 100000,
+    ]);
+
+    $this->postJson("/api/orders/{$order->id}/status", [
+        'status' => Order::STATUS_DRIVING,
+        'latitude' => 37.497941999,
+        'longitude' => 127.027621001,
+    ])->assertOk();
+
+    $driving = $order->fresh();
+
+    expect($driving?->status)->toBe(Order::STATUS_DRIVING);
+    expect((float) $driving?->start_latitude)->toEqualWithDelta(37.497942, 0.0000001);
+    expect((float) $driving?->start_longitude)->toEqualWithDelta(127.027621, 0.0000001);
+});
+
+test('위치를 받지 못해도 운행 시작은 그대로 진행된다', function () {
+    $order = Order::factory()->create([
+        'status' => Order::STATUS_ACCEPTED,
+        'user_id' => $this->driver->id,
+        'expected_revenue' => 100000,
+    ]);
+
+    // 권한 거부·미지원이면 프런트는 좌표 없이 전이를 보낸다 — 운행 시작이 막히면 안 된다
+    $this->postJson("/api/orders/{$order->id}/status", ['status' => Order::STATUS_DRIVING])
+        ->assertOk();
+
+    $driving = $order->fresh();
+
+    expect($driving?->status)->toBe(Order::STATUS_DRIVING);
+    expect($driving?->start_latitude)->toBeNull();
+    expect($driving?->start_longitude)->toBeNull();
+});
+
+test('범위를 벗어난 좌표는 거부되고 운행은 시작되지 않는다', function () {
+    $order = Order::factory()->create([
+        'status' => Order::STATUS_ACCEPTED,
+        'user_id' => $this->driver->id,
+        'expected_revenue' => 100000,
+    ]);
+
+    $this->postJson("/api/orders/{$order->id}/status", [
+        'status' => Order::STATUS_DRIVING,
+        'latitude' => 137.5,
+        'longitude' => 127.027621,
+    ])->assertStatus(422)->assertJsonValidationErrors(['latitude']);
+
+    expect($order->fresh()?->status)->toBe(Order::STATUS_ACCEPTED);
+    expect($order->fresh()?->start_latitude)->toBeNull();
+});
+
 test('운행중 단계는 기사 본인이 순서대로 진행하고 도착지 도착 시 완료된다', function () {
     $order = Order::factory()->create([
         'status' => Order::STATUS_DRIVING,
@@ -1124,6 +1179,110 @@ test('운행 수행자가 아닌 사용자의 단계 진행은 거부된다', fu
     $this->postJson("/api/orders/{$order->id}/ride-step")->assertStatus(403);
 
     expect($order->fresh()?->ride_step)->toBeNull();
+});
+
+test('픽업지에서 멀리 떨어진 위치로는 픽업 도착 단계를 진행할 수 없다', function () {
+    $order = Order::factory()->create([
+        'status' => Order::STATUS_DRIVING,
+        'user_id' => $this->driver->id,
+        'ride_step' => Order::RIDE_STEP_START,
+        'pickup_location' => '마포구',
+        'dropoff_location' => '인천공항',
+    ]);
+
+    // 강남 한복판 — 마포구에서 10km 이상 떨어져 있다
+    $this->postJson("/api/orders/{$order->id}/ride-step", [
+        'latitude' => 37.4979,
+        'longitude' => 127.0276,
+    ])->assertStatus(422)->assertJsonValidationErrors(['ride_step']);
+
+    expect($order->fresh()?->ride_step)->toBe(Order::RIDE_STEP_START);
+});
+
+test('픽업지 근처에 있으면 픽업 도착 단계가 진행된다', function () {
+    $order = Order::factory()->create([
+        'status' => Order::STATUS_DRIVING,
+        'user_id' => $this->driver->id,
+        'ride_step' => Order::RIDE_STEP_START,
+        'pickup_location' => '마포구',
+        'dropoff_location' => '인천공항',
+    ]);
+
+    $this->postJson("/api/orders/{$order->id}/ride-step", [
+        'latitude' => 37.5663,
+        'longitude' => 126.9014,
+    ])->assertOk()->assertJsonPath('data.ride_step', Order::RIDE_STEP_PICKUP_ARRIVED);
+
+    expect($order->fresh()?->ride_step)->toBe(Order::RIDE_STEP_PICKUP_ARRIVED);
+});
+
+test('정확한 지점 지명은 1km 밖에서 단계를 진행할 수 없다', function () {
+    // '인천공항'은 사전에 특정 지점으로 있으니 촘촘하게 잡는다
+    $order = Order::factory()->create([
+        'status' => Order::STATUS_DRIVING,
+        'user_id' => $this->driver->id,
+        'ride_step' => Order::RIDE_STEP_START,
+        'pickup_location' => '인천공항 제1터미널',
+        'dropoff_location' => '명동',
+    ]);
+
+    // 약 2km 떨어진 지점 — 도착이라고 보기 어렵다
+    $this->postJson("/api/orders/{$order->id}/ride-step", [
+        'latitude' => 37.4671,
+        'longitude' => 126.4509,
+    ])->assertStatus(422)->assertJsonValidationErrors(['ride_step']);
+
+    // 1km 안이면 통과한다
+    $this->postJson("/api/orders/{$order->id}/ride-step", [
+        'latitude' => 37.4530,
+        'longitude' => 126.4509,
+    ])->assertOk()->assertJsonPath('data.ride_step', Order::RIDE_STEP_PICKUP_ARRIVED);
+});
+
+test('구 단위 지명은 1.5km 를 기준으로 판정한다', function () {
+    // 마포구 중심(37.5663, 126.9014)에서 약 1.2km — 도착으로 본다
+    $near = Order::factory()->create([
+        'status' => Order::STATUS_DRIVING,
+        'user_id' => $this->driver->id,
+        'ride_step' => Order::RIDE_STEP_START,
+        'pickup_location' => '마포구',
+        'dropoff_location' => '인천공항',
+    ]);
+
+    $this->postJson("/api/orders/{$near->id}/ride-step", [
+        'latitude' => 37.5771,
+        'longitude' => 126.9014,
+    ])->assertOk();
+
+    // 약 2.5km — 아직 픽업지가 아니라고 보고 막는다
+    $far = Order::factory()->create([
+        'status' => Order::STATUS_DRIVING,
+        'user_id' => $this->driver->id,
+        'ride_step' => Order::RIDE_STEP_START,
+        'pickup_location' => '마포구',
+        'dropoff_location' => '인천공항',
+    ]);
+
+    $this->postJson("/api/orders/{$far->id}/ride-step", [
+        'latitude' => 37.5888,
+        'longitude' => 126.9014,
+    ])->assertStatus(422)->assertJsonValidationErrors(['ride_step']);
+});
+
+test('이동중 단계는 위치와 무관하게 진행된다', function () {
+    // 출발까지 마친 뒤에는 픽업지를 떠나 있는 게 정상이라 위치를 보지 않는다
+    $order = Order::factory()->create([
+        'status' => Order::STATUS_DRIVING,
+        'user_id' => $this->driver->id,
+        'ride_step' => Order::RIDE_STEP_DEPARTED,
+        'pickup_location' => '마포구',
+        'dropoff_location' => '인천공항',
+    ]);
+
+    $this->postJson("/api/orders/{$order->id}/ride-step", [
+        'latitude' => 37.4979,
+        'longitude' => 127.0276,
+    ])->assertOk()->assertJsonPath('data.ride_step', Order::RIDE_STEP_MOVING);
 });
 
 test('내 운행 목록 행에 운행중 단계(rideStep)가 노출된다', function () {

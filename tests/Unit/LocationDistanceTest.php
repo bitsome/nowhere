@@ -48,6 +48,35 @@ test('거리에서 대략 소요시간(분)을 추정한다', function () {
         ->and($minutes)->toBe((int) round(LocationDistance::km('인천공항', '명동') / 45 * 60));
 });
 
+test('지명과 GPS 좌표의 거리를 계산한다', function () {
+    // 운행 단계 진행 위치 검증(픽업지·도착지 근처인지)에 쓴다. 도로 보정 없는 직선거리다.
+    expect(LocationDistance::kmFromPoint('마포구', 37.5663, 126.9014))->toBeLessThan(0.1)
+        ->and(LocationDistance::kmFromPoint('마포구', 37.4979, 127.0276))->toBeGreaterThan(10)
+        ->and(LocationDistance::kmFromPoint('인천공항', 37.4491, 126.4509))->toBeLessThan(0.1);
+});
+
+test('좌표를 모르는 지명은 GPS 거리도 주지 않는다', function () {
+    // 지명 좌표를 모르면 검증할 수 없다 — 호출한 쪽은 '검증 불가'로 보고 통과시킨다
+    expect(LocationDistance::kmFromPoint('미정', 37.5663, 126.9014))->toBeNull()
+        ->and(LocationDistance::kmFromPoint('명동—인천', 37.5663, 126.9014))->toBeNull()
+        ->and(LocationDistance::kmFromPoint(null, 37.5663, 126.9014))->toBeNull();
+});
+
+test('광역(구·시) 단위 지명을 구분한다', function () {
+    // 구·시 단위는 좌표가 중심점뿐 — 단계 진행 반경을 넓게 잡아야 한다
+    expect(LocationDistance::isCoarsePlace('마포구'))->toBeTrue()
+        ->and(LocationDistance::isCoarsePlace('강남'))->toBeTrue()
+        ->and(LocationDistance::isCoarsePlace('성남시'))->toBeTrue()
+        // 공항·역·랜드마크는 특정 지점을 아니 촘촘하게 잡는다
+        ->and(LocationDistance::isCoarsePlace('인천공항'))->toBeFalse()
+        ->and(LocationDistance::isCoarsePlace('인천공항 제1터미널'))->toBeFalse()
+        ->and(LocationDistance::isCoarsePlace('인천 인스파이어'))->toBeFalse()
+        ->and(LocationDistance::isCoarsePlace('명동'))->toBeFalse()
+        // 좌표를 모르는 지명은 광역으로 보지 않는다
+        ->and(LocationDistance::isCoarsePlace('미정'))->toBeFalse()
+        ->and(LocationDistance::isCoarsePlace(null))->toBeFalse();
+});
+
 test('거리를 모르면 소요시간도 주지 않는다', function () {
     expect(LocationDistance::minutes('미정', '명동'))->toBeNull()
         ->and(LocationDistance::minutes('명동—인천', '강남'))->toBeNull()

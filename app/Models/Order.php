@@ -65,6 +65,8 @@ use Throwable;
     'user_id',
     'original_owner_id',
     'started_at',
+    'start_latitude',
+    'start_longitude',
     'completed_at',
     'actual_revenue',
     'is_hidden',
@@ -530,6 +532,9 @@ class Order extends Model
             'estimated_duration_minutes' => 'integer',
             'is_priority' => 'boolean',
             'started_at' => 'datetime',
+            // 운행 시작 위치 — 좌표를 그대로 숫자로 내려준다 (소수 7자리 = 약 1cm 정밀도)
+            'start_latitude' => 'float',
+            'start_longitude' => 'float',
             'completed_at' => 'datetime',
             'actual_revenue' => 'integer',
             'is_hidden' => 'boolean',
