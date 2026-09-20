@@ -11,6 +11,8 @@ import LevelBadge from '../../components/common/LevelBadge.vue';
 import BaseIcon from '../../components/common/BaseIcon.vue';
 import EmptyState from '../../components/common/EmptyState.vue';
 import CommunityPostEditor from '../../components/community/CommunityPostEditor.vue';
+import SurveyBlock from '../../components/community/SurveyBlock.vue';
+import PlaceCard from '../../components/community/PlaceCard.vue';
 
 defineOptions({ name: 'CommunityView' });
 
@@ -26,7 +28,7 @@ const composer = usePostComposer({ message, posts: feed.posts });
 const {
     posts, popularPosts, categoryCounts, pagination, page, loading, error, category, search,
     load, loadMore, loadPopular, setCategory, applySearch, clearSearch,
-    toggleLike, commentText, submitComment, deleteComment,
+    toggleLike, vote, commentText, submitComment, deleteComment,
     expandComments, removePost, timeAgo, avatarText, myId, playingVideo, parseVideo, toggleVideo, visiblePosts,
     scrollToPost, author, period, clearAllFilters,
 } = feed;
@@ -46,7 +48,8 @@ const tabCounts = computed(() => {
 
 const {
     showComposer, composing, draftContent, draftCategory, draftImage, draftPreviewUrl, draftVideoUrl,
-    openComposer, pickImage, submitPost,
+    draftSurveyOptions, draftSurveyCloses, draftPlaceName, draftPlaceRegion, draftPlaceAddress, draftPlaceMapUrl,
+    isSurveyCategory, isPlaceCategory, openComposer, pickImage, addSurveyOption, removeSurveyOption, submitPost,
 } = composer;
 
 // 인기 글은 '전체 탭 + 검색 없음 + 내 글만 보기 아님'일 때만 상단 노출
@@ -311,6 +314,14 @@ onMounted(() => {
                         </a>
                     </template>
 
+                    <!-- 여행지 맛집 카드 / 설문 투표 -->
+                    <PlaceCard v-if="post.place" :place="post.place" />
+                    <SurveyBlock
+                        v-if="post.survey"
+                        :survey="post.survey"
+                        @vote="(optionId) => vote(post, optionId)"
+                    />
+
                     <div class="feed-card__actions" @click.stop>
                         <button
                             type="button"
@@ -432,6 +443,53 @@ onMounted(() => {
                     clearable
                     class="composer__video"
                 />
+
+                <!-- 설문조사 — 선택지 2개 이상 + 마감일 -->
+                <div v-if="isSurveyCategory" class="composer__survey">
+                    <span class="composer__group-title">선택지 (2개 이상)</span>
+                    <div v-for="(option, index) in draftSurveyOptions" :key="index" class="composer__option-row">
+                        <n-input
+                            v-model:value="draftSurveyOptions[index]"
+                            type="text"
+                            :placeholder="`선택지 ${index + 1}`"
+                            maxlength="80"
+                        />
+                        <button
+                            v-if="draftSurveyOptions.length > 2"
+                            type="button"
+                            class="composer__option-remove"
+                            aria-label="선택지 삭제"
+                            @click="removeSurveyOption(index)"
+                        >
+                            <BaseIcon name="close" :size="14" />
+                        </button>
+                    </div>
+                    <button
+                        v-if="draftSurveyOptions.length < 10"
+                        type="button"
+                        class="composer__option-add"
+                        @click="addSurveyOption"
+                    >
+                        <BaseIcon name="add" :size="14" />
+                        선택지 추가
+                    </button>
+                    <n-date-picker
+                        v-model:formatted-value="draftSurveyCloses"
+                        type="date"
+                        value-format="yyyy-MM-dd"
+                        placeholder="마감일 (선택)"
+                        clearable
+                    />
+                </div>
+
+                <!-- 여행지 맛집 — 장소 정보가 카드로 노출된다 -->
+                <div v-if="isPlaceCategory" class="composer__place">
+                    <span class="composer__group-title">맛집 정보</span>
+                    <n-input v-model:value="draftPlaceName" type="text" placeholder="맛집 이름 (필수)" maxlength="80" />
+                    <n-input v-model:value="draftPlaceRegion" type="text" placeholder="지역 (예: 제주 서귀포)" maxlength="40" />
+                    <n-input v-model:value="draftPlaceAddress" type="text" placeholder="주소" maxlength="150" />
+                    <n-input v-model:value="draftPlaceMapUrl" type="text" placeholder="지도 링크 (선택)" maxlength="500" />
+                </div>
 
                 <div class="composer__footer">
                     <label class="composer__upload">
@@ -828,6 +886,8 @@ html.dark .feed-avatar {
 .feed-card__cat--car { background: color-mix(in srgb, #f4be5f 16%, transparent); color: #e8a83c; }
 .feed-card__cat--money { background: color-mix(in srgb, #f2994a 16%, transparent); color: #e2873a; }
 .feed-card__cat--shop { background: color-mix(in srgb, #63e2b7 14%, transparent); color: var(--status-accepted); }
+.feed-card__cat--survey { background: color-mix(in srgb, #8b7bf7 14%, transparent); color: #8b7bf7; }
+.feed-card__cat--food { background: color-mix(in srgb, #ff8a5c 16%, transparent); color: #e8734a; }
 
 .feed-badge {
     display: inline-flex;
@@ -1159,6 +1219,70 @@ html.dark .feed-card__composer input:focus { background: rgba(255, 255, 255, 0.0
     object-fit: cover;
     border-radius: 10px;
 }
+
+/* ── 설문조사 / 여행지 맛집 입력 ── */
+.composer__survey,
+.composer__place {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.02);
+}
+
+html.dark .composer__survey,
+html.dark .composer__place { background: rgba(255, 255, 255, 0.03); }
+
+.composer__group-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.composer__option-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.composer__option-row :deep(.n-input) { flex: 1; }
+
+.composer__option-remove {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 50%;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.12s ease;
+}
+
+.composer__option-remove:hover { color: var(--danger); }
+
+.composer__option-add {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    align-self: flex-start;
+    padding: 5px 10px;
+    border: 1px dashed var(--border);
+    border-radius: 999px;
+    background: none;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.12s ease, color 0.12s ease;
+}
+
+.composer__option-add:hover { border-color: var(--brand); color: var(--brand); }
 
 .composer__footer {
     display: flex;

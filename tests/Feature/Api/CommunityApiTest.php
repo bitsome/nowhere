@@ -245,3 +245,104 @@ test('카테고리 집계 쿼리가 ONLY_FULL_GROUP_BY 를 위반하지 않는�
     expect($response->json('meta.category_counts.free'))->toBe(1);
     expect($response->json('meta.category_counts.route'))->toBe(1);
 });
+
+test('설문 글을 작성하면 선택지와 함께 피드에 노출된다', function () {
+    $created = $this->postJson('/api/community/posts', [
+        'content' => '다음 달 인천공항 주차장 어디로 옮길까요?',
+        'category' => 'survey',
+        'survey_options' => ['제1여객터미널', '제2여객터미널', '장기주차장'],
+    ])->assertStatus(201);
+
+    expect($created->json('data.survey.options'))->toHaveCount(3);
+    expect($created->json('data.survey.options.0.text'))->toBe('제1여객터미널');
+    expect($created->json('data.survey.options.0.votes'))->toBe(0);
+    expect($created->json('data.survey.total'))->toBe(0);
+    expect($created->json('data.survey.my_option'))->toBeNull();
+    expect($created->json('data.survey.closed'))->toBeFalse();
+
+    $feed = $this->getJson('/api/community/posts')->assertOk();
+
+    expect($feed->json('data.0.survey.options.2.text'))->toBe('장기주차장');
+});
+
+test('설문 선택지가 2개 미만이면 거부된다', function () {
+    $this->postJson('/api/community/posts', [
+        'content' => '선택지 하나짜리 설문',
+        'category' => 'survey',
+        'survey_options' => ['하나뿐'],
+    ])->assertStatus(422)->assertJsonValidationErrors('survey_options');
+});
+
+test('설문에는 1인 1표 — 다시 투표하면 선택만 바뀐다', function () {
+    $post = CommunityPost::create([
+        'user_id' => $this->actor->id,
+        'category' => 'survey',
+        'content' => '어느 노선이 가장 좋으세요?',
+        'survey_options' => ['공항', '관광', '장거리'],
+    ]);
+
+    $first = $this->postJson("/api/community/posts/{$post->id}/vote", ['option_id' => 0])->assertOk();
+    expect($first->json('data.my_option'))->toBe(0);
+    expect($first->json('data.total'))->toBe(1);
+    expect($first->json('data.options.0.votes'))->toBe(1);
+
+    // 같은 사람이 다시 투표 — 표가 늘지 않고 선택만 옮겨간다
+    $second = $this->postJson("/api/community/posts/{$post->id}/vote", ['option_id' => 2])->assertOk();
+    expect($second->json('data.my_option'))->toBe(2);
+    expect($second->json('data.total'))->toBe(1);
+    expect($second->json('data.options.0.votes'))->toBe(0);
+    expect($second->json('data.options.2.votes'))->toBe(1);
+
+    expect(DB::table('community_survey_votes')->where('post_id', $post->id)->count())->toBe(1);
+
+    // 다른 사람이 투표하면 득표가 함께 쌓인다
+    $this->actingAs($this->peer);
+    $third = $this->postJson("/api/community/posts/{$post->id}/vote", ['option_id' => 0])->assertOk();
+    expect($third->json('data.total'))->toBe(2);
+    expect($third->json('data.my_option'))->toBe(0);
+});
+
+test('마감된 설문과 설문이 아닌 글에는 투표할 수 없다', function () {
+    $closed = CommunityPost::create([
+        'user_id' => $this->actor->id,
+        'category' => 'survey',
+        'content' => '마감된 설문',
+        'survey_options' => ['A', 'B'],
+        'survey_closes_at' => now()->subDay(),
+    ]);
+
+    $normal = CommunityPost::create(['user_id' => $this->actor->id, 'content' => '일반 글']);
+
+    $this->postJson("/api/community/posts/{$closed->id}/vote", ['option_id' => 0])->assertStatus(422);
+    $this->postJson("/api/community/posts/{$normal->id}/vote", ['option_id' => 0])->assertStatus(422);
+
+    // 없는 선택지도 거부
+    $open = CommunityPost::create([
+        'user_id' => $this->actor->id,
+        'category' => 'survey',
+        'content' => '진행 중 설문',
+        'survey_options' => ['A', 'B'],
+    ]);
+
+    $this->postJson("/api/community/posts/{$open->id}/vote", ['option_id' => 9])->assertStatus(422);
+});
+
+test('여행지 맛집 글은 장소 카드 정보로 노출된다', function () {
+    $created = $this->postJson('/api/community/posts', [
+        'content' => '제주 여행 중 들른 흑돼지집 — 웨이팅 있지만 회전 빠름',
+        'category' => 'food',
+        'place_name' => '제주 흑돼지 명가',
+        'place_region' => '제주 서귀포',
+        'place_address' => '제주특별자치도 서귀포시 중문로 12',
+        'place_map_url' => 'https://map.example.com/jeju-blackpork',
+    ])->assertStatus(201);
+
+    expect($created->json('data.place.name'))->toBe('제주 흑돼지 명가');
+    expect($created->json('data.place.region'))->toBe('제주 서귀포');
+    expect($created->json('data.place.address'))->toBe('제주특별자치도 서귀포시 중문로 12');
+    expect($created->json('data.place.map_url'))->toBe('https://map.example.com/jeju-blackpork');
+
+    // 장소 정보가 없는 일반 글은 카드가 아니다
+    $plain = $this->postJson('/api/community/posts', ['content' => '그냥 잡담'])->assertStatus(201);
+    expect($plain->json('data.place'))->toBeNull();
+});

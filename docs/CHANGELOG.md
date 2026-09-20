@@ -38,6 +38,21 @@
 - 서비스 워커가 하드코딩한 `/spa` 경로 제거 — 알림 아이콘 404·알림 탭 시 404 화면이 되던 문제 (배포 경로를 `registration.scope`에서 계산)
 - PWA 매니페스트 카피 용어 교정("드라이버 오더 마켓" → 운행·기사 용어)
 
+## 2026-09-11 — 커뮤니티 설문조사 · 여행지 맛집
+
+### Added
+- **커뮤니티 카테고리 2종** — 설문조사·여행지 맛집 (`communityCategories.js`, 아이콘 `survey`/`food`)
+- **투표형 설문조사** — 선택지 2~10개(80자) + 마감일(선택). 항목별 득표 막대·득표율·내 선택을 카드에서 바로 보여주고, 항목을 누르면 투표된다. **1인 1표**(다시 누르면 선택만 변경), 마감 후에는 투표 불가
+  - 저장: `community_posts.survey_options`(JSON 선택지 목록)·`survey_closes_at`, 표는 `community_survey_votes`(post_id·option_id·user_id, `unique(post_id, user_id)`)
+  - API: `POST /api/community/posts/{post}/vote`
+- **여행지 맛집 카드** — 상호(필수)·지역·주소·지도 링크를 구조화해 카드로 노출 (`community_posts.place_name`·`place_region`·`place_address`·`place_map_url`)
+- 공용 컴포넌트 `SurveyBlock.vue`·`PlaceCard.vue` — 피드 카드와 상세 화면이 같은 렌더를 공유
+
+### Changed
+- 커뮤니티 글 작성 모달 — 설문 카테고리면 선택지·마감일 입력, 맛집 카테고리면 장소 정보 입력이 나타난다
+- 글 수정 모달 — 맛집 장소 정보는 수정 가능, 설문 글은 선택지가 투표와 묶여 있어 카테고리·선택지 고정(안내 문구 표시)
+- 피드 카드 카테고리 뱃지에 설문·맛집 색상 추가
+
 ## 2026-09-10 — 수수료 정책 정비 · 수금·매출 가시화 (수익구조 1축)
 
 ### Added

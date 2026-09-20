@@ -7,6 +7,7 @@ import {
     apiDeleteCommunityPost,
     apiToggleCommunityLike,
     apiUpdateCommunityPost,
+    apiVoteCommunityPost,
 } from '../api/community';
 import { getApiErrorMessage } from '../api/client';
 
@@ -143,6 +144,16 @@ export function useCommunityFeed({ message, auth, ui }) {
     };
 
     const commentText = ref({});
+
+    // 설문 투표 — 서버가 1인 1표를 강제하고, 응답으로 받은 갱신된 득표를 그대로 반영한다
+    const vote = async (post, optionId) => {
+        try {
+            const { data } = await apiVoteCommunityPost(post.id, optionId);
+            post.survey = data.data;
+        } catch (e) {
+            message.error(getApiErrorMessage(e, '투표에 실패했습니다.'));
+        }
+    };
 
     // 댓글 입력창으로 포커스 복귀 — 카드(data-post-id) 또는 상세 화면(input[data-post-comment])에서
     const focusCommentInput = (postId) => {
@@ -326,6 +337,7 @@ export function useCommunityFeed({ message, auth, ui }) {
         clearSearch,
         loadMore,
         toggleLike,
+        vote,
         commentText,
         submitComment,
         deleteComment,

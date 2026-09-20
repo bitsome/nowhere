@@ -7,6 +7,8 @@ export const COMMUNITY_CATEGORIES = [
     { key: 'car', label: '차량정보', icon: 'car' },
     { key: 'money', label: '수익·노하우', icon: 'cash' },
     { key: 'shop', label: '쇼핑·중고거래', icon: 'cart' },
+    { key: 'survey', label: '설문조사', icon: 'survey' },
+    { key: 'food', label: '여행지 맛집', icon: 'food' },
 ];
 
 export const categoryOf = (key) => COMMUNITY_CATEGORIES.find((c) => c.key === key) ?? COMMUNITY_CATEGORIES[0];

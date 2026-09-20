@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useMessage } from 'naive-ui';
 import { apiUpdateCommunityPost } from '../../api/community';
 import { getApiErrorMessage } from '../../api/client';
@@ -22,6 +22,9 @@ const props = defineProps({
 
 const emit = defineEmits(['update:show', 'saved']);
 
+// 수정으로는 설문을 만들 수 없다(선택지 입력이 없어 카테고리에서 제외) — 설문 글은 카테고리 자체가 고정된다
+const EDIT_CATEGORIES = COMMUNITY_CATEGORIES.filter((c) => c.key !== 'survey');
+
 const message = useMessage();
 
 const draftContent = ref('');
@@ -30,6 +33,16 @@ const draftImage = ref(null);
 const draftPreviewUrl = ref('');
 const draftVideoUrl = ref('');
 const submitting = ref(false);
+
+// 여행지 맛집 — 장소 정보
+const draftPlaceName = ref('');
+const draftPlaceRegion = ref('');
+const draftPlaceAddress = ref('');
+const draftPlaceMapUrl = ref('');
+
+// 설문조사는 선택지가 투표 순번과 묶여 있어 수정할 수 없다 (카테고리도 고정)
+const isSurvey = computed(() => Boolean(props.post?.survey));
+const isPlaceCategory = computed(() => draftCategory.value === 'food');
 
 // 열릴 때마다 원본 글 값으로 초기화
 watch(
@@ -44,6 +57,10 @@ watch(
         draftImage.value = null;
         draftPreviewUrl.value = props.post?.image_url ?? '';
         draftVideoUrl.value = props.post?.video_url ?? '';
+        draftPlaceName.value = props.post?.place?.name ?? '';
+        draftPlaceRegion.value = props.post?.place?.region ?? '';
+        draftPlaceAddress.value = props.post?.place?.address ?? '';
+        draftPlaceMapUrl.value = props.post?.place?.map_url ?? '';
     },
 );
 
@@ -74,6 +91,12 @@ const submit = async () => {
         return;
     }
 
+    if (isPlaceCategory.value && draftPlaceName.value.trim() === '') {
+        message.warning('맛집 이름을 입력해 주세요.');
+
+        return;
+    }
+
     submitting.value = true;
 
     try {
@@ -82,6 +105,11 @@ const submit = async () => {
             category: draftCategory.value,
             image: draftImage.value,
             video_url: draftVideoUrl.value.trim(),
+            // 맛집 카테고리에서 벗어나면 장소 정보를 비운다 (카드가 아닌 일반 글로 돌아간다)
+            place_name: isPlaceCategory.value ? draftPlaceName.value.trim() : '',
+            place_region: isPlaceCategory.value ? draftPlaceRegion.value.trim() : '',
+            place_address: isPlaceCategory.value ? draftPlaceAddress.value.trim() : '',
+            place_map_url: isPlaceCategory.value ? draftPlaceMapUrl.value.trim() : '',
         });
 
         emit('saved', data.data);
@@ -102,10 +130,10 @@ const submit = async () => {
         @update:show="(v) => emit('update:show', v)"
     >
         <div class="editor">
-            <!-- 카테고리 선택 -->
-            <div class="editor__cats">
+            <!-- 카테고리 선택 — 설문 글은 선택지가 투표와 묶여 있어 고정 -->
+            <div v-if="!isSurvey" class="editor__cats">
                 <button
-                    v-for="c in COMMUNITY_CATEGORIES"
+                    v-for="c in EDIT_CATEGORIES"
                     :key="c.key"
                     type="button"
                     class="editor__cat"
@@ -115,6 +143,7 @@ const submit = async () => {
                     <span><BaseIcon :name="c.icon" :size="16" /></span>{{ c.label }}
                 </button>
             </div>
+            <p v-else class="editor__locked">설문조사 — 선택지와 카테고리는 수정할 수 없습니다.</p>
 
             <n-input
                 v-model:value="draftContent"
@@ -134,6 +163,14 @@ const submit = async () => {
                 clearable
                 class="editor__video"
             />
+
+            <!-- 여행지 맛집 — 장소 정보 -->
+            <div v-if="isPlaceCategory" class="editor__place">
+                <n-input v-model:value="draftPlaceName" type="text" placeholder="맛집 이름 (필수)" maxlength="80" />
+                <n-input v-model:value="draftPlaceRegion" type="text" placeholder="지역 (예: 제주 서귀포)" maxlength="40" />
+                <n-input v-model:value="draftPlaceAddress" type="text" placeholder="주소" maxlength="150" />
+                <n-input v-model:value="draftPlaceMapUrl" type="text" placeholder="지도 링크 (선택)" maxlength="500" />
+            </div>
 
             <div class="editor__footer">
                 <label class="editor__upload">
@@ -195,6 +232,31 @@ const submit = async () => {
 }
 
 .editor__video { margin-top: 0; }
+
+/* ── 설문 고정 안내 / 여행지 맛집 입력 ── */
+.editor__locked {
+    margin: 0;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.02);
+    color: var(--text-muted);
+    font-size: 11px;
+}
+
+html.dark .editor__locked { background: rgba(255, 255, 255, 0.03); }
+
+.editor__place {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.02);
+}
+
+html.dark .editor__place { background: rgba(255, 255, 255, 0.03); }
 
 .editor__footer {
     display: flex;

@@ -12,6 +12,8 @@ import LevelBadge from '../../components/common/LevelBadge.vue';
 import BaseIcon from '../../components/common/BaseIcon.vue';
 import EmptyState from '../../components/common/EmptyState.vue';
 import CommunityPostEditor from '../../components/community/CommunityPostEditor.vue';
+import SurveyBlock from '../../components/community/SurveyBlock.vue';
+import PlaceCard from '../../components/community/PlaceCard.vue';
 
 defineOptions({ name: 'CommunityPostView' });
 
@@ -24,7 +26,7 @@ const ui = useUiStore();
 const feed = useCommunityFeed({ message, auth, ui });
 
 const {
-    toggleLike, commentText, submitComment, deleteComment, removePost,
+    toggleLike, vote, commentText, submitComment, deleteComment, removePost,
     timeAgo, avatarText, playingVideo, parseVideo, toggleVideo,
 } = feed;
 
@@ -193,6 +195,14 @@ onMounted(loadDetail);
                     영상 보기
                 </a>
             </template>
+
+            <!-- 여행지 맛집 카드 / 설문 투표 -->
+            <PlaceCard v-if="post.place" :place="post.place" />
+            <SurveyBlock
+                v-if="post.survey"
+                :survey="post.survey"
+                @vote="(optionId) => vote(post, optionId)"
+            />
 
             <div class="feed-card__actions">
                 <button
@@ -395,6 +405,8 @@ html.dark .feed-avatar {
 .feed-card__cat--car { background: color-mix(in srgb, #f4be5f 16%, transparent); color: #e8a83c; }
 .feed-card__cat--money { background: color-mix(in srgb, #f2994a 16%, transparent); color: #e2873a; }
 .feed-card__cat--shop { background: color-mix(in srgb, #63e2b7 14%, transparent); color: var(--status-accepted); }
+.feed-card__cat--survey { background: color-mix(in srgb, #8b7bf7 14%, transparent); color: #8b7bf7; }
+.feed-card__cat--food { background: color-mix(in srgb, #ff8a5c 16%, transparent); color: #e8734a; }
 
 .feed-badge { display: inline-flex; align-items: center; font-size: 10px; line-height: 1; }
 

@@ -15,15 +15,48 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'content',
     'image_path',
     'video_url',
+    'survey_options',
+    'survey_closes_at',
+    'place_name',
+    'place_region',
+    'place_address',
+    'place_map_url',
 ])]
 class CommunityPost extends Model
 {
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'survey_options' => 'array',
+            'survey_closes_at' => 'datetime',
+        ];
+    }
+
     /**
      * 작성자.
      */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * 설문 투표 — 설문 글에만 존재한다.
+     */
+    public function surveyVotes(): HasMany
+    {
+        return $this->hasMany(CommunitySurveyVote::class, 'post_id');
+    }
+
+    /**
+     * 설문 글인지 — 선택지 목록이 있으면 설문으로 본다.
+     */
+    public function isSurvey(): bool
+    {
+        return ! empty($this->survey_options);
     }
 
     /**
@@ -52,6 +85,8 @@ class CommunityPost extends Model
             'user:id,name,email,profile_photo_path,is_vip,is_vehicle_verified,is_license_verified,xp',
             // 피드 응답 최적화 — 글마다 최근 3개 댓글만 미리 로드 (나머지는 '모두 보기'로 지연 로드)
             'comments' => fn ($q) => $q->with('user:id,name,email,profile_photo_path')->latest()->limit(3),
+            // 설문 득표 집계 — 글마다 조회하면 N+1이 되므로 한 번에 함께 불러온다
+            'surveyVotes:id,post_id,option_id,user_id',
         ])
             ->withCount('likes')
             ->withCount('comments')

@@ -97,63 +97,66 @@ class CommunityController extends Controller
     }
 
     /**
-     * 글 작성 — 내용 + 선택 사진 + 영상/숏츠 URL.
+     * 글 작성 — 내용 + 선택 사진 + 영상/숏츠 URL + 카테고리 (+ 설문 선택지 / 맛집 장소 정보).
      *
      * @return JsonResponse{data: array<string, mixed>}
      */
     public function store(Request $request, CommunityPostService $posts): JsonResponse
     {
-        $data = $request->validate([
-            'content' => ['required', 'string', 'max:2000'],
-            'category' => ['nullable', 'string', 'max:20'],
-            'image' => ['nullable', 'image', 'max:5120'],
-            'video_url' => ['nullable', 'string', 'max:500'],
-        ]);
+        $data = $request->validate($this->postRules());
 
-        $post = $posts->create(
-            $request->user(),
-            $data['content'],
-            $data['image'] ?? null,
-            (string) ($data['video_url'] ?? ''),
-            (string) ($data['category'] ?? 'free'),
-        );
+        $post = $posts->create($request->user(), $data, $data['image'] ?? null);
 
         return response()->json([
             'data' => $posts->serialize($post
                 ->load('user:id,name,email,profile_photo_path,is_vip,is_vehicle_verified,is_license_verified,xp')
                 ->load('comments.user:id,name')
+                ->load('surveyVotes:id,post_id,option_id,user_id')
                 ->loadCount('likes')
                 ->loadCount('comments')),
         ], 201);
     }
 
     /**
-     * 글 수정 — 본인 글만 (내용/카테고리/영상, 선택적으로 사진 교체).
+     * 글 작성/수정 공통 입력 규칙 — 설문 선택지·마감과 맛집 장소 정보를 포함한다.
+     *
+     * @return array<string, array<int, string>>
+     */
+    private function postRules(): array
+    {
+        return [
+            'content' => ['required', 'string', 'max:2000'],
+            'category' => ['nullable', 'string', 'max:20'],
+            'image' => ['nullable', 'image', 'max:5120'],
+            'video_url' => ['nullable', 'string', 'max:500'],
+            // 설문 — 선택지 2~10개, 마감 시각은 선택
+            'survey_options' => ['nullable', 'array', 'min:2', 'max:10'],
+            'survey_options.*' => ['required', 'string', 'max:80'],
+            'survey_closes_at' => ['nullable', 'date'],
+            // 여행지 맛집 카드 — 장소 정보는 선택(장소명이 있어야 카드로 노출)
+            'place_name' => ['nullable', 'string', 'max:80'],
+            'place_region' => ['nullable', 'string', 'max:40'],
+            'place_address' => ['nullable', 'string', 'max:150'],
+            'place_map_url' => ['nullable', 'string', 'max:500'],
+        ];
+    }
+
+    /**
+     * 글 수정 — 본인 글만 (내용/카테고리/영상/장소 정보, 선택적으로 사진 교체).
      *
      * @return JsonResponse{data: array<string, mixed>}
      */
     public function update(Request $request, CommunityPost $post, CommunityPostService $posts): JsonResponse
     {
-        $data = $request->validate([
-            'content' => ['required', 'string', 'max:2000'],
-            'category' => ['nullable', 'string', 'max:20'],
-            'image' => ['nullable', 'image', 'max:5120'],
-            'video_url' => ['nullable', 'string', 'max:500'],
-        ]);
+        $data = $request->validate($this->postRules());
 
-        $post = $posts->update(
-            $request->user(),
-            $post,
-            $data['content'],
-            $data['image'] ?? null,
-            (string) ($data['video_url'] ?? ''),
-            (string) ($data['category'] ?? 'free'),
-        );
+        $post = $posts->update($request->user(), $post, $data, $data['image'] ?? null);
 
         return response()->json([
             'data' => $posts->serialize($post
                 ->load('user:id,name,email,profile_photo_path,is_vip,is_vehicle_verified,is_license_verified,xp')
                 ->load('comments.user:id,name')
+                ->load('surveyVotes:id,post_id,option_id,user_id')
                 ->loadCount('likes')
                 ->loadCount('comments')),
         ]);
@@ -169,6 +172,7 @@ class CommunityController extends Controller
         $post->load([
             'user:id,name,email,profile_photo_path,is_vip,is_vehicle_verified,is_license_verified,xp',
             'comments.user:id,name,email,profile_photo_path',
+            'surveyVotes:id,post_id,option_id,user_id',
         ])
             ->loadCount('likes')
             ->loadCount('comments')
@@ -205,6 +209,22 @@ class CommunityController extends Controller
                 'id' => $post->id,
                 ...$result,
             ],
+        ]);
+    }
+
+    /**
+     * 설문 투표 — 1인 1표 (다시 투표하면 선택이 바뀐다).
+     *
+     * @return JsonResponse{data: array<string, mixed>}
+     */
+    public function vote(Request $request, CommunityPost $post, CommunityPostService $posts): JsonResponse
+    {
+        $data = $request->validate([
+            'option_id' => ['required', 'integer', 'min:0'],
+        ]);
+
+        return response()->json([
+            'data' => $posts->vote($request->user(), $post, (int) $data['option_id']),
         ]);
     }
 

@@ -6,6 +6,7 @@ use App\Models\CommunityPost;
 use App\Models\Order;
 use App\Models\Review;
 use App\Models\User;
+use App\Support\Orders\ChineseTextNormalizer;
 
 /**
  * 유저 페이지 — 프로필, 올린 글, 등록한 운행, 리뷰 통계, 수행 실적을 집계한다.
@@ -68,7 +69,7 @@ class UserProfileService
                 'customer_name' => $order->customer_name,
                 'status' => $order->status,
                 'statusLabel' => Order::statusOptions()[$order->status] ?? $order->status,
-                'route' => trim(($order->pickup_location ?? '').' → '.($order->dropoff_location ?? '')),
+                'route' => ChineseTextNormalizer::routeLabel($order->pickup_location ?? '', $order->dropoff_location ?? ''),
                 'service_date' => $order->service_date,
                 'service_time' => $order->service_time,
                 'amount' => (int) ($order->expected_revenue ?? $order->amount_value ?? 0),

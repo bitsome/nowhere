@@ -4,6 +4,7 @@ namespace App\Services\Community;
 
 use App\Models\CommunityComment;
 use App\Models\CommunityPost;
+use App\Models\CommunitySurveyVote;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -14,9 +15,11 @@ use Illuminate\Support\Facades\Storage;
 class CommunityPostService
 {
     /**
-     * 글 작성 — 내용 + 선택 사진 + 영상/숏츠 URL + 카테고리.
+     * 글 작성 — 내용 + 선택 사진 + 영상/숏츠 URL + 카테고리 (+ 설문 선택지 / 맛집 장소 정보).
+     *
+     * @param  array<string, mixed>  $attributes
      */
-    public function create(User $author, string $content, ?UploadedFile $image, string $videoUrl, string $category = 'free'): CommunityPost
+    public function create(User $author, array $attributes, ?UploadedFile $image): CommunityPost
     {
         $imagePath = null;
 
@@ -26,10 +29,12 @@ class CommunityPostService
 
         $post = CommunityPost::create([
             'user_id' => $author->id,
-            'category' => $category,
-            'content' => $content,
+            'category' => $attributes['category'] ?? 'free',
+            'content' => $attributes['content'],
             'image_path' => $imagePath,
-            'video_url' => trim($videoUrl),
+            'video_url' => trim((string) ($attributes['video_url'] ?? '')),
+            ...$this->surveyAttributes($attributes),
+            ...$this->placeAttributes($attributes),
         ]);
 
         // 레벨링: 커뮤니티 글 작성 +5 XP
@@ -40,21 +45,19 @@ class CommunityPostService
 
     /**
      * 글 수정 — 본인 글만 (첨부 이미지 교체 시 기존 파일 정리).
+     * 설문 선택지는 투표가 순번을 가리키므로 수정 대상에서 제외한다(장소 정보만 갱신).
+     *
+     * @param  array<string, mixed>  $attributes
      */
-    public function update(
-        User $author,
-        CommunityPost $post,
-        string $content,
-        ?UploadedFile $image,
-        string $videoUrl,
-        string $category = 'free',
-    ): CommunityPost {
+    public function update(User $author, CommunityPost $post, array $attributes, ?UploadedFile $image): CommunityPost
+    {
         abort_unless($post->user_id === $author->id, 403);
 
         $data = [
-            'category' => $category,
-            'content' => $content,
-            'video_url' => trim($videoUrl),
+            'category' => $attributes['category'] ?? 'free',
+            'content' => $attributes['content'],
+            'video_url' => trim((string) ($attributes['video_url'] ?? '')),
+            ...$this->placeAttributes($attributes),
         ];
 
         if ($image instanceof UploadedFile) {
@@ -68,6 +71,52 @@ class CommunityPostService
         $post->update($data);
 
         return $post;
+    }
+
+    /**
+     * 설문 선택지·마감 — 선택지가 2개 미만이면 설문이 아니라 일반 글로 저장한다(설문 컬럼을 비운다).
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    private function surveyAttributes(array $attributes): array
+    {
+        $options = collect($attributes['survey_options'] ?? [])
+            ->map(fn ($option) => trim((string) $option))
+            ->filter(fn (string $option) => $option !== '')
+            ->values()
+            ->all();
+
+        if (count($options) < 2) {
+            return ['survey_options' => null, 'survey_closes_at' => null];
+        }
+
+        return [
+            'survey_options' => $options,
+            'survey_closes_at' => $attributes['survey_closes_at'] ?? null,
+        ];
+    }
+
+    /**
+     * 맛집 장소 정보 — 빈 값은 null 로 저장해 카드가 아닌 일반 글로 남는다.
+     *
+     * @param  array<string, mixed>  $attributes
+     * @return array<string, mixed>
+     */
+    private function placeAttributes(array $attributes): array
+    {
+        $value = function (string $key) use ($attributes): ?string {
+            $trimmed = trim((string) ($attributes[$key] ?? ''));
+
+            return $trimmed !== '' ? $trimmed : null;
+        };
+
+        return [
+            'place_name' => $value('place_name'),
+            'place_region' => $value('place_region'),
+            'place_address' => $value('place_address'),
+            'place_map_url' => $value('place_map_url'),
+        ];
     }
 
     /**
@@ -139,6 +188,89 @@ class CommunityPostService
     }
 
     /**
+     * 설문 투표 — 한 사람 한 표. 다시 투표하면 선택이 바뀐다(표가 늘지 않는다).
+     * 마감된 설문은 막는다.
+     *
+     * @return array<string, mixed>
+     */
+    public function vote(User $voter, CommunityPost $post, int $optionId): array
+    {
+        abort_unless($post->isSurvey(), 422, '설문 글이 아닙니다.');
+
+        $options = $post->survey_options ?? [];
+
+        abort_unless(array_key_exists($optionId, $options), 422, '없는 선택지입니다.');
+
+        if ($post->survey_closes_at !== null && $post->survey_closes_at->isPast()) {
+            abort(422, '마감된 설문입니다.');
+        }
+
+        CommunitySurveyVote::updateOrCreate(
+            ['post_id' => $post->id, 'user_id' => $voter->id],
+            ['option_id' => $optionId],
+        );
+
+        return $this->surveyPayload($post->fresh(), $voter->id);
+    }
+
+    /**
+     * 설문 득표 결과 — 선택지별 득표 수, 내가 고른 선택지, 마감 여부.
+     *
+     * @return array<string, mixed>
+     */
+    private function surveyPayload(CommunityPost $post, ?int $userId): array
+    {
+        $options = $post->survey_options ?? [];
+        $votes = $post->relationLoaded('surveyVotes') ? $post->surveyVotes : $post->surveyVotes()->get();
+
+        $counts = array_fill(0, count($options), 0);
+        $mine = null;
+
+        foreach ($votes as $vote) {
+            $index = (int) $vote->option_id;
+
+            if (array_key_exists($index, $counts)) {
+                $counts[$index]++;
+            }
+
+            if ($userId !== null && (int) $vote->user_id === $userId) {
+                $mine = $index;
+            }
+        }
+
+        return [
+            'options' => collect($options)->map(fn ($text, $index) => [
+                'id' => $index,
+                'text' => $text,
+                'votes' => $counts[$index],
+            ])->values()->all(),
+            'total' => array_sum($counts),
+            'my_option' => $mine,
+            'closes_at' => $post->survey_closes_at?->toISOString(),
+            'closed' => $post->survey_closes_at !== null && $post->survey_closes_at->isPast(),
+        ];
+    }
+
+    /**
+     * 맛집 카드 정보 — 장소명이 없으면 카드가 아니다.
+     *
+     * @return array<string, string|null>|null
+     */
+    private function placePayload(CommunityPost $post): ?array
+    {
+        if ($post->place_name === null) {
+            return null;
+        }
+
+        return [
+            'name' => $post->place_name,
+            'region' => $post->place_region,
+            'address' => $post->place_address,
+            'map_url' => $post->place_map_url,
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function serialize(CommunityPost $post): array
@@ -153,6 +285,8 @@ class CommunityPostService
                 ? '/api/community/images/'.basename($post->image_path)
                 : null,
             'video_url' => $post->video_url,
+            'survey' => $post->isSurvey() ? $this->surveyPayload($post, auth()->id()) : null,
+            'place' => $this->placePayload($post),
             'created_at' => $post->created_at?->toISOString(),
             'user' => [
                 'id' => $post->user->id,
