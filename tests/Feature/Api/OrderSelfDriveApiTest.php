@@ -99,7 +99,7 @@ test('공개하지 않은 초안은 직접 수행할 수 없다', function () {
     expect($order->fresh()->status)->toBe(Order::STATUS_DRAFT);
 });
 
-test('직접 수행을 완료·정산하면 등록자와 수행자가 같은 원장이 만들어진다', function () {
+test('직접 수행을 완료·정산하면 수금·수수료·지급 없이 0으로 마감된다', function () {
     $order = Order::factory()->create([
         'user_id' => $this->owner->id,
         'status' => Order::STATUS_PUBLISHED,
@@ -120,11 +120,17 @@ test('직접 수행을 완료·정산하면 등록자와 수행자가 같은 원
 
     expect($settlement)->not->toBeNull()
         ->and($settlement->driver_id)->toBe($this->owner->id)
-        // 원 등록자가 기록되어 자기 수행 운행도 수금·출금 흐름에 그대로 올라탄다
+        // 등록자 = 수행자 — 입금·지급이 자기 자신에게 왕복하므로 전액 0으로 마감한다
         ->and($settlement->registrant_id)->toBe($this->owner->id)
-        ->and($settlement->gross_amount)->toBe(90000)
-        ->and($settlement->fee_amount)->toBe(4500)
-        ->and($settlement->net_amount)->toBe(85500);
+        ->and($settlement->gross_amount)->toBe(0)
+        ->and($settlement->fee_amount)->toBe(0)
+        ->and($settlement->net_amount)->toBe(0)
+        ->and($settlement->collection_status)->toBe(Settlement::COLLECTION_NOT_REQUIRED)
+        ->and($settlement->status)->toBe(Settlement::STATUS_PAID);
+
+    // 관리자 '수금 확인' 대기 목록과 기사 출금 재원 어디에도 잡히지 않는다
+    expect(Settlement::query()->where('collection_status', Settlement::COLLECTION_PENDING)->count())->toBe(0)
+        ->and(Settlement::query()->where('collection_status', Settlement::COLLECTION_PAID)->count())->toBe(0);
 });
 
 test('직접 수행한 운행은 마켓에서 내려가고 내 운행에 노출된다', function () {

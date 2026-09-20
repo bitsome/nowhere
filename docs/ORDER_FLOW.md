@@ -92,8 +92,11 @@ draft ──▶ published ──▶ acceptance_pending ──▶ accepted ──
 
 - 가능 조건: 본인 소유 + `published` + 다른 기사의 신청이 없을 때
 - 불가: 남의 운행, 아직 공개하지 않은 초안, 이미 기사 신청이 들어온 운행
-- 완료·정산하면 등록자와 수행자가 같아 **원장은 하나만** 만들어지고, 위 3-4 수금·출금 흐름에 그대로 올라탄다
-- 미확정: 등록자=수행자인 경우의 수금 처리(입금·지급 순환을 없애고 수수료만 납부하는 방향)는 **정책 결정 대기** — 결정 전까지는 동일한 입금 확인 흐름을 따른다
+- 실행 시 **공개가 즉시 중단**되고(마켓에서 내려감) 기사 모집이 멈춘다 — 되돌릴 수 없다
+- 완료·정산하면 등록자와 수행자가 같아 입금·지급이 자기 자신에게 왕복한다. 그래서 **수금·수수료·지급을 전액 0으로 마감**한다
+  - 원장(`settlements`)은 하나만 만들어지고 `gross_amount`·`fee_amount`·`net_amount` = 0, `status` = `paid`로 즉시 마감
+  - 수금 상태는 `COLLECTION_NOT_REQUIRED` — 관리자 수금 확인 목록과 기사 출금 재원에서 자동 제외된다
+  - 정산 화면에는 '자기 수행'으로 표시된다(입금 대기로 보이지 않게)
 
 ## 4. 운행중 세부 단계 (ride_step)
 
@@ -145,6 +148,6 @@ draft ──▶ published ──▶ acceptance_pending ──▶ accepted ──
 - 상태 상수·전이 규칙: `app/Models/Order.php` (`STATUS_FLOW`, `canTransitionTo`, `transitionTo`)
 - 신청/승인/거절/철회/만료/직접 수행: `app/Services/Order/OrderClaimService.php` (`selfDrive`)
 - 운행 전이·정산·자동 매칭: `app/Services/Order/OrderTransitionService.php`
-- 수수료 계산·수금·출금: `app/Services/Settlement/SettlementService.php` (`feeRateFor`, `calculateFee`, 수금 확인)
-- 수금 상태 상수: `app/Models/Settlement.php` (`COLLECTION_PENDING`, `COLLECTION_PAID`)
+- 수수료 계산·수금·출금: `app/Services/Settlement/SettlementService.php` (`feeRateFor`, `calculateFee`, 수금 확인, 자기 수행 0 마감)
+- 수금 상태 상수: `app/Models/Settlement.php` (`COLLECTION_PENDING`, `COLLECTION_PAID`, `COLLECTION_NOT_REQUIRED`)
 - 상태 라벨: `Order::statusOptions()` (초안/공개/거래중/예약/운행중/완료/정산/취소/수락 대기)

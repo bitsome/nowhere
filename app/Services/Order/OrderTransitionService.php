@@ -22,10 +22,10 @@ class OrderTransitionService
 {
     /**
      * 미매칭 공개 운행의 유예 시간 — 운행 시작 시각이 이 시간만큼 지나도 매칭되지 않으면
-     * 자동 취소한다. 마켓 커트오프(시작 후 2시간)와 같은 기준이라 화면에서 이미 사라진
+     * 자동 취소한다. 마켓 커트오프(시작 후 1시간)와 같은 기준이라 화면에서 이미 사라진
      * 운행만 정리되고, 등록자는 안내와 함께 다시 등록할 수 있다.
      */
-    public const PUBLISHED_CLOSE_AFTER_HOURS = 2;
+    public const PUBLISHED_CLOSE_AFTER_HOURS = 1;
 
     public function __construct(
         private readonly MatchService $matchService,
@@ -93,6 +93,16 @@ class OrderTransitionService
                     'status' => [$publishError],
                 ]);
             }
+        }
+
+        // 요금 협의(금액 미지정) 운행은 완료 시 실제 수익이 있어야 정산·수수료가 성립한다.
+        // 계약 금액도 실제 수익도 없으면 정산 원장이 0원으로 마감되어 플랫폼 수익이 사라진다.
+        if ($status === Order::STATUS_COMPLETED
+            && blank($order->expected_revenue ?? $order->amount_value)
+            && blank($actualRevenue ?? $order->actual_revenue)) {
+            throw ValidationException::withMessages([
+                'actual_revenue' => ['요금 협의 운행은 완료 시 실제 수익을 입력해야 정산할 수 있습니다.'],
+            ]);
         }
 
         // 취소 사유를 먼저 반영 — 상태 전이 이벤트(타임라인)에 사유가 함께 남도록 한다

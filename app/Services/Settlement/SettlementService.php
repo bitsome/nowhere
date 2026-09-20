@@ -8,6 +8,7 @@ use App\Models\Settlement;
 use App\Models\User;
 use App\Notifications\OrderNotification;
 use App\Services\NotificationService;
+use App\Support\Orders\ChineseTextNormalizer;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -56,6 +57,15 @@ class SettlementService
     }
 
     /**
+     * 자기 수행 여부 — 등록자(원 등록자)와 수행자가 같은 사람이면 플랫폼을 통과하는 돈이 없다.
+     * 자기 수행은 수금(등록자 입금)·수수료(플랫폼 매출)·지급(기사 출금)을 모두 0으로 마감한다.
+     */
+    private function isSelfDrive(Order $order): bool
+    {
+        return $order->original_owner_id !== null && $order->original_owner_id === $order->user_id;
+    }
+
+    /**
      * 정산된 운행의 원장을 만든다 (중복 방지 — 운행당 원장 1개).
      * 정산 대상 금액은 실제 수익(actual_revenue)을 우선하고 없으면 계약 금액을 쓴다.
      * 원장 생성 시 등록자에게 입금 안내, 기사에게 정산 완료를 알린다(입금 확인 후 출금 가능).
@@ -64,6 +74,28 @@ class SettlementService
     {
         if (Settlement::query()->where('order_id', $order->id)->exists()) {
             return null;
+        }
+
+        // 자기 수행 — 등록자·수행자·지급 대상이 모두 같아 입금·지급이 자기 자신에게 왕복한다.
+        // 그래서 수금·수수료·지급을 0으로 두고 원장을 바로 마감한다(수금 확인 목록·출금 재원에서 빠진다).
+        if ($this->isSelfDrive($order)) {
+            $settlement = Settlement::query()->create([
+                'order_id' => $order->id,
+                'driver_id' => $order->user_id,
+                'registrant_id' => $order->original_owner_id,
+                'gross_amount' => 0,
+                'fee_amount' => 0,
+                'fee_rate' => 0.0,
+                'net_amount' => 0,
+                'status' => Settlement::STATUS_PAID,
+                'paid_at' => now(),
+                'collection_status' => Settlement::COLLECTION_NOT_REQUIRED,
+                'collection_note' => '자기 수행 — 수금·수수료·지급 없음',
+            ]);
+
+            $this->notifySettled($order, $settlement);
+
+            return $settlement;
         }
 
         $gross = (int) ($order->actual_revenue
@@ -136,6 +168,7 @@ class SettlementService
     /**
      * 정산 원장 생성 결과를 당사자에게 알린다.
      * 등록자에게는 운행 대금 입금 안내(입금 계좌 포함), 기사에게는 입금 확인 후 출금 가능함을 알린다.
+     * 자기 수행이면 입금 안내 없이 마감 안내만 보낸다.
      * 같은 사용자가 등록자이자 수행 기사인 경우 한 번으로 묶는다.
      */
     private function notifySettled(Order $order, Settlement $settlement): void
@@ -143,6 +176,16 @@ class SettlementService
         $registrantId = $order->original_owner_id ?? $order->user_id;
         $driverId = $order->user_id;
         $deposit = $this->depositInstruction();
+
+        // 자기 수행 — 수금할 것이 없으므로 입금 안내를 보내지 않는다
+        if ($this->isSelfDrive($order)) {
+            if ($driverId !== null) {
+                $this->notifyOnceUser($driverId, '운행 정산 완료', $order->id,
+                    "{$order->rideSummary()} 자기 수행 운행으로 정산되었습니다. 수금·수수료·지급 없이 마감됩니다.");
+            }
+
+            return;
+        }
 
         if ($registrantId !== null && $registrantId === $driverId) {
             $this->notifyOnceUser($registrantId, '운행 정산 완료', $order->id,
@@ -486,7 +529,7 @@ class SettlementService
             'status' => $settlement->status,
             'collection_status' => $settlement->collection_status,
             'route' => $order !== null
-                ? trim(($order->pickup_location ?: '').' → '.($order->dropoff_location ?: ''))
+                ? ChineseTextNormalizer::routeLabel($order->pickup_location, $order->dropoff_location)
                 : '',
             'service_date' => $order?->service_date,
             'service_time' => $order?->service_time,
@@ -512,7 +555,7 @@ class SettlementService
             'id' => $settlement->id,
             'collection_status' => $settlement->collection_status,
             'route' => $order !== null
-                ? trim(($order->pickup_location ?: '').' → '.($order->dropoff_location ?: ''))
+                ? ChineseTextNormalizer::routeLabel($order->pickup_location, $order->dropoff_location)
                 : '',
             'service_date' => $order?->service_date,
             'service_time' => $order?->service_time,
@@ -537,7 +580,7 @@ class SettlementService
                 ? ['id' => $registrant->id, 'name' => $registrant->name, 'company_name' => $registrant->company_name]
                 : null,
             'route' => $order !== null
-                ? trim(($order->pickup_location ?: '').' → '.($order->dropoff_location ?: ''))
+                ? ChineseTextNormalizer::routeLabel($order->pickup_location, $order->dropoff_location)
                 : '',
             'service_date' => $order?->service_date,
             'service_time' => $order?->service_time,

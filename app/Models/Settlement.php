@@ -21,6 +21,9 @@ class Settlement extends Model
 
     public const COLLECTION_PAID = 'paid';
 
+    // 자기 수행(등록자 = 수행자) — 플랫폼을 통과하는 돈이 없어 수금할 것이 없다
+    public const COLLECTION_NOT_REQUIRED = 'not_required';
+
     /**
      * @return array<string, string>
      */

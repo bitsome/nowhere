@@ -35,7 +35,7 @@ function publishedOrderFor(User $owner, string $time, array $extra = []): Order
 }
 
 test('시작 시각 + 유예가 지난 대기 요금 제안은 자동 철회되고 기사에게 만료 알림이 간다', function () {
-    $pastOrder = publishedOrderFor($this->customer, '05:00'); // 08:00 기준 유예(2h) 경과
+    $pastOrder = publishedOrderFor($this->customer, '05:00'); // 08:00 기준 유예(1h) 경과
     $futureOrder = publishedOrderFor($this->customer, '12:00');
 
     $this->postJson("/api/orders/{$pastOrder->id}/offers", ['amount' => 65000, 'message' => '제안합니다.'])->assertCreated();
@@ -71,7 +71,7 @@ test('이미 취소된 운행에 남은 대기 제안도 자동으로 정리된�
 });
 
 test('시작 시각 후 유예가 지난 미매칭 공개 운행은 자동 취소되고 등록자·제안 기사에게 알림이 간다', function () {
-    $order = publishedOrderFor($this->customer, '05:00'); // 유예(2h) 경과
+    $order = publishedOrderFor($this->customer, '05:00'); // 유예(1h) 경과
 
     $this->postJson("/api/orders/{$order->id}/offers", ['amount' => 65000, 'message' => '제안합니다.'])->assertCreated();
 
