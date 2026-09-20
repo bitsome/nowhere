@@ -6,6 +6,7 @@
 - **응답 형식**: `{ "data": ... }` / 목록은 `{ "data": [...], "meta": { "pagination": {...} } }`
 - **권한 표기**: (기사) = Driver 역할만 / (등록자) = 운행 소유자만 / (관리자) = Admin·Super Admin만
 - **운행 상태 흐름**: [ORDER_FLOW.md](./ORDER_FLOW.md) 참조
+- **앱(기사·업체) 계약**: [APP_API_CONTRACT.md](./APP_API_CONTRACT.md) — 앱이 소비하는 API 범위와 앱 착수 전 미확정 결정 목록
 
 ---
 
