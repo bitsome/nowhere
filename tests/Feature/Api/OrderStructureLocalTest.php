@@ -109,6 +109,10 @@ test('套·套出 표기도 셋트로 해석하고 금액과 섞이지 않는다
 });
 
 test('AI가 정상 응답하면 그대로 쓰고 폴백하지 않는다', function () {
+    // AI 설정이 비어 있으면 요청을 보내지 않고 로컬 파서로 떨어진다 — 이 테스트는 "AI 경로가
+    // 켜져 있을 때"의 계약이므로, 로컬 .env(ORDER_AI_API_KEY)에 기대지 않고 설정을 직접 채운다.
+    config(['services.order_ai.api_key' => 'test-key']);
+
     Http::fake([
         '*' => Http::response([
             'choices' => [['message' => ['content' => json_encode([
