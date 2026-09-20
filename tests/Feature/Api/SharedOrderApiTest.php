@@ -97,6 +97,24 @@ test('the public payload never exposes customer identity or internal identifiers
     expect($response->json())->not->toContain('010-1234-5678');
 });
 
+test('the public payload carries estimated distance and duration instead of the empty stored columns', function () {
+    // 실등록 경로는 두 저장 컬럼을 채우지 않는다 — 표시값은 행 계약의 추정치로 내려간다
+    sharedOrder($this->registrant, [
+        'share_token' => 'estimate000000ab',
+        'distance_km' => null,
+        'estimated_duration_minutes' => null,
+    ]);
+
+    $response = $this->getJson('/api/public/orders/estimate000000ab')->assertOk();
+
+    expect($response->json('data.row.distanceKm'))->toBeGreaterThan(50);
+    expect($response->json('data.row.estimatedDurationMinutes'))->toBeGreaterThan(0);
+
+    // 전건 NULL 인 저장 컬럼은 공개 payload 에서 내려보내지 않는다
+    expect($response->json('data'))->not->toHaveKey('distance_km');
+    expect($response->json('data'))->not->toHaveKey('estimated_duration_minutes');
+});
+
 test('an order that is no longer available is reported as closed', function () {
     sharedOrder($this->registrant, [
         'share_token' => 'closed000000abcd',

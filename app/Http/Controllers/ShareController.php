@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
+use App\Support\Orders\ChineseTextNormalizer;
 use App\Support\Orders\OrderListRowBuilder;
 use Illuminate\Http\Response;
 
@@ -43,8 +44,12 @@ class ShareController extends Controller
             return 'NoWhere — 오늘 받을 운행을 앱이 먼저 골라드립니다';
         }
 
-        $route = trim(($order->pickup_location ?: '').' → '.($order->dropoff_location ?: ''), ' →');
         $rowBuilder = app(OrderListRowBuilder::class);
+
+        // 표시용 노선 — 유입 원문의 중국어가 공유 미리보기에 노출되지 않도록 변환한다
+        $pickup = ChineseTextNormalizer::displayLocation($order->pickup_location);
+        $dropoff = ChineseTextNormalizer::displayLocation($order->dropoff_location);
+        $route = ($pickup === '-' && $dropoff === '-') ? '' : $pickup.' → '.$dropoff;
 
         $parts = array_filter([
             $route !== '' ? $route : null,

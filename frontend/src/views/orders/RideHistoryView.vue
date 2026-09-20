@@ -245,7 +245,7 @@ const switchViewMode = (mode) => {
 // 샌딩/랜딩 구분 — serviceIcon(sending/landing/pickup) 기준.
 // service_type 누락 데이터는 방향(공항 포함 여부)으로 판별한다.
 const serviceTypeLabel = (row) => {
-    const labels = { sending: '샌딩', landing: '랜딩', pickup: '픽업' };
+    const labels = { sending: '샌딩', point: '시내', landing: '랜딩', pickup: '픽업' };
 
     if (labels[row.serviceIcon]) {
         return labels[row.serviceIcon];

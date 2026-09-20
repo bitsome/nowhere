@@ -34,8 +34,8 @@ class LocationTokens
 
             $tokens[] = mb_strtolower($part);
 
-            // '강남구' → '강남' — 상세 구역만으로도 겹치게
-            $stripped = preg_replace('/(구|동|읍|면|리)$/u', '', mb_strtolower($part));
+            // '강남구' → '강남' · '성남시' → '성남' — 상세 구역만으로도 겹치게
+            $stripped = preg_replace('/(구|시|동|읍|면|리)$/u', '', mb_strtolower($part));
 
             if (mb_strlen((string) $stripped) >= 2) {
                 $tokens[] = (string) $stripped;

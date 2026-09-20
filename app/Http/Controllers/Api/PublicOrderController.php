@@ -62,8 +62,6 @@ class PublicOrderController extends Controller
             // 등록자 신뢰 정보 — 기사가 '누구의 운행인지' 확인하고 판단하도록 업체명만 노출한다
             'registrant_company' => $order->user?->company_name ?: ($order->reservation_company ?: ''),
             'row' => $row,
-            'distance_km' => $order->distance_km,
-            'estimated_duration_minutes' => $order->estimated_duration_minutes,
             'request_label' => $order->request_label,
         ];
     }

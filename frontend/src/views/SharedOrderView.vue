@@ -30,14 +30,23 @@ onMounted(async () => {
     }
 });
 
+// 소요시간 표기 — 1시간 미만은 분으로 보여준다 ("약 0.2시간" 은 읽히지 않는다)
+const formatDuration = (minutes) => {
+    const value = Number(minutes);
+
+    return value < 60 ? `약 ${Math.round(value)}분` : `약 ${Math.round(value / 6) / 10}시간`;
+};
+
 // 기사 판단에 필요한 조건만 추린다 — 값이 없는 항목은 카드에서 빠진다
 const conditions = computed(() => {
     if (row.value === null) {
         return [];
     }
 
-    const distance = data.value?.distance_km;
-    const minutes = data.value?.estimated_duration_minutes;
+    // 거리·소요시간은 저장 컬럼이 아니라 행 계약의 즉석 계산값을 쓴다
+    // (저장 컬럼은 데모 데이터만 채우고 실등록 경로는 비워 둔다)
+    const distance = row.value.distanceKm;
+    const minutes = row.value.estimatedDurationMinutes;
 
     return [
         row.value.vehicle && row.value.vehicle !== '-' ? `차량 ${row.value.vehicle}` : null,
@@ -45,7 +54,7 @@ const conditions = computed(() => {
         row.value.luggageCount > 0 ? `캐리어 ${row.value.luggageCount}` : null,
         row.value.flightNumber ? `항공편 ${row.value.flightNumber}` : null,
         distance ? `약 ${Number(distance)}km` : null,
-        minutes ? `약 ${Math.round(minutes / 60 * 10) / 10}시간` : null,
+        minutes ? formatDuration(minutes) : null,
     ].filter(Boolean);
 });
 
