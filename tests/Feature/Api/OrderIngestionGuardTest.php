@@ -161,6 +161,23 @@ test('지명 칸에 필드 라벨이 들어오면 거절한다', function () {
     expect(Order::query()->count())->toBe(0);
 });
 
+test('인원·차종 라벨이 지명 칸에 들어와도 거절한다', function () {
+    Sanctum::actingAs(ingestionGuardRegistrant());
+
+    // 같은 예약 문구의 `人数、行李：6人6行李` 에서 라벨(人数)만 값으로 밀려 들어온 행
+    $this->postJson('/api/orders', [
+        'pickup_location' => '仁川T2',
+        'dropoff_location' => '人数',
+        'service_date' => '2026-09-16',
+        'service_time' => '16:00',
+        'original_summary' => '日期：9.16 接机 航班号：OZ364 仁川T2 地址：中庭首尔钟路酒店 人数、行李：6人6行李',
+    ])
+        ->assertStatus(422)
+        ->assertJsonPath('errors.service_time.0', '지명 칸에 값이 아니라 라벨(人数)이 들어 있습니다. 원문을 확인해 다시 보내 주세요.');
+
+    expect(Order::query()->count())->toBe(0);
+});
+
 test('유입 원문의 금액을 날짜로 읽어 상한을 넘긴 행은 거절한다', function () {
     Sanctum::actingAs(ingestionGuardRegistrant());
 

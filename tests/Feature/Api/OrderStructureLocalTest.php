@@ -108,6 +108,43 @@ test('套·套出 표기도 셋트로 해석하고 금액과 섞이지 않는다
         ->and($legacy['amount_text'])->toBe('9만');
 });
 
+test('날짜 표기 9.14号 를 시각으로 읽지 않는다', function () {
+    // 9.14号 는 9월 14일이다. 이걸 시각(09:14)으로 잡으면 문구 전체의 시간이 덮여
+    // 실제 운행 시각(07:30)이 사라진다.
+    $result = structureOffline('9.14号订单 07:30 送机 东大门');
+
+    expect($result['service_date'])->toBe('9월14일')
+        ->and($result['service_time'])->toBe('07:30');
+});
+
+test('接机 뒤 편명은 지명으로 잡지 않는다', function () {
+    // `接机oz111有要的没` 의 OZ111 은 편명이다. 앞 두 글자 oz 를 도착지로 잡으면
+    // 지명이 아닌 값이 마켓에 뜬다. 다만 接机(공항 픽업)의 '출발지=공항'은 그대로다.
+    $result = structureOffline('今天12点接机oz111有要的没');
+
+    expect($result['service_time'])->toBe('12:00')
+        ->and($result['pickup_location'])->toBe('인천')
+        ->and($result['dropoff_location'])->toBe('');
+});
+
+test('送机 뒤 인원 단위는 지명으로 잡지 않는다', function () {
+    // `送机 一位` 의 一位 는 '1명'이다 — 지명으로 잡으면 출발지가 '一位' 가 된다
+    $result = structureOffline('07:00 送机 一位');
+
+    expect($result['pickup_location'])->toBe('')
+        ->and($result['dropoff_location'])->toBe('');
+});
+
+test('물결(～)도 노선 구분자로 읽는다', function () {
+    // `Coex～江南Voco` 는 Coex → 江南Voco 노선이다
+    $result = structureOffline('19:30 Coex～江南Voco 3人');
+
+    expect($result['service_time'])->toBe('19:30')
+        ->and($result['pickup_location'])->toBe('Coex')
+        ->and($result['dropoff_location'])->toBe('江南Voco')
+        ->and($result['passenger_count'])->toBe(3);
+});
+
 test('AI가 정상 응답하면 그대로 쓰고 폴백하지 않는다', function () {
     // AI 설정이 비어 있으면 요청을 보내지 않고 로컬 파서로 떨어진다 — 이 테스트는 "AI 경로가
     // 켜져 있을 때"의 계약이므로, 로컬 .env(ORDER_AI_API_KEY)에 기대지 않고 설정을 직접 채운다.

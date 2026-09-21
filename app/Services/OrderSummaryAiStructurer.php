@@ -251,10 +251,13 @@ class OrderSummaryAiStructurer
 
     /**
      * 시간 — 위챗 문구는 "3.30" 처럼 점을 시간 구분자로 쓴다(3시 30분).
+     *
+     * `9.14号`(9월 14일)처럼 号·日 가 따라오면 날짜이므로 시각으로 읽지 않는다.
+     * 이걸 시각으로 잡으면 문구 전체의 시간이 09:14 로 덮여 실제 운행 시각이 사라진다.
      */
     private function detectLocalTime(string $text): string
     {
-        if (preg_match('/(?<!\d)(\d{1,2})\s*[:.时]\s*(\d{2})(?!\d)/u', $text, $matches) === 1) {
+        if (preg_match('/(?<!\d)(\d{1,2})\s*[:.时]\s*(\d{2})(?!\d)(?!\s*[号日])/u', $text, $matches) === 1) {
             return sprintf('%02d:%02d', (int) $matches[1], (int) $matches[2]);
         }
 
@@ -273,7 +276,8 @@ class OrderSummaryAiStructurer
      */
     private function detectLocalRoute(string $segment): array
     {
-        if (preg_match('/([^\s,，、\-—–到至→>]+)\s*(?:—|–|-|到|至|→|>)\s*([^\s,，、]+)/u', $segment, $matches) === 1) {
+        // 물결(～)도 노선 구분자다 — `Coex～江南Voco`
+        if (preg_match('/([^\s,，、\-—–~～〜到至→>]+)\s*(?:—|–|-|~|～|〜|到|至|→|>)\s*([^\s,，、]+)/u', $segment, $matches) === 1) {
             return [$matches[1], $matches[2]];
         }
 
@@ -284,6 +288,13 @@ class OrderSummaryAiStructurer
                 return ['', ''];
             }
 
+            // 接机/送机 뒤에 온 값이 지명이 아닐 수 있다 — 편명(`接机oz111`)이나 인원 단위(`送机 一位`)를
+            // 지명으로 잡으면 엉뚱한 출발지·도착지가 마켓에 뜬다. 지명이 아니면 값만 비운다
+            // (接机의 '출발지=공항' 규칙은 그대로 살린다).
+            if (! $this->looksLikePlace($place)) {
+                $place = '';
+            }
+
             // 接机(공항 픽업)은 공항에서 출발해 지명으로 간다 — 출발지는 공항으로 본다
             return $this->normalizeServiceType($segment) === '픽업'
                 ? ['仁川', $place]
@@ -291,6 +302,36 @@ class OrderSummaryAiStructurer
         }
 
         return ['', ''];
+    }
+
+    /**
+     * 지명다운 값인가 — 接机·送机 뒤에 우연히 붙은 비(非)지명 토큰을 가려낸다.
+     *
+     * 사전에서 읽히는 표기는 무엇이든 지명으로 본다(모르는 한자 지명을 잘못 지우지 않게).
+     * 걸러내는 것은 모르는 값 중에서도 지명일 수 없는 모양뿐이다 —
+     * 항공사 코드·편명(`OZ`·`OZ111`), 인원·수량 단위(`一位`·`3人`), 차종(`利亚`).
+     */
+    private function looksLikePlace(string $place): bool
+    {
+        $trimmed = trim($place);
+
+        if ($trimmed === '') {
+            return false;
+        }
+
+        if (ChineseTextNormalizer::location($trimmed) !== $trimmed) {
+            return true;
+        }
+
+        if (ChineseTextNormalizer::isVehicleToken($trimmed)) {
+            return false;
+        }
+
+        if (preg_match('/^[0-9一二三四五六七八九十两]+\s*(?:位|人|名|件|个|個|份|台|辆|輛)$/u', $trimmed) === 1) {
+            return false;
+        }
+
+        return preg_match('/^[A-Za-z]{2}\d{0,4}$/', $trimmed) !== 1;
     }
 
     /**
