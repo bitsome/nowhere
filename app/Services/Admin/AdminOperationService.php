@@ -8,6 +8,7 @@ use App\Models\Message;
 use App\Models\Order;
 use App\Models\OrderClaim;
 use App\Models\OrderEvent;
+use App\Models\OrderIngestion;
 use App\Models\Report;
 use App\Models\Settlement;
 use App\Models\User;
@@ -507,6 +508,63 @@ class AdminOperationService
             'reports' => $reports,
             'users' => $users,
         ];
+    }
+
+    /**
+     * 실패한 유입 목록 — 파서가 원문에서 못 뽑아 등록하지 못한 건.
+     *
+     * 실패해도 호출자에게 응답으로만 알려질 뿐 관리자에게는 아무 알림이 가지 않아
+     * 조용히 쌓인다. 원문을 보고 파서를 고칠 근거가 되도록 화면에서 보이게 모은다.
+     *
+     * @return array{total: int, items: array<int, array<string, mixed>>}
+     */
+    public function failedIngestions(int $limit = 50): array
+    {
+        $query = OrderIngestion::query()->where('status', OrderIngestion::STATUS_FAILED);
+
+        return [
+            'total' => $query->count(),
+            'items' => $query
+                ->with('user:id,name')
+                ->orderByDesc('id')
+                ->limit($limit)
+                ->get()
+                ->map(fn (OrderIngestion $ingestion): array => [
+                    'id' => $ingestion->id,
+                    'endpoint' => $ingestion->endpoint,
+                    'sent_by' => $ingestion->user?->name,
+                    'error' => $ingestion->error,
+                    'rows' => $this->ingestionRowValues($ingestion),
+                    'created_at_iso' => $ingestion->created_at?->toIso8601String(),
+                ])
+                ->all(),
+        ];
+    }
+
+    /**
+     * 실패 원문에서 뽑힌 값 — 어느 칸이 비어 막혔는지 화면에서 바로 보이게 한다.
+     *
+     * 일괄 등록은 `orders[]` 로 오고 단일 등록은 payload 자체가 한 건이다.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function ingestionRowValues(OrderIngestion $ingestion): array
+    {
+        $payload = $ingestion->payload ?? [];
+        $rows = is_array($payload['orders'] ?? null) ? $payload['orders'] : [$payload];
+
+        return collect($rows)
+            ->filter(fn (mixed $row): bool => is_array($row))
+            ->take(5)
+            ->map(fn (array $row): array => [
+                'pickup' => $row['pickup_location'] ?? null,
+                'dropoff' => $row['dropoff_location'] ?? null,
+                'service_date' => $row['service_date'] ?? null,
+                'service_time' => $row['service_time'] ?? null,
+                'summary' => $row['original_summary'] ?? null,
+            ])
+            ->values()
+            ->all();
     }
 
     /**

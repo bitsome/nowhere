@@ -15,6 +15,9 @@ export const apiAdminOperationMetrics = () => apiClient.get('/admin/operations/m
 // 관리자 감사 로그 — 정산·신고·제재·운행 개입·역할 변경 행위 이력
 export const apiAdminOperationAudit = () => apiClient.get('/admin/operations/audit');
 
+// 실패한 유입 — 파서가 원문에서 못 뽑아 등록하지 못한 건 (원문을 보고 파서를 고치는 근거)
+export const apiAdminOperationIngestions = () => apiClient.get('/admin/operations/ingestions');
+
 // 사용자 제재 — 기사·등록자 상태(정상/주의/운행 제한/정지)를 사유와 함께 변경
 export const apiAdminModerateUser = (userId, payload) => apiClient.patch(`/admin/users/${userId}/moderation`, payload);
 

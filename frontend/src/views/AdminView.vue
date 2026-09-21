@@ -29,6 +29,7 @@ import {
     apiAdminOperationAudit,
     apiAdminOperationConversations,
     apiAdminOperationDaily,
+    apiAdminOperationIngestions,
     apiAdminOperationMeta,
     apiAdminOperationMetrics,
     apiAdminOperationOrders,
@@ -711,6 +712,32 @@ const loadAudit = async () => {
     }
 };
 
+// ── 실패 유입 — 파서가 원문에서 못 뽑아 등록하지 못한 건 (관리자에게 알림은 가지 않는다) ──
+const failedIngestions = ref({ total: 0, items: [] });
+const ingestionsLoading = ref(false);
+
+const loadIngestions = async () => {
+    ingestionsLoading.value = true;
+
+    try {
+        const { data } = await apiAdminOperationIngestions();
+        failedIngestions.value = data.data;
+    } catch (e) {
+        message.error(getApiErrorMessage(e, '실패 유입 목록을 불러오지 못했습니다.'));
+    } finally {
+        ingestionsLoading.value = false;
+    }
+};
+
+const formatIngestTime = (iso) => (iso ? new Date(iso).toLocaleString('ko-KR') : '');
+
+// 어느 칸이 비어 막혔는지 한 줄로 — 원문 요약은 중국어라 값만으로는 원인이 안 보인다
+const ingestionRowLine = (row) => [
+    row.pickup || '출발 미상',
+    row.dropoff || '도착 미상',
+    [row.service_date, row.service_time].filter(Boolean).join(' ') || '일시 미상',
+].join(' · ');
+
 const onTabChange = (name) => {
     if (name === 'metrics') {
         loadMetrics();
@@ -728,6 +755,8 @@ const onTabChange = (name) => {
         loadReports();
     } else if (name === 'terms') {
         loadOrderTerms();
+    } else if (name === 'ingestions') {
+        loadIngestions();
     } else if (name === 'verifications') {
         loadVerifications();
     } else if (name === 'support') {
@@ -2160,6 +2189,48 @@ onBeforeUnmount(() => {
                     <n-button size="small" :disabled="orderTermsMeta.current_page <= 1" @click="loadOrderTerms(orderTermsMeta.current_page - 1)">이전</n-button>
                     <span class="admin-pager__info">{{ orderTermsMeta.current_page }} / {{ orderTermsMeta.last_page }} (총 {{ orderTermsMeta.total }}건)</span>
                     <n-button size="small" :disabled="orderTermsMeta.current_page >= orderTermsMeta.last_page" @click="loadOrderTerms(orderTermsMeta.current_page + 1)">다음</n-button>
+                </div>
+            </n-tab-pane>
+
+            <n-tab-pane name="ingestions" tab="실패 유입">
+                <div class="admin-filter-row">
+                    <n-button size="small" @click="loadIngestions()">새로 고침</n-button>
+                    <span class="admin-filter-info">
+                        전체 {{ failedIngestions.total }}건 · 최근 {{ failedIngestions.items.length }}건
+                    </span>
+                </div>
+
+                <p class="admin-page-hint">
+                    파서가 원문에서 찾지 못한 항목이 있어 등록하지 못한 건입니다. 실패는 호출자에게 응답으로만
+                    돌아가고 관리자에게는 알림이 가지 않으니, 여기서 원문을 확인해 파서를 고칩니다.
+                </p>
+
+                <div v-if="ingestionsLoading" class="admin-skeleton">
+                    <div v-for="n in 3" :key="n" class="sk-card admin-skeleton__row" />
+                </div>
+
+                <EmptyState
+                    v-else-if="failedIngestions.items.length === 0"
+                    icon="inbox"
+                    title="실패한 유입이 없습니다"
+                    hint="파서가 원문에서 값을 못 뽑으면 이 목록에 쌓입니다"
+                />
+
+                <div v-else class="report-list">
+                    <article v-for="ing in failedIngestions.items" :key="ing.id" class="report-card">
+                        <div class="report-card__head">
+                            <span class="report-card__cat">#{{ ing.id }} · {{ ing.endpoint }}</span>
+                            <span class="report-card__status">{{ formatIngestTime(ing.created_at_iso) }}</span>
+                        </div>
+                        <p class="report-card__subject">{{ ing.error }}</p>
+                        <div v-for="(row, index) in ing.rows" :key="index">
+                            <p class="report-card__note">
+                                <template v-if="ing.rows.length > 1">{{ index + 1 }}. </template>{{ ingestionRowLine(row) }}
+                            </p>
+                            <p class="report-card__meta">원문: {{ row.summary || '(없음)' }}</p>
+                        </div>
+                        <p v-if="ing.sent_by" class="report-card__meta">보낸 계정: {{ ing.sent_by }}</p>
+                    </article>
                 </div>
             </n-tab-pane>
 

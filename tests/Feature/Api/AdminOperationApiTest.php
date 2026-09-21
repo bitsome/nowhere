@@ -4,6 +4,7 @@ use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\Order;
 use App\Models\OrderEvent;
+use App\Models\OrderIngestion;
 use App\Models\Settlement;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -479,4 +480,75 @@ test('audit log records admin interventions and lists newest first with labels',
         ->assertJsonPath('data.3.action', 'user.moderation')
         ->assertJsonPath('data.3.action_label', '사용자 제재')
         ->assertJsonPath('data.3.meta.user_id', $this->driver->id);
+});
+
+test('관리자는 실패한 유입 목록에서 원문과 결손 칸을 확인한다', function () {
+    // 파서가 도착지를 못 뽑아 등록이 막힌 일괄 유입
+    OrderIngestion::query()->create([
+        'user_id' => $this->admin->id,
+        'endpoint' => 'orders/batch',
+        'status' => OrderIngestion::STATUS_FAILED,
+        'error' => '1번째 운행 — 원문에서 찾지 못한 항목(도착지)이 있어 등록하지 않았습니다.',
+        'payload' => [
+            'orders' => [
+                [
+                    'pickup_location' => '인천공항 T1',
+                    'dropoff_location' => null,
+                    'service_date' => '2026-10-01',
+                    'service_time' => '09:30',
+                    'original_summary' => '9:30 包车',
+                ],
+            ],
+        ],
+    ]);
+
+    // 정상 처리된 유입은 목록에 뜨지 않는다
+    OrderIngestion::query()->create([
+        'user_id' => $this->admin->id,
+        'endpoint' => 'orders',
+        'status' => OrderIngestion::STATUS_PROCESSED,
+        'order_ids' => [1],
+        'payload' => ['pickup_location' => '서울역', 'dropoff_location' => '인천공항'],
+    ]);
+
+    Sanctum::actingAs($this->admin);
+
+    $this->getJson('/api/admin/operations/ingestions')
+        ->assertOk()
+        ->assertJsonPath('data.total', 1)
+        ->assertJsonCount(1, 'data.items')
+        ->assertJsonPath('data.items.0.endpoint', 'orders/batch')
+        ->assertJsonPath('data.items.0.sent_by', '운영자')
+        ->assertJsonPath('data.items.0.rows.0.pickup', '인천공항 T1')
+        ->assertJsonPath('data.items.0.rows.0.dropoff', null)
+        ->assertJsonPath('data.items.0.rows.0.service_time', '09:30')
+        ->assertJsonPath('data.items.0.rows.0.summary', '9:30 包车');
+});
+
+test('일괄이 아닌 단일 유입도 한 건으로 결손 칸이 드러난다', function () {
+    OrderIngestion::query()->create([
+        'user_id' => $this->admin->id,
+        'endpoint' => 'orders',
+        'status' => OrderIngestion::STATUS_FAILED,
+        'error' => '원문에서 찾지 못한 항목(시간)이 있어 등록하지 않았습니다.',
+        'payload' => [
+            'pickup_location' => '명동',
+            'dropoff_location' => '인천공항',
+            'original_summary' => '명동 → 공항',
+        ],
+    ]);
+
+    Sanctum::actingAs($this->admin);
+
+    $this->getJson('/api/admin/operations/ingestions')
+        ->assertOk()
+        ->assertJsonPath('data.total', 1)
+        ->assertJsonPath('data.items.0.rows.0.pickup', '명동')
+        ->assertJsonPath('data.items.0.rows.0.service_time', null);
+});
+
+test('비관리자는 실패한 유입 목록을 볼 수 없다', function () {
+    Sanctum::actingAs($this->driver);
+
+    $this->getJson('/api/admin/operations/ingestions')->assertForbidden();
 });

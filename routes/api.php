@@ -94,6 +94,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/operations/daily', [AdminOperationController::class, 'daily']);
     Route::get('/admin/operations/metrics', [AdminOperationController::class, 'metrics']);
     Route::get('/admin/operations/audit', [AdminOperationController::class, 'audit']);
+    // 실패한 유입 — 파서가 못 뽑아 등록하지 못한 원문 (관리자에게 알림은 가지 않는다)
+    Route::get('/admin/operations/ingestions', [AdminOperationController::class, 'ingestions']);
     Route::get('/admin/operations/orders', [AdminOperationController::class, 'orders']);
     Route::patch('/admin/users/{user}/moderation', [AdminOperationController::class, 'moderateUser']);
     Route::post('/admin/orders/{order}/hide', [AdminOperationController::class, 'hide']);

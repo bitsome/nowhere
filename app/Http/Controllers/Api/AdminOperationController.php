@@ -266,6 +266,20 @@ class AdminOperationController extends Controller
     }
 
     /**
+     * 실패한 유입 목록 — 파서가 못 뽑아 등록하지 못한 원문 (최근 50건 + 전체 건수).
+     *
+     * @return JsonResponse{data: array{total: int, items: array<int, array<string, mixed>>}}
+     */
+    public function ingestions(AdminOperationService $service): JsonResponse
+    {
+        $this->assertAdmin();
+
+        return response()->json([
+            'data' => $service->failedIngestions(),
+        ]);
+    }
+
+    /**
      * 감사 로그 — 관리자 개입·변경 행위 최신 100건.
      *
      * @return JsonResponse{data: array<int, array<string, mixed>>}
