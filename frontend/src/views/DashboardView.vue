@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useUiStore } from '../stores/ui';
 import { useDashboardStats } from '../composables/useDashboardStats';
+import { useDriverTodayStats } from '../composables/useDriverTodayStats';
 import { useBatchSettle } from '../composables/useBatchSettle';
 import BaseIcon from '../components/common/BaseIcon.vue';
 
@@ -11,15 +12,17 @@ const ui = useUiStore();
 const auth = useAuthStore();
 const router = useRouter();
 
-// ── 모듈: 대시보드 통계 / 일괄 정산 ──
+// ── 모듈: 대시보드 통계 / 기사 오늘 요약 / 일괄 정산 ──
 const dashboard = useDashboardStats({ auth });
 const settle = useBatchSettle({ load: dashboard.load });
 
 const {
-    loading, error, days, stats, driverToday, load, changeDays, isDriver, loadDriverToday,
-    formatDuration, summary, revenueSeries, maxRevenue, revenuePercent, maxCount, countPercent,
+    loading, error, days, stats, load, changeDays, isDriver,
+    summary, revenueSeries, maxRevenue, revenuePercent, maxCount, countPercent,
     totalRevenue, monthlySeries, maxMonthRevenue, monthRevenuePercent, maxMonthCount, monthCountPercent, totalMonthRevenue,
 } = dashboard;
+
+const { todayStats, loadTodayStats, formatDuration } = useDriverTodayStats();
 
 const { settling, settleMessage, settleAll } = settle;
 
@@ -40,13 +43,13 @@ let timer = null;
 onMounted(() => {
     load();
     if (isDriver.value) {
-        loadDriverToday();
+        loadTodayStats();
     }
     // 30초마다 통계 자동 갱신
     timer = setInterval(() => {
         load();
         if (isDriver.value) {
-            loadDriverToday();
+            loadTodayStats();
         }
     }, 30000);
 });
@@ -78,22 +81,22 @@ onBeforeUnmount(() => clearInterval(timer));
             <div class="dash-driver__head">
                 <strong>오늘의 운행</strong>
                 <span class="dash-driver__status">
-                    <span class="dash-driver__dot" :class="{ 'dash-driver__dot--active': driverToday?.status === 'online' || driverToday?.status === 'on_trip' }" />
-                    {{ driverToday?.status_label ?? '-' }}
+                    <span class="dash-driver__dot" :class="{ 'dash-driver__dot--active': todayStats?.status === 'online' || todayStats?.status === 'on_trip' }" />
+                    {{ todayStats?.status_label ?? '-' }}
                 </span>
             </div>
             <div class="dash-driver__grid">
                 <div class="dash-driver__cell">
                     <span class="dash-driver__label">온라인 시간</span>
-                    <strong>{{ driverToday ? formatDuration(driverToday.online_seconds) : '-' }}</strong>
+                    <strong>{{ todayStats ? formatDuration(todayStats.online_seconds) : '-' }}</strong>
                 </div>
                 <div class="dash-driver__cell">
                     <span class="dash-driver__label">완료 운행</span>
-                    <strong>{{ driverToday?.today_completed ?? '-' }}<small>건</small></strong>
+                    <strong>{{ todayStats?.today_completed ?? '-' }}<small>건</small></strong>
                 </div>
                 <div class="dash-driver__cell">
                     <span class="dash-driver__label">오늘 수입</span>
-                    <strong>{{ driverToday ? formatWon(driverToday.today_income) : '-' }}<small>원</small></strong>
+                    <strong>{{ todayStats ? formatWon(todayStats.today_income) : '-' }}<small>원</small></strong>
                 </div>
             </div>
         </n-card>

@@ -16,7 +16,7 @@ const message = useMessage();
 
 // 모듈: 프로필 설정(알림) 재사용
 const settings = useProfileSettings({ auth, router, message });
-const { error, success, notifyEnabled, toggleNotify } = settings;
+const { error, success, notifyEnabled, notifySupported, notifyBlocked, toggleNotify } = settings;
 
 const pwa = usePwaInstall();
 
@@ -32,7 +32,7 @@ const needsInstallFirst = computed(() => pwa.guide.value === 'ios' || pwa.guide.
         <div class="page-head">
             <div>
                 <h1 class="page-head__title">알림</h1>
-                <p class="page-head__desc">새 운행·채팅·알림 도착 시 데스크톱 알림으로 알려 드립니다.</p>
+                <p class="page-head__desc">새 운행·채팅이 오면 앱을 닫아 둬도 알려 드립니다.</p>
             </div>
         </div>
 
@@ -58,6 +58,26 @@ const needsInstallFirst = computed(() => pwa.guide.value === 'ios' || pwa.guide.
                 <n-button type="primary" ghost @click="router.push({ name: 'settings-appearance' })">
                     추가 방법
                 </n-button>
+            </div>
+        </n-card>
+
+        <!-- 브라우저가 차단 — 차단된 뒤에는 권한 창이 다시 뜨지 않아 사용자가 직접 풀어야 한다 -->
+        <n-card v-else-if="notifyBlocked" :bordered="true" class="settings-block">
+            <div class="notify-row">
+                <div class="notify-row__text">
+                    <strong>브라우저가 알림을 차단하고 있어요</strong>
+                    <span>주소창의 자물쇠 아이콘 → 알림 → 허용으로 바꾼 뒤 다시 켜 주세요.</span>
+                </div>
+            </div>
+        </n-card>
+
+        <!-- 푸시를 켤 수 없는 환경(HTTP 접속·구형 브라우저) — 켜기를 시도하면 실패만 반복된다 -->
+        <n-card v-else-if="!notifySupported" :bordered="true" class="settings-block">
+            <div class="notify-row">
+                <div class="notify-row__text">
+                    <strong>이 브라우저에서는 알림을 켤 수 없어요</strong>
+                    <span>HTTPS 주소로 접속하거나 최신 브라우저로 열어 주세요.</span>
+                </div>
             </div>
         </n-card>
 

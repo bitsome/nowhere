@@ -6,6 +6,7 @@ import { useAuthStore } from '../stores/auth';
 import { useDriverStore } from '../stores/driver';
 import { useProfileSettings } from '../composables/useProfileSettings';
 import { useDriverWorkspace } from '../composables/useDriverWorkspace';
+import { useDriverTodayStats } from '../composables/useDriverTodayStats';
 import LevelBadge from '../components/common/LevelBadge.vue';
 import BaseIcon from '../components/common/BaseIcon.vue';
 import { formatTime } from '../utils/formatTime';
@@ -16,10 +17,11 @@ const auth = useAuthStore();
 const router = useRouter();
 const message = useMessage();
 
-// ── 모듈: 프로필 설정(회원정보·알림·인증·실적) / 기사 운영(상태·통계·차량) ──
+// ── 모듈: 프로필 설정(회원정보·알림·인증·실적) / 기사 운영(상태·차량) / 기사 오늘 요약 ──
 const settings = useProfileSettings({ auth, router, message });
 const driver = useDriverStore();
-const workspace = useDriverWorkspace({ message, driver });
+const { todayStats, loadTodayStats, formatDuration } = useDriverTodayStats();
+const workspace = useDriverWorkspace({ message, driver, loadTodayStats });
 
 const isDriver = computed(() => auth.user?.role === 'Driver');
 
@@ -32,7 +34,7 @@ const {
 } = settings;
 
 const {
-    todayStats, toggleDriverStatus, loadTodayStats, formatDuration,
+    toggleDriverStatus,
 } = workspace;
 
 onMounted(() => {

@@ -1,10 +1,10 @@
 import { computed, ref } from 'vue';
 import { apiOrderStats } from '../api/stats';
-import { apiDriverStats } from '../api/driver';
 import { getApiErrorMessage } from '../api/client';
 
 /**
- * 대시보드 통계 — 기간별 매출/운행 통계와 기사 오늘 요약을 담당한다.
+ * 대시보드 통계 — 기간별 매출/운행 통계를 담당한다.
+ * 기사 오늘 요약은 useDriverTodayStats 가 맡는다(다른 화면과 같은 값을 쓴다).
  *
  * @param {object} options
  * @param {object} options.auth useAuthStore
@@ -14,7 +14,6 @@ export function useDashboardStats({ auth }) {
     const error = ref('');
     const days = ref(7);
     const stats = ref(null);
-    const driverToday = ref(null);
 
     const load = async () => {
         try {
@@ -33,24 +32,8 @@ export function useDashboardStats({ auth }) {
         load();
     };
 
-    // ── 기사 오늘 요약 (드라이버 전용) ──
+    // ── 기사 여부 — 홈에서 기사 전용 블록을 가른다 ──
     const isDriver = computed(() => auth.user?.role === 'Driver');
-
-    const loadDriverToday = async () => {
-        try {
-            const { data } = await apiDriverStats();
-            driverToday.value = data.data;
-        } catch {
-            driverToday.value = null;
-        }
-    };
-
-    const formatDuration = (seconds) => {
-        const hours = Math.floor((seconds ?? 0) / 3600);
-        const minutes = Math.floor(((seconds ?? 0) % 3600) / 60);
-
-        return hours > 0 ? `${hours}시간 ${minutes}분` : `${minutes}분`;
-    };
 
     const summary = computed(() => stats.value?.summary ?? {});
 
@@ -75,12 +58,9 @@ export function useDashboardStats({ auth }) {
         error,
         days,
         stats,
-        driverToday,
         load,
         changeDays,
         isDriver,
-        loadDriverToday,
-        formatDuration,
         summary,
         revenueSeries,
         maxRevenue,

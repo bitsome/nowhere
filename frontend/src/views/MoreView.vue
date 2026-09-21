@@ -1,9 +1,9 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { useUiStore } from '../stores/ui';
-import { apiDriverStats } from '../api/driver';
+import { useDriverTodayStats } from '../composables/useDriverTodayStats';
 import { roleLabel, ROLE_CUSTOMER } from '../data/roles';
 import UiCard from '../components/ui/UiCard.vue';
 import UiSection from '../components/ui/UiSection.vue';
@@ -27,21 +27,12 @@ const level = computed(() => auth.user?.level ?? null);
 const isDriver = computed(() => auth.user?.role === 'Driver');
 const isCustomer = computed(() => auth.user?.role === ROLE_CUSTOMER);
 
-// 오늘 통계 — 기사 통계 API (진행중/완료/수익)
-const todayStats = ref(null);
-
-const loadStats = async () => {
-    try {
-        const { data } = await apiDriverStats();
-        todayStats.value = data.data;
-    } catch {
-        todayStats.value = null;
-    }
-};
+// 오늘 요약 — 기사 통계 API (진행중/완료/수익)
+const { todayStats, loadTodayStats } = useDriverTodayStats();
 
 onMounted(() => {
     if (isDriver.value) {
-        loadStats();
+        loadTodayStats();
     }
 });
 

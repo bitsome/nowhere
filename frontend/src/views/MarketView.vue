@@ -251,12 +251,11 @@ const resetFilters = () => {
     search.value = '';
 };
 
-// 빠른 보기 칩 — 신규/임박/긴급/찜 (금액 정렬은 '정렬'에서 선택하므로 중복 제거)
+// 빠른 보기 칩 — 신규/임박/긴급 (금액 정렬은 '정렬'에서, 찜한 운행은 전용 화면에서 본다)
 const QUICK_OPTIONS = [
     { label: '신규', value: 'new' },
     { label: '임박', value: 'urgent' },
     { label: '긴급', value: 'priority' },
-    { label: '찜한 운행', value: 'favorites' },
 ];
 
 // 빠른 날짜 칩 — 오늘/내일 (빠른 보기 위에 별도 행)
@@ -264,6 +263,12 @@ const DATE_QUICK_OPTIONS = [
     { label: '오늘', value: 'today' },
     { label: '내일', value: 'tomorrow' },
 ];
+
+// 칩에 없는 퀵 보기가 저장돼 있으면 버린다 — 화면에 없는 필터가 조용히 걸려 있으면 안 된다.
+// (찜한 운행은 마켓의 퀵 칩에서 걷어내고 전용 화면으로 일원화했다)
+if (quick.value && ![...QUICK_OPTIONS, ...DATE_QUICK_OPTIONS].some((opt) => opt.value === quick.value)) {
+    quick.value = '';
+}
 
 // 오늘/내일 퀵 칩은 날짜시간 필드도 함께 맞춰 준다 (오늘=현재 시각, 내일=자정)
 const localDateStr = (d) => {
@@ -589,8 +594,8 @@ const load = async (silent = false) => {
             pageTasks.push(apiOrders(buildListParams(p)));
         }
 
-        // 왕복 추천은 참고용이라 목록과 병렬 호출 (빠른매칭·찜 보기에서는 호출하지 않음)
-        if (!matchedOnly.value && quick.value !== 'favorites') {
+        // 왕복 추천은 참고용이라 목록과 병렬 호출 (빠른매칭 보기에서는 호출하지 않음)
+        if (!matchedOnly.value) {
             pageTasks.push(apiReturnRoutes(buildListParams(1)));
         }
 
@@ -1206,18 +1211,14 @@ watch(
             <EmptyState
                 v-else-if="orders.length === 0"
                 icon="search"
-                :title="quick === 'favorites'
-                    ? '찜한 운행이 없습니다'
-                    : matchedOnly ? '조건에 맞는 운행이 아직 없습니다' : '가져올 수 있는 운행이 없습니다'"
-                :hint="quick === 'favorites'
-                    ? '마음에 드는 운행의 하트를 눌러 모아두면 여기서 다시 확인할 수 있어요'
-                    : matchedOnly
-                        ? '매칭 조건을 넓히거나 잠시 후 다시 확인해 주세요'
-                        : '필터를 줄이거나 잠시 후 다시 확인해 주세요'"
+                :title="matchedOnly ? '조건에 맞는 운행이 아직 없습니다' : '가져올 수 있는 운행이 없습니다'"
+                :hint="matchedOnly
+                    ? '매칭 조건을 넓히거나 잠시 후 다시 확인해 주세요'
+                    : '필터를 줄이거나 잠시 후 다시 확인해 주세요'"
             />
             <template v-else>
                 <!-- 연결 운행 — 내가 맡은 운행의 하차지에서 이어지는 운행 (공차 복귀 절감) -->
-                <div v-if="quick !== 'favorites' && returnRoutes.length" class="market-section">
+                <div v-if="returnRoutes.length" class="market-section">
                     <div class="order-grid">
                         <OrderCard
                             v-for="(order, ri) in returnRoutes"

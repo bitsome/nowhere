@@ -27,6 +27,16 @@ export function setBrowserNotifyEnabled(enabled) {
     localStorage.setItem('notify_enabled', enabled ? '1' : '0');
 }
 
+/**
+ * 브라우저가 이 사이트의 알림을 차단해 둔 상태인지.
+ *
+ * 차단된 뒤에는 requestPermission() 을 다시 불러도 권한 창이 뜨지 않고 곧바로 'denied' 가 온다.
+ * 켜기를 시도하면 "권한이 거부되었습니다"만 반복되므로, 화면에서 브라우저 설정을 풀도록 안내해야 한다.
+ */
+export function isBrowserNotifyBlocked() {
+    return 'Notification' in window && Notification.permission === 'denied';
+}
+
 export function showBrowserNotification(title, options = {}) {
     if (!('Notification' in window) || Notification.permission !== 'granted') {
         return;

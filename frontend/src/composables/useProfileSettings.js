@@ -5,6 +5,7 @@ import { getApiErrorMessage } from '../api/client';
 import { ROLE_CUSTOMER, roleLabel as roleLabelOf } from '../data/roles';
 import { getActivePushSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from '../utils/push';
 import {
+    isBrowserNotifyBlocked,
     isBrowserNotifyEnabled,
     requestNotifyPermission,
     setBrowserNotifyEnabled,
@@ -26,6 +27,10 @@ export function useProfileSettings({ auth, router, message }) {
 
     // 브라우저 알림 설정 — 로컬 저장 + 웹 푸시 구독(서버 push_subscriptions) 동기화
     const notifyEnabled = ref(isBrowserNotifyEnabled());
+    // 이 브라우저에서 푸시를 켤 수 있는지(HTTPS·PushManager) — 켤 수 없으면 화면이 이유를 안내한다
+    const notifySupported = ref(isPushSupported());
+    // 브라우저가 차단해 둔 상태 — 사용자가 브라우저 설정에서 풀어야 한다
+    const notifyBlocked = ref(isBrowserNotifyBlocked());
 
     // 마운트 시 실제 활성 구독과 동기화 (다른 브라우저에서 꺼진 경우 반영)
     onMounted(() => {
@@ -45,11 +50,22 @@ export function useProfileSettings({ auth, router, message }) {
                     return;
                 }
 
+                // 차단된 뒤에는 권한 창이 다시 뜨지 않는다 — 켜기를 반복해도 실패만 하므로 먼저 안내한다
+                if (isBrowserNotifyBlocked()) {
+                    notifyBlocked.value = true;
+                    notifyEnabled.value = false;
+                    setBrowserNotifyEnabled(false);
+                    message.error('브라우저가 알림을 차단하고 있습니다. 주소창의 자물쇠에서 알림을 허용으로 바꿔 주세요.');
+
+                    return;
+                }
+
                 // 권한 요청 — 최초 한 번만
                 if (Notification.permission === 'default') {
                     const granted = await requestNotifyPermission();
 
                     if (!granted) {
+                        notifyBlocked.value = isBrowserNotifyBlocked();
                         setBrowserNotifyEnabled(false);
                         message.error('브라우저 알림 권한이 거부되었습니다. 브라우저 설정에서 허용해 주세요.');
 
@@ -59,6 +75,7 @@ export function useProfileSettings({ auth, router, message }) {
 
                 // 푸시 구독 생성 + 서버 저장
                 await subscribeToPush();
+                notifyBlocked.value = false;
                 setBrowserNotifyEnabled(true);
                 message.success('브라우저 알림이 켜졌습니다. 앱이 닫혀 있어도 알림을 받을 수 있습니다.');
             } else {
@@ -138,6 +155,8 @@ export function useProfileSettings({ auth, router, message }) {
         error,
         success,
         notifyEnabled,
+        notifySupported,
+        notifyBlocked,
         toggleNotify,
         myStats,
         loadMyStats,

@@ -1,16 +1,17 @@
 import { reactive, ref } from 'vue';
-import { apiCreateVehicle, apiDeleteVehicle, apiDriverStats, apiMyVehicles, apiUpdateVehicle } from '../api/driver';
+import { apiCreateVehicle, apiDeleteVehicle, apiMyVehicles, apiUpdateVehicle } from '../api/driver';
 import { getApiErrorMessage } from '../api/client';
 
 /**
- * 기사 운영 — 가용 상태 토글, 오늘 통계, 차량 관리(등록/수정/삭제)를 담당한다.
+ * 기사 운영 — 가용 상태 토글, 차량 관리(등록/수정/삭제)를 담당한다.
+ * 오늘 요약은 useDriverTodayStats 가 맡는다.
  *
  * @param {object} options
  * @param {object} options.message naive-ui message
  * @param {object} options.driver useDriverStore
+ * @param {() => Promise<void>} [options.loadTodayStats] 상태를 바꾼 뒤 오늘 요약을 다시 불러올 콜백 (선택)
  */
-export function useDriverWorkspace({ message, driver }) {
-    const todayStats = ref(null);
+export function useDriverWorkspace({ message, driver, loadTodayStats }) {
     const vehicles = ref([]);
     const vehicleLoading = ref(true);
     const vehicleFormOpen = ref(false);
@@ -39,18 +40,10 @@ export function useDriverWorkspace({ message, driver }) {
         try {
             await driver.setStatus(driver.isOnline ? 'offline' : 'online');
             message.success(driver.status === 'online' ? '온라인으로 전환되었습니다.' : '오프라인으로 전환되었습니다.');
-            loadTodayStats();
+            // 온라인 시간은 상태에 따라 달라진다 — 켠 화면의 요약도 함께 맞춘다
+            await loadTodayStats?.();
         } catch (e) {
             message.error(getApiErrorMessage(e, '상태 변경에 실패했습니다.'));
-        }
-    };
-
-    const loadTodayStats = async () => {
-        try {
-            const { data } = await apiDriverStats();
-            todayStats.value = data.data;
-        } catch {
-            todayStats.value = null;
         }
     };
 
@@ -141,15 +134,7 @@ export function useDriverWorkspace({ message, driver }) {
         }
     };
 
-    const formatDuration = (seconds) => {
-        const hours = Math.floor((seconds ?? 0) / 3600);
-        const minutes = Math.floor(((seconds ?? 0) % 3600) / 60);
-
-        return hours > 0 ? `${hours}시간 ${minutes}분` : `${minutes}분`;
-    };
-
     return {
-        todayStats,
         vehicles,
         vehicleLoading,
         vehicleFormOpen,
@@ -157,12 +142,10 @@ export function useDriverWorkspace({ message, driver }) {
         savingVehicle,
         vehicleForm,
         toggleDriverStatus,
-        loadTodayStats,
         loadVehicles,
         openVehicleForm,
         closeVehicleForm,
         saveVehicle,
         removeVehicle,
-        formatDuration,
     };
 }
