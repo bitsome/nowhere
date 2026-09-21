@@ -494,31 +494,7 @@ html.dark .set-card__urgent {
     color: #101418;
 }
 
-/* 상태 배지 */
-.status-badge {
-    display: inline-flex;
-    align-items: center;
-    padding: 1px 6px;
-    border-radius: 999px;
-    color: #ffffff;
-    font-size: 10px;
-    white-space: nowrap;
-    flex-shrink: 0;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-}
-
-/* 밝은 배경 배지 — 흰 글자 대비가 약하므로 라이트·다크 모두 어두운 글자 (접근성) */
-.status-badge--published,
-.status-badge--driving,
-.status-badge--trading,
-.status-badge--acceptance-pending,
-/* accepted(예약) 배지는 script에서 앰버(--status-trading)로 칠하고, completed(완료)는 초록 — 둘 다 밝아 어두운 글자 */
-.status-badge--accepted,
-.status-badge--completed,
-html.dark .status-badge--published,
-html.dark .status-badge--driving {
-    color: #101418;
-}
+/* 상태 배지 스타일은 base.css 공용(.status-badge) — OrderCard 와 같은 배지를 쓴다 */
 
 /* 일정 목록 — 헤더(노선·배지·금액·차량·인원) 바로 아래. 카드에 구분선은 두지 않는다 */
 .set-card__routes {
@@ -697,35 +673,5 @@ html.dark .status-badge--driving {
     color: var(--danger);
 }
 
-/* 조건 상세 모달 — 별점 + 추천 근거 체크리스트 */
-.cond-modal__reasons {
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px dashed var(--border);
-}
-
-.cond-modal__reason {
-    display: inline-flex;
-    align-items: flex-start;
-    gap: 6px;
-    color: var(--text-muted);
-    font-size: 12px;
-    font-weight: 500;
-    line-height: 1.45;
-}
-
-.cond-modal__check {
-    flex-shrink: 0;
-    color: var(--brand);
-    margin-top: 1px;
-}
-
-.cond-modal__empty {
-    margin: 12px 0 0;
-    color: var(--text-muted);
-    font-size: 11px;
-}
+/* 조건 상세 모달 — 별점 + 추천 근거 체크리스트 스타일은 base.css 공용(.cond-modal__*) */
 </style>
