@@ -11,7 +11,7 @@
     /* 공용 칩 탭 여백 — 홈/채팅/커뮤니티 등 칩 행과 다음 콘텐츠 사이 간격 */
     --chips-gap: 8px;
 
-    /* 브랜드 — 라이트=파랑, 다크=틸 (utils/colors.js와 동일 값) */
+    /* 브랜드 — 라이트=파랑, 다크=틸. JS(naive-ui 테마)는 utils/colors.js 가 같은 값을 들고 있다 */
     --brand: #36adff;
     --brand-hover: #5cbfff;
     --brand-pressed: #2b8ee0;
@@ -44,7 +44,7 @@
 html.dark {
     /* 다크에서는 스크롤바·네이티브 피커까지 어둡게 (:root의 color-scheme: light 대응) */
     color-scheme: dark;
-    /* 틸 계조 — #63e2b7 기준 아래(어두운) 단계만 사용 (utils/colors.js tealScale와 동일) */
+    /* 틸 계조 — #63e2b7 기준 아래(어두운) 단계만 사용 (utils/colors.js DARK_BRAND 와 동일 값) */
     --brand: #63e2b7;
     --brand-hover: #54cf9f;
     --brand-pressed: #48b98c;
