@@ -128,7 +128,7 @@
   - [x] SubTask 16.5: 회귀 테스트 7건 신규(`OrderStructureLocalTest`) — 샌딩·노선·接机·묶음·차량·다중 일정·AI 정상 경로 보존. 백엔드 377건 통과
   - [x] SubTask 16.6: `.deploy/rehearse_wechat_parse.ps1` — **운영 서버에서 실제 위챗 문구 5종 전부 통과**(`3.30送机 蚕室 3人 2行李 9万` → 03:30·샌딩·잠실→인천·3명·9만 / `3号 卡起 03:00 ... 07:00 ...` → 2건 분리·셋트·카니발부터 가능)
   - 남은 것: 중국 LLM(DeepSeek/Qwen 등) 키를 넣으면 `parsed_by=ai` 로 정확도가 올라간다(설정만 교체, 코드 변경 없음)
-  - 미사용 잔재: `StoreStructuredOrderRequest`·`orders.original_summary`/`structured_payload` 컬럼은 어디서도 쓰이지 않는다(원문 보관을 하려면 이 컬럼을 살리면 된다)
+  - 미사용 잔재: `orders.original_summary`/`structured_payload` 컬럼은 어디서도 쓰이지 않는다(원문 보관을 하려면 이 컬럼을 살리면 된다). `StoreStructuredOrderRequest` 등 미사용 FormRequest 는 삭제했다
 
 - [x] Task 17: 운행 등록을 쉽게 — AI 결과 수정 + 붙여넣기 1회로 N건 등록
   - 배경: 위챗방 → 앱 이관의 마찰은 두 곳이었다. ① AI(현재는 규칙 파서) 구조화 결과가 **읽기 전용**이라 오해석을 고칠 수 없는데 안내 문구는 "수정해 주세요"라고 했다 — 고칠 수단 없이 잘못된 값이 그대로 공개될 수 있었다. ② 한 방에 여러 건이 섞이면 한 운행 + 여러 일정으로만 들어가, 등록자가 원하는 "여러 운행"이 되지 않았다.

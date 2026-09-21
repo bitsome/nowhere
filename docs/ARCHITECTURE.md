@@ -69,8 +69,8 @@ nowhere/
 │   │   └── Leveling/LevelTable.php      # 레벨 테이블
 │   ├── Notifications/                   # OrderNotification, PasswordResetCodeNotification, WebPushChannel
 │   ├── Policies/                        # OrderPolicy, UserPolicy
-│   ├── Console/Commands/                # AutoRegisterOrders, SendRideReminders, SendServerNotification,
-│   │                                    # SendTestPush, SimulateTraffic
+│   ├── Console/Commands/                # AutoRegisterOrders, SendRideReminders, SendTestPush,
+│   │                                    # WatchIngestion, SyncPipelineOrders
 │   └── Providers/AppServiceProvider.php
 ├── routes/
 │   ├── api.php                          # 전체 API 라우트 (Sanctum 인증)
@@ -80,7 +80,7 @@ nowhere/
 │       ├── api/                         # 도메인별 API 클라이언트 (orders, chats, driver, match, ...)
 │       ├── components/                  # 공용/도메인 컴포넌트
 │       │   ├── ui/                      # UiCard, UiChip, UiListRow, UiSection
-│       │   ├── common/                  # BaseIcon, EmptyState, LevelBadge, SegmentedGroup, ...
+│       │   ├── common/                  # BaseIcon, EmptyState, LevelBadge, ...
 │       │   ├── layout/                  # HeaderBar, ChatListener, NotificationListener
 │       │   ├── orders/                  # OrderCard, OrderDetailChat, SetGroupCard, ...
 │       │   ├── chat/                    # ChatThread, MessageBubble, ...

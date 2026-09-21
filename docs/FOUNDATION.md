@@ -24,7 +24,6 @@
 | `BaseIcon` | 모든 아이콘의 공통 래퍼 — 아이콘은 이 컴포넌트로만 사용한다 |
 | `ConfirmDialog` | 파괴적 작업 확인 다이얼로그 — `window.confirm` 대신 사용 |
 | `EmptyState` | 데이터 없음 — 아이콘 + 제목 + 설명 구조 |
-| `SegmentedGroup` | 탭/세그먼트 토글 (내 마켓·내 운행 탭 스타일) |
 | `LevelBadge` / `VerifiedBadge` | 레벨·차량/면허 인증 배지 |
 | `ImageGallery` | 이미지 갤러리 뷰어 |
 | `ScrollTopButton` | 스크롤 최상단 이동 |
