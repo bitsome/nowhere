@@ -9,6 +9,7 @@ import LevelBadge from '../../components/common/LevelBadge.vue';
 import BaseIcon from '../../components/common/BaseIcon.vue';
 import ReportDialog from '../../components/reports/ReportDialog.vue';
 import { formatTime } from '../../utils/formatTime';
+import { avatarText, parseVideo, timeAgo } from '../../utils/communityPost';
 
 const route = useRoute();
 const router = useRouter();
@@ -43,40 +44,10 @@ const load = async () => {
     }
 };
 
-const avatarText = (name) => (name ?? '?').charAt(0).toUpperCase();
-
 const formatWon = (value) => (value ?? 0).toLocaleString();
 
-// 유튜브(영상/숏츠) URL → 썸네일 이미지. 아니면 null
-const youtubeThumb = (url) => {
-    if (!url) {
-        return null;
-    }
-
-    const match = String(url).match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{6,})/);
-
-    return match ? `https://i.ytimg.com/vi/${match[1]}/hqdefault.jpg` : null;
-};
-
-const timeAgo = (iso) => {
-    if (!iso) {
-        return '';
-    }
-
-    const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-
-    if (diff < 60) {
-        return '방금 전';
-    }
-    if (diff < 3600) {
-        return `${Math.floor(diff / 60)}분 전`;
-    }
-    if (diff < 86400) {
-        return `${Math.floor(diff / 3600)}시간 전`;
-    }
-
-    return new Date(iso).toLocaleDateString('ko-KR');
-};
+// 영상 썸네일 — 주소 해석 규칙은 공용 유틸(utils/communityPost) 한 곳에서만 관리한다
+const youtubeThumb = (url) => parseVideo(url)?.thumb ?? null;
 
 onMounted(load);
 </script>

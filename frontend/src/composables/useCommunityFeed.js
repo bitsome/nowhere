@@ -10,6 +10,7 @@ import {
     apiVoteCommunityPost,
 } from '../api/community';
 import { getApiErrorMessage } from '../api/client';
+import { avatarText, parseVideo, timeAgo } from '../utils/communityPost';
 
 /**
  * 커뮤니티 피드 — 글 목록/카테고리/검색/인기글/좋아요/댓글/삭제/영상 재생/표시 필터를 담당한다.
@@ -233,48 +234,10 @@ export function useCommunityFeed({ message, auth, ui }) {
         }
     };
 
-    // 상대 시간 (NaN 방어 포함)
-    const timeAgo = (iso) => {
-        if (!iso) return '';
-        const d = new Date(iso);
-        if (isNaN(d.getTime())) return String(iso).slice(0, 10);
-
-        const diff = (Date.now() - d.getTime()) / 1000;
-
-        if (diff < 60) return '방금 전';
-        if (diff < 3600) return `${Math.floor(diff / 60)}분 전`;
-        if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
-        if (diff < 86400 * 7) return `${Math.floor(diff / 86400)}일 전`;
-
-        return d.toLocaleDateString('ko-KR');
-    };
-
-    const avatarText = (name) => (name ?? '?').charAt(0).toUpperCase();
-
     const myId = computed(() => auth.user?.id);
 
     // 재생 중인 영상 (post.id → true) — 클릭 시 iframe 임베드로 전환
     const playingVideo = ref({});
-
-    // 영상 URL 해석 — 유튜브(영상/숏츠)는 썸네일+임베드, 그 외는 링크
-    const parseVideo = (url) => {
-        if (!url) {
-            return null;
-        }
-
-        const match = String(url).match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([\w-]{6,})/);
-
-        if (match) {
-            return {
-                kind: 'youtube',
-                id: match[1],
-                thumb: `https://i.ytimg.com/vi/${match[1]}/hqdefault.jpg`,
-                embed: `https://www.youtube.com/embed/${match[1]}`,
-            };
-        }
-
-        return { kind: 'link', url };
-    };
 
     const toggleVideo = (post) => {
         const info = parseVideo(post.video_url);
@@ -344,11 +307,8 @@ export function useCommunityFeed({ message, auth, ui }) {
         updatePost,
         expandComments,
         removePost,
-        timeAgo,
-        avatarText,
         myId,
         playingVideo,
-        parseVideo,
         toggleVideo,
         visiblePosts,
         scrollToPost,

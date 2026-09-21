@@ -7,12 +7,11 @@ import { useUiStore } from '../../stores/ui';
 import { useCommunityFeed } from '../../composables/useCommunityFeed';
 import { usePostComposer } from '../../composables/usePostComposer';
 import { COMMUNITY_CATEGORIES, categoryOf } from '../../utils/communityCategories';
-import LevelBadge from '../../components/common/LevelBadge.vue';
+import { timeAgo } from '../../utils/communityPost';
 import BaseIcon from '../../components/common/BaseIcon.vue';
 import EmptyState from '../../components/common/EmptyState.vue';
 import CommunityPostEditor from '../../components/community/CommunityPostEditor.vue';
-import SurveyBlock from '../../components/community/SurveyBlock.vue';
-import PlaceCard from '../../components/community/PlaceCard.vue';
+import FeedCard from '../../components/community/FeedCard.vue';
 
 defineOptions({ name: 'CommunityView' });
 
@@ -29,7 +28,7 @@ const {
     posts, popularPosts, categoryCounts, pagination, page, loading, error, category, search,
     load, loadMore, loadPopular, setCategory, applySearch, clearSearch,
     toggleLike, vote, commentText, submitComment, deleteComment,
-    expandComments, removePost, timeAgo, avatarText, myId, playingVideo, parseVideo, toggleVideo, visiblePosts,
+    expandComments, removePost, myId, playingVideo, toggleVideo, visiblePosts,
     scrollToPost, author, period, clearAllFilters,
 } = feed;
 
@@ -219,171 +218,26 @@ onMounted(() => {
             />
 
             <div v-else class="community-feed">
-                <article
+                <!-- 피드 카드 — 목록·상세가 함께 쓰는 공용 컴포넌트 (components/community/FeedCard.vue) -->
+                <FeedCard
                     v-for="post in visiblePosts"
                     :key="post.id"
-                    class="feed-card"
-                    :data-post-id="post.id"
-                    @click="openPost(post)"
-                >
-                    <div class="feed-card__head">
-                        <button
-                            type="button"
-                            class="feed-avatar feed-avatar--link"
-                            @click.stop="router.push({ name: 'user-page', params: { id: post.user.id } })"
-                        >
-                            {{ avatarText(post.user.name) }}
-                        </button>
-                        <button
-                            type="button"
-                            class="feed-card__who"
-                            @click.stop="router.push({ name: 'user-page', params: { id: post.user.id } })"
-                        >
-                            <span class="feed-card__name-row">
-                                <strong>{{ post.user.name }}</strong>
-                                <LevelBadge v-if="post.user.level" :level="post.user.level.level" size="sm" />
-                                <span v-if="post.user.is_vip" class="feed-badge feed-badge--vip">VIP</span>
-                                <span class="feed-card__time">{{ timeAgo(post.created_at) }}</span>
-                            </span>
-                            <span class="feed-card__cat-row">
-                                <span class="feed-card__cat" :class="`feed-card__cat--${post.category}`">
-                                    {{ categoryOf(post.category).label }}
-                                </span>
-                            </span>
-                        </button>
-                        <n-dropdown
-                            v-if="post.is_mine"
-                            trigger="click"
-                            :options="[
-                                { label: '수정', key: 'edit' },
-                                { label: '삭제', key: 'delete' },
-                            ]"
-                            @select="(key) => (key === 'edit' ? openEdit(post) : removePost(post))"
-                        >
-                            <button type="button" class="feed-card__more" aria-label="더보기" @click.stop>
-                                <BaseIcon name="more" :size="16" />
-                            </button>
-                        </n-dropdown>
-                    </div>
-
-                    <p class="feed-card__content" v-text="post.content" />
-
-                    <img
-                        v-if="post.image_url"
-                        :src="post.image_url"
-                        alt="게시글 사진"
-                        class="feed-card__image"
-                        loading="lazy"
-                    />
-
-                    <!-- 영상/숏츠 — 유튜브는 썸네일 클릭 시 재생 -->
-                    <template v-if="parseVideo(post.video_url)">
-                        <div v-if="parseVideo(post.video_url).kind === 'youtube'">
-                            <button
-                                v-if="!playingVideo[post.id]"
-                                type="button"
-                                class="video-player video-player--thumb"
-                                @click.stop="toggleVideo(post)"
-                            >
-                                <img :src="parseVideo(post.video_url).thumb" alt="영상 썸네일" loading="lazy" />
-                                <span class="video-player__play">
-                                    <BaseIcon name="play" :size="16" />
-                                </span>
-                                <span class="video-player__badge">숏츠/영상</span>
-                            </button>
-                            <div v-else class="video-player" @click.stop>
-                                <iframe
-                                    :src="parseVideo(post.video_url).embed"
-                                    title="YouTube 영상"
-                                    frameborder="0"
-                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                    allowfullscreen
-                                />
-                            </div>
-                        </div>
-                        <a
-                            v-else
-                            :href="parseVideo(post.video_url).url"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="video-link"
-                            @click.stop
-                        >
-                            <BaseIcon name="video" :size="14" />
-                            영상 보기
-                        </a>
-                    </template>
-
-                    <!-- 여행지 맛집 카드 / 설문 투표 -->
-                    <PlaceCard v-if="post.place" :place="post.place" />
-                    <SurveyBlock
-                        v-if="post.survey"
-                        :survey="post.survey"
-                        @vote="(optionId) => vote(post, optionId)"
-                    />
-
-                    <div class="feed-card__actions" @click.stop>
-                        <button
-                            type="button"
-                            class="feed-action"
-                            :class="{ 'feed-action--liked': post.is_liked }"
-                            @click="toggleLike(post)"
-                        >
-                            <BaseIcon
-                                class="feed-action__icon"
-                                :name="post.is_liked ? 'heart-filled' : 'heart'"
-                                :size="18"
-                            />
-                            <span>{{ post.likes_count > 0 ? post.likes_count : '좋아요' }}</span>
-                        </button>
-
-                        <span class="feed-action feed-action--static">
-                            <BaseIcon class="feed-action__icon" name="comment" :size="16" />
-                            <span>{{ post.comments_count > 0 ? post.comments_count : '댓글' }}</span>
-                        </span>
-                    </div>
-
-                    <div v-if="post.comments.length" class="feed-card__comments" @click.stop>
-                        <div v-for="comment in post.comments" :key="comment.id" class="comment-row">
-                            <strong>{{ comment.user?.name }}</strong>
-                            <span>{{ comment.content }}</span>
-                            <span class="comment-row__time">{{ timeAgo(comment.created_at) }}</span>
-                            <button
-                                v-if="comment.is_mine"
-                                type="button"
-                                class="comment-row__delete"
-                                aria-label="댓글 삭제"
-                                @click="deleteComment(post, comment)"
-                            >
-                                <BaseIcon name="trash" :size="13" />
-                            </button>
-                        </div>
-                        <button
-                            v-if="post.comments_count > post.comments.length"
-                            type="button"
-                            class="comments-more"
-                            @click="expandComments(post)"
-                        >
-                            댓글 모두 보기 ({{ post.comments_count - post.comments.length }}개 더)
-                        </button>
-                    </div>
-
-                    <div class="feed-card__composer" @click.stop>
-                        <input
-                            v-model="commentText[post.id]"
-                            type="text"
-                            placeholder="댓글 달기..."
-                            @keyup.enter="submitComment(post)"
-                        />
-                        <button
-                            type="button"
-                            :disabled="!(commentText[post.id] ?? '').trim()"
-                            @click="submitComment(post)"
-                        >
-                            게시
-                        </button>
-                    </div>
-                </article>
+                    class="feed-card--link"
+                    :post="post"
+                    :can-expand-comments="true"
+                    :playing-video="Boolean(playingVideo[post.id])"
+                    :comment="commentText[post.id] ?? ''"
+                    @update:comment="(text) => (commentText[post.id] = text)"
+                    @open="openPost"
+                    @like="toggleLike"
+                    @vote="vote"
+                    @toggle-video="toggleVideo"
+                    @comment-submit="submitComment"
+                    @comment-delete="deleteComment"
+                    @expand-comments="expandComments"
+                    @edit="openEdit"
+                    @delete="removePost"
+                />
 
                 <div v-if="pagination && page < pagination.last_page" class="feed-more">
                     <n-button size="large" secondary :loading="loading" @click="loadMore">
@@ -783,377 +637,20 @@ onMounted(() => {
     gap: var(--card-gap);
 }
 
-/* ── 카드 ── */
-.feed-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--card-radius);
-    padding: var(--card-pad);
+/* ── 카드 ──
+   카드 골격(.feed-card·.feed-avatar·.feed-action …)은 공용 컴포넌트가 갖는다.
+   (components/community/FeedCard.vue) 여기에는 목록만의 차이만 남긴다. */
+.feed-card--link {
     cursor: pointer;
     transition: border-color 0.15s ease;
 }
 
-.feed-card:hover { border-color: color-mix(in srgb, var(--brand) 35%, transparent); }
+.feed-card--link:hover { border-color: color-mix(in srgb, var(--brand) 35%, transparent); }
 
-/* ── 헤드(아바타+이름) ── */
-.feed-card__head {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 2px;
-}
-
-.feed-avatar {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    background: var(--brand-gradient);
-    color: #ffffff;
-    font-size: 11px;
-    font-weight: 700;
-    flex-shrink: 0;
-    transition: transform 0.15s ease;
-}
-
-/* 다크 — 그라디언트가 밝은 틸로 바뀌어 흰 글자 대비가 ≈1.6:1로 떨어짐 → 앱 표준 어두운 글자 */
-html.dark .feed-avatar {
-    color: #07120e;
-}
-
-.feed-avatar--link { border: 0; padding: 0; cursor: pointer; }
-.feed-avatar--link:hover { transform: scale(1.05); }
-
-.feed-card__who {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    gap: 2px;
-    min-width: 0;
-    padding: 0;
-    border: 0;
-    background: none;
-    color: var(--text);
-    text-align: left;
-    cursor: pointer;
-}
-
-.feed-card__name-row {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 11px;
-    min-width: 0;
-}
-
-.feed-card__name-row strong {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.feed-card__time {
-    color: var(--text-muted);
-    font-size: 11px;
-    white-space: nowrap;
-    flex-shrink: 0;
-}
-
-.feed-card__time::before {
-    content: '·';
-    margin: 0 3px;
-    color: var(--text-muted);
-}
-
-.feed-card__cat-row { display: flex; }
-
-.feed-card__cat {
-    display: inline-flex;
-    align-items: center;
-    padding: 1px 6px;
-    border-radius: 6px;
-    background: color-mix(in srgb, var(--brand) 12%, transparent);
-    color: var(--brand);
-    font-size: 10px;
-    font-weight: 400;
-}
-
-.feed-card__cat--airport { background: color-mix(in srgb, #4a9eff 14%, transparent); color: #4a9eff; }
-.feed-card__cat--route { background: color-mix(in srgb, var(--status-accepted) 14%, transparent); color: var(--status-accepted); }
-.feed-card__cat--region { background: color-mix(in srgb, #a78bfa 14%, transparent); color: #a78bfa; }
-.feed-card__cat--car { background: color-mix(in srgb, #f4be5f 16%, transparent); color: #e8a83c; }
-.feed-card__cat--money { background: color-mix(in srgb, #f2994a 16%, transparent); color: #e2873a; }
-.feed-card__cat--shop { background: color-mix(in srgb, #63e2b7 14%, transparent); color: var(--status-accepted); }
-.feed-card__cat--survey { background: color-mix(in srgb, #8b7bf7 14%, transparent); color: #8b7bf7; }
-.feed-card__cat--food { background: color-mix(in srgb, #ff8a5c 16%, transparent); color: #e8734a; }
-
-.feed-badge {
-    display: inline-flex;
-    align-items: center;
-    font-size: 10px;
-    line-height: 1;
-}
-
-.feed-badge--vip {
-    padding: 1px 6px;
-    border-radius: 999px;
-    background: linear-gradient(135deg, #f7b731, #f2994a);
-    color: #ffffff;
-    font-size: 10px;
-    font-weight: 400;
-}
-
-.feed-card__more {
-    margin-left: auto;
-    border: 0;
-    border-radius: 50%;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: none;
-    color: var(--text-muted);
-    font-size: 14px;
-    cursor: pointer;
-    padding: 0;
-    transition: background 0.12s ease;
-}
-
-.feed-card__more:hover { background: rgba(0, 0, 0, 0.05); }
-html.dark .feed-card__more:hover { background: rgba(255, 255, 255, 0.06); }
-
-/* ── 본문 ── */
-.feed-card__content {
-    margin: 10px 0;
-    white-space: pre-wrap;
-    word-break: break-word;
-    line-height: 1.65;
-    font-size: 11px;
-}
-
-/* ── 이미지 ── */
-.feed-card__image {
-    width: 100%;
-    aspect-ratio: 4 / 3;
-    object-fit: cover;
-    border-radius: 10px;
-    background: rgba(0, 0, 0, 0.05);
-    margin-bottom: 2px;
-}
-
-html.dark .feed-card__image { background: rgba(255, 255, 255, 0.08); }
-
-/* ── 영상/숏츠 ── */
-.video-player {
-    position: relative;
-    width: 100%;
-    border-radius: 10px;
-    overflow: hidden;
-    background: #000;
-    margin-bottom: 2px;
-}
-
-.video-player--thumb {
-    border: 0;
-    padding: 0;
-    cursor: pointer;
-    display: block;
-}
-
-.video-player--thumb img {
-    width: 100%;
-    aspect-ratio: 16 / 9;
-    object-fit: cover;
-    display: block;
-}
-
-.video-player iframe {
-    width: 100%;
-    aspect-ratio: 16 / 9;
-    display: block;
-    border: 0;
-}
-
-.video-player__play {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.28);
-}
-
-.video-player__play svg {
-    width: 52px;
-    height: 52px;
-    color: #fff;
-    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5));
-}
-
-.video-player__badge {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    padding: 3px 10px;
-    border-radius: 999px;
-    background: rgba(0, 0, 0, 0.6);
-    color: #fff;
-    font-size: 11px;
-    font-weight: 600;
-}
-
-.video-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 4px;
-    padding: 8px 14px;
-    border-radius: 10px;
-    border: 1px solid color-mix(in srgb, var(--brand) 35%, transparent);
-    background: color-mix(in srgb, var(--brand) 6%, transparent);
-    color: var(--accent);
-    font-size: 11px;
-    font-weight: 600;
-    text-decoration: none;
-}
-
-.video-link svg { width: 16px; height: 16px; }
-
+/* ── 글쓰기 모달의 영상 미리보기 ── */
 .composer__video { margin-top: 10px; }
 
-/* ── 액션 버튼 ── */
-.feed-card__actions {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    margin-top: 10px;
-    padding-top: 8px;
-    border-top: 1px solid var(--border);
-}
-
-.feed-action {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    border: 0;
-    border-radius: 8px;
-    background: none;
-    color: var(--text-muted);
-    font-size: 11px;
-    cursor: pointer;
-    padding: 2px 6px;
-    transition: background 0.12s ease;
-}
-
-.feed-action:hover { background: rgba(0, 0, 0, 0.04); }
-html.dark .feed-action:hover { background: rgba(255, 255, 255, 0.06); }
-.feed-action--liked { color: #e5484d; }
-.feed-action--static { cursor: default; }
-.feed-action--static:hover { background: none; }
-
-.feed-action__icon { width: 18px; height: 18px; }
-
-/* ── 댓글 ── */
-.feed-card__comments {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-top: 8px;
-    padding: 10px;
-    border-radius: 10px;
-    background: rgba(0, 0, 0, 0.02);
-}
-
-html.dark .feed-card__comments { background: rgba(255, 255, 255, 0.03); }
-
-.comment-row {
-    display: flex;
-    gap: 8px;
-    font-size: 11px;
-    align-items: baseline;
-}
-
-.comment-row strong { flex-shrink: 0; color: var(--text); font-size: 11px; }
-.comment-row span { word-break: break-word; color: var(--text); }
-
-/* 댓글 시간 — 위 `.comment-row span`(본문 글자색)보다 우선하도록 범위를 좁힌다 (선택자 우선순위로 해결) */
-.comment-row span.comment-row__time {
-    color: var(--text-muted);
-    font-size: 11px;
-    flex-shrink: 0;
-}
-
-.comment-row__delete {
-    margin-left: auto;
-    border: 0;
-    background: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 2px;
-    display: flex;
-    align-items: center;
-    opacity: 0.6;
-    transition: opacity 0.12s ease, color 0.12s ease;
-}
-
-.comment-row__delete:hover { opacity: 1; color: var(--danger); }
-
-.comment-row__delete svg { width: 13px; height: 13px; }
-
-.comments-more {
-    border: 0;
-    background: none;
-    color: var(--brand);
-    font-size: 11px;
-    cursor: pointer;
-    padding: 2px 0;
-    text-align: left;
-    font-weight: 500;
-}
-
-.comments-more:hover { opacity: 0.8; }
-
-/* ── 댓글 입력 ── */
-.feed-card__composer {
-    display: flex;
-    gap: 8px;
-    margin-top: 8px;
-    align-items: center;
-}
-
-.feed-card__composer input {
-    flex: 1;
-    border: 0;
-    border-radius: 20px;
-    padding: 9px 16px;
-    background: rgba(0, 0, 0, 0.04);
-    color: var(--text);
-    font-size: 11px;
-    outline: none;
-    transition: background 0.15s ease;
-}
-
-.feed-card__composer input:focus { background: rgba(0, 0, 0, 0.07); }
-
-html.dark .feed-card__composer input { background: rgba(255, 255, 255, 0.05); }
-html.dark .feed-card__composer input:focus { background: rgba(255, 255, 255, 0.08); }
-
-.feed-card__composer button {
-    border: 0;
-    background: none;
-    color: var(--brand);
-    font-weight: 700;
-    font-size: 11px;
-    cursor: pointer;
-    flex-shrink: 0;
-    padding: 6px 4px;
-    transition: opacity 0.12s ease;
-}
-
-.feed-card__composer button:disabled { color: var(--text-muted); cursor: default; opacity: 0.5; }
+/* 카드 내부(액션·댓글·입력창) 스타일도 공용 컴포넌트가 갖는다 — FeedCard.vue */
 
 .feed-more {
     display: flex;
