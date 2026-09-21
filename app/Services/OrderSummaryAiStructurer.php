@@ -276,8 +276,9 @@ class OrderSummaryAiStructurer
      */
     private function detectLocalRoute(string $segment): array
     {
-        // 물결(～)도 노선 구분자다 — `Coex～江南Voco`
-        if (preg_match('/([^\s,，、\-—–~～〜到至→>]+)\s*(?:—|–|-|~|～|〜|到|至|→|>)\s*([^\s,，、]+)/u', $segment, $matches) === 1) {
+        // 물결(～)도 노선 구분자다 — `Coex～江南Voco`. 도착지 칸이 구분자로만 채워지지 않게
+        // 양쪽 모두 구분자를 뺀 값만 받는다 (`出发～～` 의 `～` 가 도착지로 들어온 건이 있었다).
+        if (preg_match('/([^\s,，、\-—–~～〜到至→>]+)\s*(?:—|–|-|~|～|〜|到|至|→|>)\s*([^\s,，、\-—–~～〜到至→>]+)/u', $segment, $matches) === 1) {
             return [$matches[1], $matches[2]];
         }
 
@@ -328,6 +329,12 @@ class OrderSummaryAiStructurer
         }
 
         if (preg_match('/^[0-9一二三四五六七八九十两]+\s*(?:位|人|名|件|个|個|份|台|辆|輛)$/u', $trimmed) === 1) {
+            return false;
+        }
+
+        // 한 글자짜리 모르는 값은 지명이 아니다 — 사전에 있는 한 글자 지명(`钟`)은 위에서 이미 통과했다.
+        // `明天11:35接机 话 中午…` 의 `话` 가 도착지로 들어온 건이 있었다.
+        if (mb_strlen($trimmed) < 2) {
             return false;
         }
 

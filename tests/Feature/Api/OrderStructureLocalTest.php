@@ -145,6 +145,23 @@ test('물결(～)도 노선 구분자로 읽는다', function () {
         ->and($result['passenger_count'])->toBe(3);
 });
 
+test('구분자만 남은 값은 도착지로 잡지 않는다', function () {
+    // `出发～～` 의 물결이 도착지로 들어온 건이 있었다
+    $result = structureOffline('grand 洲际17:00 出发～～');
+
+    expect($result['service_time'])->toBe('17:00')
+        ->and($result['dropoff_location'])->toBe('');
+});
+
+test('接机 뒤 한 글자 잡음은 지명으로 잡지 않는다', function () {
+    // `明天11:35接机 话 中午13点左右有送机` 의 `话` 가 도착지로 들어온 건이 있었다
+    $result = structureOffline('明天11:35接机 话 中午13点左右有送机');
+
+    expect($result['service_time'])->toBe('11:35')
+        ->and($result['pickup_location'])->toBe('인천')
+        ->and($result['dropoff_location'])->toBe('');
+});
+
 test('AI가 정상 응답하면 그대로 쓰고 폴백하지 않는다', function () {
     // AI 설정이 비어 있으면 요청을 보내지 않고 로컬 파서로 떨어진다 — 이 테스트는 "AI 경로가
     // 켜져 있을 때"의 계약이므로, 로컬 .env(ORDER_AI_API_KEY)에 기대지 않고 설정을 직접 채운다.
