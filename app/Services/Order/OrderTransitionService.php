@@ -307,18 +307,23 @@ class OrderTransitionService
         $times = $order->ride_step_times ?? [];
         $times[$next] = now()->toIso8601String();
 
-        $order->forceFill([
-            'ride_step' => $next,
-            'ride_step_times' => $times,
-        ])->save();
+        // 마지막 단계는 곧 완료 전이라 단계 기록과 완료 전이를 한 묶음으로 처리한다.
+        // 완료 검증(요금 협의 = 실제 수익 필수)에 걸렸는데 단계만 'arrived'로 남으면
+        // nextRideStep()이 null이 되어 그 운행은 다시는 완료할 수 없다.
+        return DB::transaction(function () use ($order, $actor, $next, $times, $actualRevenue): string {
+            $order->forceFill([
+                'ride_step' => $next,
+                'ride_step_times' => $times,
+            ])->save();
 
-        // 목적지 도착 = 운행 완료 — 마지막 단계를 기록하는 순간 완료 전이(시각·수익·기사 복귀·XP)까지 처리한다.
-        // 수행 기사는 완료가 마지막이고, 이후 정산은 등록자가 처리한다.
-        if ($next === Order::RIDE_STEP_ARRIVED) {
-            $this->transition($actor, $order, Order::STATUS_COMPLETED, null, $actualRevenue);
-        }
+            // 목적지 도착 = 운행 완료 — 마지막 단계를 기록하는 순간 완료 전이(시각·수익·기사 복귀·XP)까지 처리한다.
+            // 수행 기사는 완료가 마지막이고, 이후 정산은 등록자가 처리한다.
+            if ($next === Order::RIDE_STEP_ARRIVED) {
+                $this->transition($actor, $order, Order::STATUS_COMPLETED, null, $actualRevenue);
+            }
 
-        return $next;
+            return $next;
+        });
     }
 
     /**

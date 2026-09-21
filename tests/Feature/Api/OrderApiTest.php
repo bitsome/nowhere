@@ -1715,6 +1715,38 @@ test('요금 협의 운행은 완료 시 실제 수익을 입력해야 정산할
         ->and($order->fresh()->actual_revenue)->toBe(90000);
 });
 
+test('요금 협의 운행은 마지막 단계에서 수익 없이 도착을 찍어도 단계가 남지 않는다', function () {
+    // 기사앱 경로 — 마지막 '도착지 도착' 기록이 곧 완료 전이라, 수익 검증에 걸리면 단계도 함께 되돌아가야 한다.
+    // 단계만 'arrived'로 남으면 nextRideStep()이 null이 되어 이후 모든 시도가 409로 막힌다.
+    $order = Order::factory()->create([
+        'status' => Order::STATUS_DRIVING,
+        'user_id' => $this->driver->id,
+        'ride_step' => Order::RIDE_STEP_MOVING,
+        'pickup_location' => '마포구',
+        'dropoff_location' => '인천공항',
+        'expected_revenue' => null,
+        'amount_value' => null,
+        'actual_revenue' => null,
+    ]);
+
+    $this->postJson("/api/orders/{$order->id}/ride-step")
+        ->assertStatus(422)
+        ->assertJsonValidationErrors(['actual_revenue']);
+
+    $stuck = $order->fresh();
+
+    expect($stuck?->status)->toBe(Order::STATUS_DRIVING);
+    expect($stuck?->ride_step)->toBe(Order::RIDE_STEP_MOVING);
+
+    // 수익과 함께 다시 시도하면 그대로 완료된다 (앞선 실패가 단계를 소모하지 않았다)
+    $this->postJson("/api/orders/{$order->id}/ride-step", ['actual_revenue' => 90000])
+        ->assertOk()
+        ->assertJsonPath('data.status', Order::STATUS_COMPLETED)
+        ->assertJsonPath('data.ride_step', Order::RIDE_STEP_ARRIVED);
+
+    expect($order->fresh()->actual_revenue)->toBe(90000);
+});
+
 test('api order update modifies the order', function () {
     $order = Order::factory()->create([
         'customer_name' => '원래이름',
