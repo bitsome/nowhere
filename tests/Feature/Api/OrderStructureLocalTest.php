@@ -2,6 +2,7 @@
 
 use App\Models\User;
 use App\Services\OrderSummaryAiStructurer;
+use App\Support\Orders\ChineseTextNormalizer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
@@ -136,13 +137,28 @@ test('送机 뒤 인원 단위는 지명으로 잡지 않는다', function () {
 });
 
 test('물결(～)도 노선 구분자로 읽는다', function () {
-    // `Coex～江南Voco` 는 Coex → 江南Voco 노선이다
+    // `Coex～江南Voco` 는 Coex → 江南Voco 노선이다.
+    // 도착지에 붙은 브랜드는 사전 지명(江南→강남구)을 살려 이어 둔다 — 그대로 두면 화면에서 '미정'이 된다.
     $result = structureOffline('19:30 Coex～江南Voco 3人');
 
     expect($result['service_time'])->toBe('19:30')
         ->and($result['pickup_location'])->toBe('Coex')
-        ->and($result['dropoff_location'])->toBe('江南Voco')
+        ->and($result['dropoff_location'])->toBe('강남구Voco')
         ->and($result['passenger_count'])->toBe(3);
+});
+
+test('지명 뒤에 붙은 차량·금액·수량을 떼고 사전에서 다시 찾는다', function () {
+    // 파서가 노선 칸에 차량·금액·수량을 붙여 보낸 값들
+    expect(ChineseTextNormalizer::location('金浦小车5万'))->toBe('김포')
+        ->and(ChineseTextNormalizer::location('金浦5'))->toBe('김포')
+        ->and(ChineseTextNormalizer::location('0830送机中区'))->toBe('중구')
+        ->and(ChineseTextNormalizer::location('江南Voco.5米'))->toBe('강남구Voco');
+});
+
+test('모르는 표기는 껍데기를 떼어도 그대로 둔다', function () {
+    // 사전에서 읽히는 값이 나올 때만 바꾼다 — 모르는 지명을 잘라내면 안 된다
+    expect(ChineseTextNormalizer::location('乐首尔酒店'))->toBe('乐首尔酒店')
+        ->and(ChineseTextNormalizer::location('东大门'))->toBe('동대문구');
 });
 
 test('구분자만 남은 값은 도착지로 잡지 않는다', function () {

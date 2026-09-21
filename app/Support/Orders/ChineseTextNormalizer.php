@@ -191,6 +191,9 @@ final class ChineseTextNormalizer
      *
      * 한 칸에 두 지점이 이어 붙어 온 표기(`宏大送inspire` = 홍대→인스파이어)는 '—' 로 이어 두고,
      * 끝에 붙은 단독 接送(`宏大送` = 홍대)은 방향 표시일 뿐이라 지명에서 뗀다.
+     *
+     * 파서가 지명 앞뒤에 시각·차량·금액을 붙여 보낸 값(`0830送机中区`, `金浦小车5万`)은
+     * 껍데기를 떼고 다시 찾는다. 사전에서 읽히는 값이 나올 때만 바꾸므로 모르는 표기는 그대로 남는다.
      */
     public static function singleLocation(string $location): string
     {
@@ -210,9 +213,123 @@ final class ChineseTextNormalizer
 
         $stripped = trim((string) preg_replace('/[接送收]$/u', '', $normalized));
 
-        return $stripped !== $normalized && $stripped !== ''
-            ? self::mappedLocation($stripped) ?? $normalized
-            : $normalized;
+        if ($stripped !== $normalized && $stripped !== '') {
+            return self::mappedLocation($stripped) ?? $normalized;
+        }
+
+        $candidates = [$normalized, ...self::noiseTrimCandidates($normalized)];
+
+        foreach ($candidates as $candidate) {
+            $resolved = self::mappedLocation($candidate);
+
+            if ($resolved !== null) {
+                return $resolved;
+            }
+        }
+
+        // 사전 지명 뒤에 브랜드가 붙은 값(`江南Voco`) — 앞 지명만 살려 이어 둔다.
+        // 껍데기를 뗀 후보까지 본다 (`江南Voco.5米` → `江南Voco`)
+        foreach ($candidates as $candidate) {
+            $resolved = self::mappedWithSuffix($candidate);
+
+            if ($resolved !== null) {
+                return $resolved;
+            }
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * 앞뒤 껍데기를 한 겹씩 벗긴 후보들 — 뒤에서부터 차례로 돌려준다.
+     *
+     * 한 번에 다 벗기면 `金浦小车5万` 이 `金浦` 까지만 가야 할 것이 지나치게 잘릴 수 있어,
+     * 벗긴 단계마다 후보로 남기고 사전 조회는 부르는 쪽이 한다.
+     *
+     * @return array<int, string>
+     */
+    private static function noiseTrimCandidates(string $value): array
+    {
+        $candidates = [];
+        $current = trim($value);
+
+        for ($round = 0; $round < 3; $round++) {
+            // 앞: 시각(0830·08:30) 과 서비스 표시(送机·接机)
+            $step = (string) preg_replace('/^(?:\d{1,2}\s*[:.时]\s*\d{2}|\d{3,4})\s*/u', '', $current);
+            $step = (string) preg_replace('/^(?:收送机|送机|接机)\s*/u', '', $step);
+
+            // 뒤: 수량·금액(5万·6人·3件) → 숫자
+            $step = (string) preg_replace('/\s*\d+(?:\.\d+)?\s*(?:万|萬|块|塊|元|米|人|位|名|件|个|個|份|台|辆|輛)$/u', '', $step);
+            $step = (string) preg_replace('/\s*\d+$/u', '', $step);
+            $step = trim($step, " \t,，、/·|.~～〜-—–");
+
+            // 차종은 어디서 끊을지 알 수 없다 — 뗀 길이마다 후보로 남기고 사전이 고르게 한다.
+            // (짧게 뗀 것부터 넣어야 `金浦小车` 가 `金` 까지 가지 않는다)
+            foreach (self::trailingVehicleVariants($step) as $variant) {
+                $candidates[] = $variant;
+            }
+
+            if ($step === '' || $step === $current) {
+                break;
+            }
+
+            $candidates[] = $step;
+            $current = $step;
+        }
+
+        return $candidates;
+    }
+
+    /**
+     * 끝에서 차종을 떼어낸 변형들 — 짧게 뗀 것부터 (사전에서 먼저 읽히는 쪽이 이긴다).
+     *
+     * 차종 판정(`isVehicleToken`)은 '포함' 기준이라 `浦小车` 도 차종으로 본다. 그래서 하나만
+     * 돌려주면 `金浦小车` 가 `金` 까지 잘린다 — 길이별로 다 남기고 사전 조회가 고르게 한다.
+     *
+     * @return array<int, string>
+     */
+    private static function trailingVehicleVariants(string $value): array
+    {
+        $variants = [];
+        $limit = min(4, mb_strlen($value) - 1);
+
+        for ($length = 2; $length <= $limit; $length++) {
+            if (self::isVehicleToken(mb_substr($value, -$length))) {
+                $variants[] = trim(mb_substr($value, 0, -$length));
+            }
+        }
+
+        return $variants;
+    }
+
+    /**
+     * 사전 지명 뒤에 브랜드·숫자가 붙은 값 — 앞 지명만 살려 이어 둔다 (`江南Voco` → `강남Voco`).
+     *
+     * 뒤에 남은 값이 한글이면 지명의 일부일 수 있어 건드리지 않는다(모르는 표기는 그대로 둔다).
+     */
+    private static function mappedWithSuffix(string $value): ?string
+    {
+        $longest = null;
+
+        foreach (self::LOCATIONS as $key => $mapped) {
+            if (mb_strlen($key) < 2 || mb_strlen($key) <= mb_strlen((string) $longest) || ! str_starts_with($value, $key)) {
+                continue;
+            }
+
+            $longest = $key;
+        }
+
+        if ($longest === null) {
+            return null;
+        }
+
+        $suffix = trim(mb_substr($value, mb_strlen($longest)));
+
+        if (preg_match('/^[A-Za-z0-9][A-Za-z0-9 .\-]{0,14}$/', $suffix) !== 1) {
+            return null;
+        }
+
+        return self::LOCATIONS[$longest].$suffix;
     }
 
     /**
