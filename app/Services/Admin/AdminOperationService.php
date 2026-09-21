@@ -339,6 +339,10 @@ class AdminOperationService
 
         $conversation->forceFill(['last_message_at' => now()])->save();
 
+        AuditService::record($admin, 'chat.moderate', "대화(#{$conversation->id})에 중재 메시지를 남겼습니다", [
+            'conversation_id' => $conversation->id,
+        ]);
+
         return $message->load('user:id,name');
     }
 

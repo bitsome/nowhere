@@ -149,6 +149,13 @@ class SettlementController extends Controller
 
         $service->payPayout($request->user(), $payout);
 
+        AuditService::record(
+            $request->user(),
+            'payout.pay',
+            '출금 신청(#'.$payout->id.') '.number_format((int) $payout->amount).'원을 지급 처리했습니다',
+            ['payout_id' => $payout->id, 'amount' => $payout->amount],
+        );
+
         return response()->json(['data' => true]);
     }
 

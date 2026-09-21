@@ -415,3 +415,42 @@ test('first revenue lifecycle completes the full money flow', function () {
         ->assertJsonPath('data.revenue.month_fee', 5000)
         ->assertJsonPath('data.revenue.month_gross', 100000);
 });
+
+test('수금 확인과 출금 지급이 감사 로그에 라벨과 함께 남는다', function () {
+    $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'name' => '운영자']);
+    $order = completedOrder($this->driver, $this->registrant);
+
+    Sanctum::actingAs($this->registrant);
+    $this->postJson('/api/orders/batch-settle', ['ids' => [$order->id]])->assertOk();
+    $settlement = Settlement::query()->firstOrFail();
+
+    Sanctum::actingAs($this->driver);
+    $this->postJson('/api/me/bank-account', [
+        'bank_name' => '국민은행',
+        'account_number' => '111-22-333333',
+        'account_holder' => '홍길동',
+    ])->assertOk();
+    $this->postJson('/api/me/payouts')->assertStatus(409);
+
+    Sanctum::actingAs($admin);
+    $this->postJson("/api/admin/settlements/{$settlement->id}/collect")->assertOk();
+
+    Sanctum::actingAs($this->driver);
+    $this->postJson('/api/me/payouts')->assertCreated();
+    $payout = PayoutRequest::query()->firstOrFail();
+
+    Sanctum::actingAs($admin);
+    $this->postJson("/api/admin/payouts/{$payout->id}/pay")->assertOk();
+
+    // 돈이 움직인 두 지점이 누가·언제 했는지와 함께 남고, 화면에는 한국어 라벨로 보인다
+    $this->getJson('/api/admin/operations/audit')
+        ->assertOk()
+        ->assertJsonCount(2, 'data')
+        ->assertJsonPath('data.0.action', 'payout.pay')
+        ->assertJsonPath('data.0.action_label', '출금 지급')
+        ->assertJsonPath('data.0.admin_name', '운영자')
+        ->assertJsonPath('data.0.meta.amount', 95000)
+        ->assertJsonPath('data.1.action', 'settlement.collect')
+        ->assertJsonPath('data.1.action_label', '수금 확인')
+        ->assertJsonPath('data.1.meta.settlement_id', $settlement->id);
+});

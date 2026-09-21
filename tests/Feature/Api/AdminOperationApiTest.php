@@ -482,6 +482,22 @@ test('audit log records admin interventions and lists newest first with labels',
         ->assertJsonPath('data.3.meta.user_id', $this->driver->id);
 });
 
+test('관리자 채팅 중재도 감사 로그에 남는다', function () {
+    $order = publishedOrder($this->customer);
+    $conversation = startConversation($this->driver, $this->customer, $order);
+
+    Sanctum::actingAs($this->admin);
+    $this->postJson("/api/admin/conversations/{$conversation->id}/moderate", [
+        'body' => '양측 확인 부탁드립니다.',
+    ])->assertCreated();
+
+    $this->getJson('/api/admin/operations/audit')
+        ->assertOk()
+        ->assertJsonPath('data.0.action', 'chat.moderate')
+        ->assertJsonPath('data.0.action_label', '채팅 중재')
+        ->assertJsonPath('data.0.meta.conversation_id', $conversation->id);
+});
+
 test('관리자는 실패한 유입 목록에서 원문과 결손 칸을 확인한다', function () {
     // 파서가 도착지를 못 뽑아 등록이 막힌 일괄 유입
     OrderIngestion::query()->create([

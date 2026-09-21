@@ -27,6 +27,7 @@ class AdminOperationController extends Controller
     private const AUDIT_ACTION_LABELS = [
         'user.moderation' => '사용자 제재',
         'user.role-change' => '역할 변경',
+        'user.fee-rate' => '수수료율 지정',
         'order.hide' => '운행 숨김',
         'order.unhide' => '숨김 해제',
         'order.hold' => '운행 보류',
@@ -35,6 +36,7 @@ class AdminOperationController extends Controller
         'chat.moderate' => '채팅 중재',
         'settlement.hold' => '정산 보류',
         'settlement.release' => '정산 보류 해제',
+        'settlement.collect' => '수금 확인',
         'payout.pay' => '출금 지급',
         'payout.reject' => '출금 거절',
         'report.advance' => '신고 처리',
