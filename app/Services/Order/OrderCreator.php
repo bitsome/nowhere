@@ -194,6 +194,8 @@ class OrderCreator
             $this->termCollector->collect(OrderTerm::FIELD_VEHICLE, $data['vehicle_type']);
         }
 
+        $data = $this->moveVehicleOutOfLocations($data);
+
         // 구분이 비어 있으면 노선에서 추정한다 (공항 쪽이 어디인지로 픽업/샌딩/시내가 갈린다)
         if (blank($data['service_type'] ?? null)) {
             $data['service_type'] = ServiceTypeInferrer::infer($data['pickup_location'] ?? null, $data['dropoff_location'] ?? null);
@@ -212,6 +214,13 @@ class OrderCreator
                     $lineItem[$key] = ChineseTextNormalizer::location($lineItem[$key]);
 
                     $this->termCollector->collect($termField, $lineItem[$key]);
+                }
+
+                // 회차 지명에도 차종이 섞여 들어온 건이 있다 — 회차에는 차량 칸이 없어 지명에서만 걷어낸다
+                foreach (['pickup_location', 'dropoff_location'] as $key) {
+                    if (array_key_exists($key, $lineItem) && ChineseTextNormalizer::isVehicleToken($lineItem[$key])) {
+                        $lineItem[$key] = null;
+                    }
                 }
 
                 if (blank($lineItem['service_type'] ?? null)) {
@@ -254,6 +263,37 @@ class OrderCreator
 
         // 사전에 없어 중국어가 남으면 용어 사전에 모아 관리자가 매핑할 수 있게 한다
         $this->termCollector->collect($termField, $data[$key]);
+
+        return $data;
+    }
+
+    /**
+     * 지명 칸에 섞여 들어온 차종 표기를 차량 칸으로 옮긴다.
+     *
+     * 유입 파서가 `埃尔法`(알파드) 같은 차종을 도착지로 보내온 건이 있었다. 그대로 두면
+     * 마켓에 뜻 없는 지명이 뜨고 차종 정보도 사라진다(차량 칸이 빈 채로 남는다).
+     * 지명에서 지우기만 하지 않고, 차량 칸이 비어 있으면 옮겨 담아 정보를 잃지 않는다.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function moveVehicleOutOfLocations(array $data): array
+    {
+        foreach (['pickup_location', 'dropoff_location'] as $key) {
+            $value = $data[$key] ?? null;
+
+            if (! ChineseTextNormalizer::isVehicleToken($value)) {
+                continue;
+            }
+
+            if (blank($data['vehicle_type'] ?? null)) {
+                $data['vehicle_type'] = ChineseTextNormalizer::vehicleType($value);
+
+                $this->termCollector->collect(OrderTerm::FIELD_VEHICLE, $data['vehicle_type']);
+            }
+
+            $data[$key] = null;
+        }
 
         return $data;
     }

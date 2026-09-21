@@ -571,6 +571,37 @@ test('api order index history source returns only finished received orders', fun
         ->assertJsonCount(1, 'data');
 });
 
+test('지난 운행에는 남이 수행한 내 등록 운행도 들어간다', function () {
+    // 등록자(owner)가 등록하고 기사가 가져가 수행한 운행 — 등록자에게도 이력이다
+    Order::factory()->create([
+        'pickup_location' => '등록자완료',
+        'dropoff_location' => '인천공항',
+        'status' => Order::STATUS_COMPLETED,
+        'claimed_at' => now(),
+        'user_id' => $this->driver->id,
+        'original_owner_id' => $this->marketUser->id,
+    ]);
+
+    // 등록자 본인이 수행하지 않은(가져가지 않은) 자기 등록 운행도 이력에 남는다
+    Order::factory()->create([
+        'pickup_location' => '등록만한운행',
+        'dropoff_location' => '김포공항',
+        'status' => Order::STATUS_CANCELLED,
+        'claimed_at' => null,
+        'user_id' => $this->marketUser->id,
+    ]);
+
+    Sanctum::actingAs($this->marketUser);
+
+    $response = $this->getJson('/api/orders?scope=mine&source=history&tab='.urlencode('전체'))
+        ->assertOk()
+        ->assertJsonCount(2, 'data');
+
+    expect(collect($response->json('data'))->pluck('route'))
+        ->toContain('등록자완료 → 인천공항')
+        ->toContain('등록만한운행 → 김포공항');
+});
+
 test('api order claim requests the market order and notifies the owner', function () {
     $order = Order::factory()->create([
         'status' => Order::STATUS_PUBLISHED,

@@ -179,11 +179,11 @@ class OrderListService
                     ->orWhereHas('pendingClaims', fn ($sub) => $sub->where('driver_id', $user->id));
             });
         } elseif ($source === 'history') {
-            // 히스토리 — 내가 수행한 운행 중 완전히 끝난 것만 (완료/정산완료/취소)
+            // 히스토리 — 완전히 끝난 운행 중 내가 수행했거나 등록한 것.
+            // 수행자(user_id)만 보면 등록자의 이력이 비어 버린다 — 남이 수행한 내 운행도 내 이력이다.
             $query->where(function ($q) use ($user) {
                 $q->where('user_id', $user->id)
-                    ->whereNotNull('claimed_at')
-                    ->where('status', '!=', Order::STATUS_ACCEPTANCE_PENDING)
+                    ->orWhere('original_owner_id', $user->id)
                     ->orWhereHas('pendingClaims', fn ($sub) => $sub->where('driver_id', $user->id));
             })->whereIn('status', [
                 Order::STATUS_COMPLETED,

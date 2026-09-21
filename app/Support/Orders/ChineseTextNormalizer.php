@@ -330,6 +330,22 @@ final class ChineseTextNormalizer
     }
 
     /**
+     * 차종 표기인지 — 지명 칸에 섞여 들어온 차종(`埃尔法`)을 가려낸다.
+     *
+     * 사전에 있는 차종 표기만 true 다. 모르는 값은 false 로 두어, 지명을 잘못 지우는 일이 없게 한다.
+     */
+    public static function isVehicleToken(?string $value): bool
+    {
+        if ($value === null) {
+            return false;
+        }
+
+        $trimmed = trim($value);
+
+        return $trimmed !== '' && self::vehicleType($trimmed) !== $trimmed;
+    }
+
+    /**
      * 화면에 보여 줄 위치 표기.
      *
      * 사전으로 풀리지 않는 한자가 남아 있으면(대화 잡음이 위치로 들어온 경우 등)

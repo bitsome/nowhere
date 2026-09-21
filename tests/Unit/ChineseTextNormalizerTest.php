@@ -30,6 +30,20 @@ test('유입 품질 점검에서 미정으로 남던 지명을 바꾼다', funct
         ->and(ChineseTextNormalizer::location('中庭首尔钟路酒店'))->toBe('종로 호텔');
 });
 
+test('지명 칸에 섞여 들어온 차종 표기를 구분한다', function () {
+    // 유입 파서가 차종을 지명 칸에 넣어 보낸 건이 있다 — 사전에 있는 차종만 걸러낸다
+    expect(ChineseTextNormalizer::isVehicleToken('埃尔法'))->toBeTrue()
+        ->and(ChineseTextNormalizer::isVehicleToken('阿尔法'))->toBeTrue()
+        ->and(ChineseTextNormalizer::isVehicleToken('卡起'))->toBeTrue()
+        ->and(ChineseTextNormalizer::isVehicleToken('利亚7'))->toBeTrue()
+        // 지명은 차종이 아니다 — 잘못 지우지 않도록
+        ->and(ChineseTextNormalizer::isVehicleToken('명동'))->toBeFalse()
+        ->and(ChineseTextNormalizer::isVehicleToken('마포구'))->toBeFalse()
+        ->and(ChineseTextNormalizer::isVehicleToken('미정'))->toBeFalse()
+        ->and(ChineseTextNormalizer::isVehicleToken(''))->toBeFalse()
+        ->and(ChineseTextNormalizer::isVehicleToken(null))->toBeFalse();
+});
+
 test('구(區) 접미사는 사전에 두 벌로 두지 않고 떼고 읽는다', function () {
     // 구 단위 행정구역은 값에 구를 붙여 통일한다 — 접미사를 떼도 기저 표기가 구를 가진다
     expect(ChineseTextNormalizer::location('瑞草区'))->toBe('서초구')

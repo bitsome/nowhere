@@ -58,6 +58,26 @@ test('중국어 운행을 등록하면 한국어로 저장된다', function () {
         ->and($order->vehicle_type)->toBe('소형 승용차(세단/SUV)');
 });
 
+test('지명 칸에 들어온 차종은 차량 칸으로 옮겨 저장한다', function () {
+    Sanctum::actingAs(ingestionTestRegistrant());
+
+    // 接机(픽업) — 공항에서 출발하는 운행인데 도착지 칸에 차종(`埃尔法`)이 들어온 유입 건이 있었다.
+    // 그대로 두면 마켓에 뜻 없는 지명이 뜨고 차종 정보는 사라진다.
+    $payload = ingestionTestPayload();
+    $payload['service_type'] = 'pickup';
+    $payload['pickup_location'] = '仁川T1';
+    $payload['dropoff_location'] = '埃尔法';
+    $payload['vehicle_type'] = null;
+
+    $this->postJson('/api/orders', $payload)->assertCreated();
+
+    $order = Order::query()->firstOrFail();
+
+    expect($order->pickup_location)->toBe('인천공항 제1터미널')
+        ->and($order->dropoff_location)->toBeNull()
+        ->and($order->vehicle_type)->toBe('알파드');
+});
+
 test('등록 요청 원본을 변환 전 그대로 보관한다', function () {
     Sanctum::actingAs(ingestionTestRegistrant());
 
